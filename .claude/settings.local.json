@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(graphify query *)",
+      "Bash(cat)",
+      "Read(//tmp/**)",
+      "Bash(awk '{print $NF}')",
+      "Bash(rg -l -i \"ripgrep-all|rga|pandoc|mammoth|python-docx|docx2txt|extract_docx\" /home/dax/Documents/arabica/roast --glob '!node_modules' --glob '!myhospital-fe/**' --glob '!myhospital-be/**' --no-messages)"
+    ]
+  }
+}

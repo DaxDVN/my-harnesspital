@@ -1,0 +1,51 @@
+# Root HARNESS git repo. Tracks only the agent/dev-workflow harness:
+# AGENTS.md, CLAUDE.md, justfile, scripts/, .claude/, .codex/, ignore files,
+# and docs/agent-rules + the graphify guide. Everything heavy, generated, secret,
+# or owned by another git repo is excluded.
+
+# --- Nested git repos (own their own history) ---
+/myhospital-fe/
+/myhospital-be/
+
+# --- Worktrees and their nested repos ---
+/worktrees/
+
+# --- Generated / large / data / backups ---
+/graphify-out/
+/_db-backups/
+/.harness-backups/
+/.linux-migration-backups/
+/.obsidian/
+/specs/
+
+# --- docs: track only the harness rule docs, not work artifacts/captures ---
+/docs/*
+!/docs/agent-rules/
+!/docs/graphify-agent-guide.md
+
+# --- Secrets / auth / runtime captures (anywhere) ---
+*.har
+session-auth.json
+*-auth.json
+*.cookies.json
+.env
+.env.*
+*.secret
+*.pem
+*.key
+*.log
+*.tmp
+
+# --- Caches / build output ---
+__pycache__/
+*.pyc
+node_modules/
+dist/
+build/
+bin/
+obj/
+.next/
+coverage/
+
+# --- Runtime locks ---
+.claude/scheduled_tasks.lock

@@ -1,0 +1,61 @@
+// MyHospital IMPLEMENTER layout (repo-managed copy).
+// Role: implement / build / test / run dev server / regen DTO+client.
+// Opens shells with reminder text only — commands are printed, NOT executed,
+// so nothing auto-starts. The agent runs them when it wants. Referenced by
+// scripts/fish helpers (zimpl) via absolute path, and installable to
+// ~/.config/zellij/layouts/ with `just z-install-layouts`.
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=1 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="impl" focus=true {
+        pane name="Implementer Agent" {
+            command "fish"
+            args "-c" "echo 'IMPLEMENTER SESSION'; echo 'Run: composer / agy / opencode / grok / codex'; echo 'Role: implement, run build/test/dev server, regen DTO/client'; echo; exec fish"
+        }
+    }
+
+    tab name="be-run" {
+        pane split_direction="vertical" {
+            pane size="65%" name="BE Dev/Build/Test" cwd="be" {
+                command "fish"
+                args "-c" "echo 'Backend implementer shell (commands are hints, run them yourself)'; echo '  dotnet run --project MyHospital --no-launch-profile'; echo '  dotnet test'; echo; exec fish"
+            }
+            pane size="35%" name="BE Scratch" cwd="be" {
+                command "fish"
+            }
+        }
+    }
+
+    tab name="fe-run" {
+        pane split_direction="vertical" {
+            pane size="65%" name="FE Dev/Build/DTO" cwd="fe" {
+                command "fish"
+                args "-c" "echo 'Frontend implementer shell (commands are hints, run them yourself)'; echo '  npm run dev'; echo '  npm run dtos:update'; echo '  npm run client:generate'; echo '  npm run lint'; echo; exec fish"
+            }
+            pane size="35%" name="FE Scratch" cwd="fe" {
+                command "fish"
+            }
+        }
+    }
+
+    tab name="review" {
+        pane split_direction="vertical" {
+            pane name="BE Git/Review" cwd="be" {
+                command "fish"
+                args "-c" "echo 'BE review'; echo 'Useful: git status --short; git diff; lazygit'; echo; exec fish"
+            }
+            pane name="FE Git/Review" cwd="fe" {
+                command "fish"
+                args "-c" "echo 'FE review'; echo 'Useful: git status --short; git diff; lazygit'; echo; exec fish"
+            }
+        }
+    }
+}

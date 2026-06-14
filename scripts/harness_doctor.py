@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""MyHospital harness doctor — read-only health check for the agent/dev harness.
+
+Verifies the things that silently break this workspace: missing tools, invalid
+hook JSON, non-compiling hooks, a stale/cross-OS graphify graph, secret leakage
+into the graph, missing fish/Zellij helpers, and routing-doc drift. It changes
+nothing.
+
+Usage:
+    python scripts/harness_doctor.py            # human report, always exits 0
+    python scripts/harness_doctor.py --strict   # exit 1 if any check FAILED
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+OK, WARN, FAIL, INFO = "OK", "WARN", "FAIL", "INFO"
+_results: list[tuple[str, str, str]] = []
+
+
+def root() -> Path:
+    return Path(__file__).resolve().parent.parent
+
+
+def add(status: str, name: str, detail: str = "") -> None:
+    _results.append((status, name, detail))
+
+
+def _run(argv: list[str], timeout: int = 30) -> tuple[int, str]:
+    try:
+        proc = subprocess.run(
+            argv, cwd=str(root()), stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout,
+        )
+        return proc.returncode, proc.stdout
+    except Exception as exc:  # noqa: BLE001
+        return 1, str(exc)
+
+
+def check_tools() -> None:
+    required = ["python", "git"]
+    recommended = ["docker", "dotnet", "npm", "just", "graphify", "zellij", "fish", "rg"]
+    for tool in required:
+        if shutil.which(tool):
+            add(OK, f"tool:{tool}", "on PATH")
+        else:
+            add(FAIL, f"tool:{tool}", "REQUIRED, not on PATH")
+    for tool in recommended:
+        add(OK if shutil.which(tool) else WARN, f"tool:{tool}",
+            "on PATH" if shutil.which(tool) else "recommended, not on PATH")
+
+
+def check_root_versioning() -> None:
+    r = root()
+    if (r / ".git").exists():
+        add(OK, "root-vcs", "root is a git repo (harness is version-controlled)")
+    else:
+        add(WARN, "root-vcs", "root is NOT a git repo — harness has no version history. "
+                              "Use `git init` (see docs) or `just harness-backup`.")
+    backups = r / ".harness-backups"
+    if backups.exists():
+        n = sum(1 for p in backups.iterdir() if p.is_dir())
+        add(INFO, "harness-backups", f"{n} snapshot(s) in .harness-backups/")
+    else:
+        add(INFO, "harness-backups", "no snapshots yet (run `just harness-backup`)")
+
+
+def check_json() -> None:
+    for rel in [".claude/settings.json", ".claude/settings.local.json", ".codex/hooks.json"]:
+        p = root() / rel
+        if not p.exists():
+            add(INFO, f"json:{rel}", "absent")
+            continue
+        try:
+            json.loads(p.read_text(encoding="utf-8"))
+            add(OK, f"json:{rel}", "valid")
+        except Exception as exc:  # noqa: BLE001
+            add(FAIL, f"json:{rel}", f"INVALID: {exc}")
+
+
+def check_pycompile() -> None:
+    targets = sorted((root() / ".claude/hooks").glob("*.py")) + sorted((root() / "scripts").glob("*.py"))
+    bad = []
+    for p in targets:
+        code, out = _run([sys.executable, "-m", "py_compile", str(p)])
+        if code != 0:
+            bad.append(p.name)
+    if bad:
+        add(FAIL, "py-compile", f"failed: {', '.join(bad)}")
+    else:
+        add(OK, "py-compile", f"{len(targets)} hook/script file(s) compile")
+
+
+def check_guard_selftest() -> None:
+    guard = root() / ".claude/hooks/myhospital_guard.py"
+    if not guard.exists():
+        add(FAIL, "guard", "myhospital_guard.py missing")
+        return
+    code, out = _run([sys.executable, str(guard), "--self-test"])
+    add(OK if code == 0 else FAIL, "guard-selftest", out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+
+
+def check_worktree_cli() -> None:
+    code, _ = _run([sys.executable, "scripts/worktree.py", "--help"])
+    add(OK if code == 0 else FAIL, "worktree-cli:help", f"exit {code}")
+    code, out = _run([sys.executable, "scripts/worktree.py", "list"])
+    add(OK if code == 0 else FAIL, "worktree-cli:list", out.strip() or f"exit {code}")
+
+
+def check_graphify_trust() -> None:
+    out = root() / "graphify-out"
+    graph = out / "graph.json"
+    if not graph.exists():
+        add(INFO, "graphify", "no graph.json (nothing to trust/verify)")
+        return
+    marker = out / ".graphify_root"
+    recorded = marker.read_text(encoding="utf-8", errors="ignore").strip() if marker.exists() else ""
+    if not recorded:
+        add(WARN, "graphify-trust", "graph.json present but build root unknown — treat as unverified")
+    elif "\\" in recorded or (len(recorded) >= 2 and recorded[1] == ":") or recorded.replace("\\", "/").rstrip("/").lower() != str(root()).rstrip("/").lower():
+        add(WARN, "graphify-trust", f"STALE/cross-machine: built for {recorded!r}, not {root()}. Rebuild on Linux before trusting graph paths.")
+    else:
+        add(OK, "graphify-trust", "graph built for this workspace")
+
+
+def check_graph_secrets() -> None:
+    graph = root() / "graphify-out" / "graph.json"
+    if graph.exists():
+        try:
+            text = graph.read_text(encoding="utf-8", errors="ignore").lower()
+        except Exception:  # noqa: BLE001
+            text = ""
+        hits = [k for k in ("session-auth", "cookie", "bearer", ".har") if k in text]
+        if hits:
+            add(WARN, "graph-secrets", f"graph.json contains {hits} — rebuild after the .graphifyignore fix to purge")
+        else:
+            add(OK, "graph-secrets", "no obvious auth/cookie/har leakage in graph.json")
+    ignore = root() / ".graphifyignore"
+    if ignore.exists():
+        body = ignore.read_text(encoding="utf-8", errors="ignore")
+        needed = ["*.har", "session-auth.json", "scripts/legacy-powershell/"]
+        missing = [n for n in needed if n not in body]
+        add(OK if not missing else WARN, "graphify-ignore",
+            "excludes secrets/legacy" if not missing else f"missing patterns: {missing}")
+
+
+def check_helpers_and_layouts() -> None:
+    fish_helper = root() / "scripts/fish/myhospital-zellij.fish"
+    if not fish_helper.exists():
+        add(FAIL, "fish-helpers", "scripts/fish/myhospital-zellij.fish missing")
+    elif shutil.which("fish"):
+        code, out = _run(["fish", "-n", str(fish_helper)])
+        add(OK if code == 0 else FAIL, "fish-helpers", "parses" if code == 0 else f"parse error: {out.strip()}")
+    else:
+        add(INFO, "fish-helpers", "present (fish not installed to parse-check)")
+    for name in ["myhospital-orch.kdl", "myhospital-impl.kdl"]:
+        p = root() / "scripts/zellij" / name
+        add(OK if p.exists() else WARN, f"layout:{name}", "present" if p.exists() else "missing repo template")
+
+
+def check_just() -> None:
+    if not shutil.which("just"):
+        add(WARN, "just", "not installed")
+        return
+    code, out = _run(["just", "--list"])
+    add(OK if code == 0 else FAIL, "just", "recipes load" if code == 0 else out.strip())
+
+
+def check_routing() -> None:
+    be_conv = root() / "myhospital-be" / "CONVENTIONS.md"
+    add(OK if be_conv.exists() else FAIL, "routing:be", "myhospital-be/CONVENTIONS.md exists"
+        if be_conv.exists() else "myhospital-be/CONVENTIONS.md MISSING")
+    fe_claude = root() / "myhospital-fe" / "CLAUDE.md"
+    add(OK if fe_claude.exists() else WARN, "routing:fe", "myhospital-fe/CLAUDE.md exists"
+        if fe_claude.exists() else "myhospital-fe/CLAUDE.md missing")
+    # CLAUDE.md must not route BE work to a nonexistent myhospital-be/CLAUDE.md.
+    claude = root() / "CLAUDE.md"
+    if claude.exists():
+        body = claude.read_text(encoding="utf-8", errors="ignore")
+        if "obey `myhospital-be/CLAUDE.md`" in body or "obey myhospital-be/CLAUDE.md" in body:
+            add(FAIL, "routing:claude-md", "CLAUDE.md still routes BE to missing myhospital-be/CLAUDE.md")
+        else:
+            add(OK, "routing:claude-md", "BE routing points at CONVENTIONS.md")
+
+
+def check_legacy_isolation() -> None:
+    legacy = root() / "scripts" / "legacy-powershell"
+    if legacy.exists():
+        add(INFO, "legacy-powershell", "archive present (excluded from graph/audit)")
+    # No active .ps1 invocation in justfile/worktree tooling.
+    hits = []
+    for rel in ["justfile", "scripts/worktree.py", "scripts/harness_backup.py"]:
+        p = root() / rel
+        if p.exists() and ".ps1" in p.read_text(encoding="utf-8", errors="ignore"):
+            hits.append(rel)
+    add(OK if not hits else WARN, "legacy-active-refs",
+        "no active .ps1 runtime refs" if not hits else f".ps1 referenced in {hits}")
+
+
+def main() -> int:
+    strict = "--strict" in sys.argv[1:]
+    print(f"MyHospital harness doctor — {root()}\n")
+    for fn in (
+        check_tools, check_root_versioning, check_json, check_pycompile,
+        check_guard_selftest, check_worktree_cli, check_graphify_trust,
+        check_graph_secrets, check_helpers_and_layouts, check_just,
+        check_routing, check_legacy_isolation,
+    ):
+        try:
+            fn()
+        except Exception as exc:  # noqa: BLE001
+            add(WARN, fn.__name__, f"check crashed: {exc}")
+
+    width = max((len(n) for _, n, _ in _results), default=0)
+    counts = {OK: 0, WARN: 0, FAIL: 0, INFO: 0}
+    for status, name, detail in _results:
+        counts[status] = counts.get(status, 0) + 1
+        print(f"  [{status:4}] {name.ljust(width)}  {detail}")
+    print(f"\nSummary: {counts[OK]} OK, {counts[WARN]} WARN, {counts[FAIL]} FAIL, {counts[INFO]} INFO")
+    if counts[FAIL]:
+        print("Action: resolve FAIL items above.")
+    return 1 if (strict and counts[FAIL]) else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

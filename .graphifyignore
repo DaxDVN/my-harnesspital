@@ -1,0 +1,72 @@
+# graphify scope for the MyHospital workspace knowledge graph.
+#
+# Current graph scope:
+# - docs/ and specs/
+# - root harness docs (AGENTS.md, CLAUDE.md)
+# - Linux migration tooling docs/scripts in scripts/
+# - non-secret Claude hook/settings files
+#
+# The graph maps design intent, specs, and harness/tooling rules. It should not
+# mix in FE/BE source code graphs, generated artifacts, secrets, caches, or
+# runtime output.
+
+myhospital-fe/**
+!myhospital-fe/
+!myhospital-fe/CLAUDE.md
+myhospital-be/**
+!myhospital-be/
+!myhospital-be/CONVENTIONS.md
+!myhospital-be/.claude/
+!myhospital-be/.claude/settings.local.json
+
+agent-tools/
+mcps/
+terminals/
+.playwright-mcp/
+.serena/
+
+worktrees/
+trash/
+_db-backups/
+.harness-backups/
+.linux-migration-backups/
+.obsidian/
+
+# Deprecated PowerShell archive — must never enter a "design intent" graph.
+scripts/legacy-powershell/
+*.ps1
+
+graphify-out/cache/
+__pycache__/
+*.pyc
+*.log
+*.tmp
+*.bak-linux-migration
+
+# Secrets, auth, and runtime capture artifacts. The Windows-built graph leaked
+# session-auth / cookie / token / .har content; keep these out of every rebuild.
+.env
+.env.*
+*.secret
+*.pem
+*.key
+*.har
+session-auth.json
+*-auth.json
+*.cookies.json
+docs/testing/screenshots/
+
+node_modules/
+dist/
+build/
+.next/
+coverage/
+bin/
+obj/
+
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
