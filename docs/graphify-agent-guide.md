@@ -12,7 +12,7 @@
 - Đây là **knowledge graph của `docs/` + `specs/`** (133 file, ~250K từ) — tức là **bản đồ của tài
   liệu BA / spec / quyết định thiết kế / task slices / convention**, **KHÔNG phải graph của code FE/BE**.
 - **Tìm/hiểu source code FE/BE → dùng CodeGraph, KHÔNG dùng graphify** (xem
-  `harness/rules/source-discovery.md`). graphify chỉ cho design intent của docs/specs.
+  `engine/rules/source-discovery.md`). graphify chỉ cho design intent của docs/specs.
 - Cách dùng nhanh nhất cho **bất kỳ agent nào có shell**:
   ```fish
   graphify query "<câu hỏi>"        # trả về vùng đồ thị liên quan, KHÔNG cần API key
@@ -33,7 +33,7 @@
 | Spec admission/inpatient (`specs/admission/**`) | Source code FE (`myhospital-fe/src`) |
 | Spec bed-day billing (`specs/ipd_bed*/**`) | Source code BE (`myhospital-be/**`) |
 | Task plan & audit (`docs/tasks`, `docs/session-notes`) | Test runtime, log, build artifact |
-| Agent rules / convention (`harness/rules`, `AGENTS.md`, `CLAUDE.md`) | Hình ảnh / screenshot (đã loại) |
+| Agent rules / convention (`engine/rules`, `AGENTS.md`, `CLAUDE.md`) | Hình ảnh / screenshot (đã loại) |
 | Quyết định đã chốt (`_DECISIONS.md`), override của architect | `worktrees/`, `trash/`, `bin/`, `obj/`, `node_modules` (đã loại) |
 
 > **Hệ quả quan trọng:** graph này giúp trả lời câu hỏi về **ý định thiết kế, quan hệ giữa các spec,

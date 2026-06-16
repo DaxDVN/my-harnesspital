@@ -1,7 +1,7 @@
 # Root HARNESS git repo. Tracks only the agent/dev-workflow harness:
-# AGENTS.md, CLAUDE.md, justfile, scripts/, .claude/, .codex/, ignore files,
-# and docs/agent-rules + the graphify guide. Everything heavy, generated, secret,
-# or owned by another git repo is excluded.
+# AGENTS.md, CLAUDE.md, justfile, scripts/, engine/, main-brain/, second-brain/, .claude/, .codex/,
+# ignore files, the graphify guide, and harness history under docs/harness/. Everything heavy,
+# generated, secret, or owned by another git repo is excluded.
 
 # --- Nested git repos (own their own history) ---
 /myhospital-fe/
@@ -18,10 +18,13 @@
 /.obsidian/
 /specs/
 
-# --- docs: track only the harness rule docs, not work artifacts/captures ---
+# --- docs: track the graphify guide + harness history; not work artifacts/captures ---
 /docs/*
-!/docs/agent-rules/
 !/docs/graphify-agent-guide.md
+!/docs/harness/
+
+# --- main-brain owner-gated promotion marker (transient; created by /promote, removed after) ---
+main-brain/.promote-unlock
 
 # --- Secrets / auth / runtime captures (anywhere) ---
 *.har

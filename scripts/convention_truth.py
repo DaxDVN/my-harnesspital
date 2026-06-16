@@ -3,7 +3,7 @@
 
 The BE audit (`velvet/notes/myhospital-be-conventions-audit-2026-06-15.md`)
 found `myhospital-be/CONVENTIONS.md` factually wrong in 5 places (D1–D6) while
-`harness/rules/backend-rules-conventions-patterns.md` was largely correct.
+`engine/rules/backend-rules-conventions-patterns.md` was largely correct.
 Because `mh-review` D2 trusts those docs, a stale doc poisons review.
 
 This checker asserts each documented claim against the live code and flags the
@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CONV = ROOT / "myhospital-be" / "CONVENTIONS.md"
-BE_RULES = ROOT / "harness" / "rules" / "backend-rules-conventions-patterns.md"
+BE_RULES = ROOT / "engine" / "rules" / "backend-rules-conventions-patterns.md"
 FUNCTIONS = ROOT / "myhospital-be" / "MyHospital.Utilities" / "Constants" / "Functions.cs"
 MODELS = ROOT / "myhospital-be" / "MyHospital.ServiceInterface" / "Models"
 
@@ -125,13 +125,13 @@ def check_rules_dotnet() -> None:
     """The agent-rules backend doc itself noted a .NET 8 vs .NET 10 drift; flag if present."""
     rules = _read(BE_RULES)
     if rules is None:
-        add(WARN, "rules:dotnet-version", "harness/rules backend canon unreadable (path moved?)")
+        add(WARN, "rules:dotnet-version", "engine/rules backend canon unreadable (path moved?)")
         return
     mentions8 = re.search(r"\.NET\s*8|net8\.0", rules)
     aware10 = re.search(r"\.NET\s*10|net10\.0", rules)
     if mentions8 and not aware10:
         add(WARN, "rules:dotnet-version",
-            "harness/rules backend canon mentions .NET 8 with no .NET 10 — update to net10.0.")
+            "engine/rules backend canon mentions .NET 8 with no .NET 10 — update to net10.0.")
     else:
         add(OK, "rules:dotnet-version", "canon version refs acknowledge net10 (no stale .NET 8 claim)")
 
@@ -152,12 +152,12 @@ def main() -> int:
         print(f"  [{status:4}] {name.ljust(width)}  {detail}")
     print(f"\nSummary: {counts[OK]} OK, {counts[WARN]} WARN, {counts[INFO]} INFO, {counts[FAIL]} FAIL")
     if counts[INFO]:
-        print("Note: CANON = harness/rules/backend-rules-conventions-patterns.md (authoritative, verified correct). "
+        print("Note: CANON = engine/rules/backend-rules-conventions-patterns.md (authoritative, verified correct). "
               "The 'doc:*' items are the SUPERSEDED myhospital-be/CONVENTIONS.md (legacy) — advisory only, "
               "NO project edit required (decision 2026-06-16; canon supersedes). "
               "Optional hygiene diff kept at docs/harness/pending/CONVENTIONS.fixed.md.")
     if counts[FAIL]:
-        print("Action: a CANON doc (harness/rules) drifted from code — fix the harness rule (not the project).")
+        print("Action: a CANON doc (engine/rules) drifted from code — fix the harness rule (not the project).")
     return 1 if (strict and counts[FAIL]) else 0
 
 

@@ -20,7 +20,7 @@ Main FE/BE keep using `mssql-hospital` on `localhost,1433`.
 Explore source with **CodeGraph**, not a broad `rg` dump or graphify. Indexes are per code
 repo (`myhospital-be/`, `myhospital-fe/`, and an active `worktrees/<slug>/{be,fe}`), never at
 root. After creating a worktree, `just codegraph-init-worktree <slug>`; check with
-`just codegraph-status`. Full policy + command table: `harness/rules/source-discovery.md`.
+`just codegraph-status`. Full policy + command table: `engine/rules/source-discovery.md`.
 
 ## List Worktrees
 
@@ -84,7 +84,7 @@ Default tools:
 
 Helpers (`zorch`/`zimpl`/`zls`/`zkillwt`/`wtlist`/`wtcreate`/`wtjoin`) live in
 `scripts/fish/myhospital-zellij.fish` — source it once (see
-`harness/rules/worktree-workflow.md`), then:
+`engine/rules/worktree-workflow.md`), then:
 
 ```fish
 zorch <slug> <orchestrator_tool>

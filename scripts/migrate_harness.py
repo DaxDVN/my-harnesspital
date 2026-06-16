@@ -9,7 +9,7 @@ output by USB or direct rsync/scp, then restore on the target.
 It captures the WORKING TREE (tracked **and** untracked harness edits) plus the
 gitignored `specs/`, because a plain `git clone` would drop the untracked
 harness dirs (`.agents/`, `.opencode/`, `.codex/config.toml`, new
-`harness/rules/*`, `scripts/opencode/`, `skills-lock.json`).
+`engine/rules/*`, `scripts/opencode/`, `skills-lock.json`).
 
 It does NOT pack (handle these separately on the target):
   - myhospital-fe / myhospital-be  -> re-clone from GitHub
@@ -248,7 +248,7 @@ RESTORE ON TARGET (fresh CachyOS) — confidential content stays off all remotes
 FIXUP_FILES = [
     "AGENTS.md",
     ".claude/settings.local.json",
-    "harness/rules/worktree-workflow.md",
+    "engine/rules/worktree-workflow.md",
     "docs/graphify-agent-guide.md",
     "scripts/fish/myhospital-zellij.fish",
     "scripts/README.md",

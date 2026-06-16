@@ -44,6 +44,36 @@ Worktree/Zellij is **user-driven** (manual) — see **`docs/guides/worktree-zell
 
 PowerShell is deprecated in this workspace. Do not use `powershell`, `pwsh`, or `*.ps1` as the primary runtime.
 
+## Self-Learning — main-brain · engine · second-brain (the harness's memory)
+
+The harness is organized like a person who cannot remember everything: a concise **brain**, a detailed
+**recipe library**, and **scratch notebooks**. Every agent + every compaction MUST keep these straight.
+
+| Tier | Role | Holds | Loaded? | Who writes |
+|---|---|---|---|---|
+| **`main-brain/`** | the BRAIN — source of truth | distilled lessons + durable cross-cutting truths/decisions + "what exists & when to use it"; **refers down** to `engine/` (which holds the skills/agents/rules) | **always** (lean — bloat burns tokens) | **owner only, via `/promote`** (guard BLOCKS all agent writes) |
+| **`engine/`** | the recipe library / governing core — **CANONICAL HOME for every asset** | rules (convention canon + policies), review protocol, routing, **AND the skills / agents / hooks / workflows themselves** — the ONE source every coding tool shares | on-demand | maintenance |
+| `.claude/` · `.codex/` · `.opencode/` | per-tool **pointers + config** (NOT copies) | reach engine's assets via each tool's own mechanism — Claude: `.claude/{skills,agents,hooks,workflows}` are **symlinks → `engine/…`**; Codex: `[[skills.config]]` / symlink; opencode: `instructions` glob. Add a new tool = add pointers, once | on invocation | the pointer only (assets live in `engine/`) |
+| **`second-brain/`** | scratch notebooks — learning buffer | provisional learnings ("remember this / pay attention / idea"); may be right OR wrong | never (on-demand) | **any agent, freely (no gate)** |
+| `docs/` · `specs/` · `scripts/` | reference · SDD · commands | (unchanged) | freely |
+
+**Write rules (BINDING):**
+- Append to **`second-brain/`** freely when the owner says "nhớ cái này / để ý cái này", or you discover a
+  durable cross-cutting fact worth keeping (one file per learning, `status: provisional`). This is the
+  **in-repo, cross-tool** learning store — NOT `~/.claude/.../memory/` (Claude-only, ephemeral).
+- **NEVER write `main-brain/`.** It is the gated source of truth; the guard hook blocks every agent write.
+  Knowledge reaches it ONLY through the owner-invoked **`/promote`** skill (owner authorizes with
+  `! touch main-brain/.promote-unlock`). `/promote` is **explicit-only — never self-invoke it.**
+
+**Boundary test (which tier?):** "always use BaseService" → coding convention → `engine/rules/`. "admission
+step 3 confirms BHYT; owner decided never auto-patch public-endpoint auth" → durable cross-cutting
+truth/decision → `main-brain/` (via promote). "decision scoped to one module" → `specs/<m>/06-decision-log.md`.
+"I suspect bed-day double-counts" → provisional → `second-brain/`.
+
+**Lifecycle of a learning:** drop it in `second-brain/` (detailed) → owner reviews → `/promote` either
+**distills it into `main-brain/`** (a lean truth/lesson) or **graduates it into a new `.claude/skills/<x>`**
+(a reusable recipe). It lives until promoted/graduated OR the owner deletes it.
+
 ## Worktree + Zellij — USER-DRIVEN (manual; agents do NOT auto-run)
 
 Worktree and Zellij are **driven by the user**, not automated by the agent. The user wants explicit
@@ -56,7 +86,7 @@ control over creating / opening / cleaning worktrees and Zellij sessions.
   and/or point to the manual guide. Execute a command **only** if the user explicitly says "run it /
   do it for me" for that specific command.
 - Step-by-step the user follows: **`docs/guides/worktree-zellij-manual.md`**. Low-level command
-  reference: `harness/rules/worktree-workflow.md` (reference only — not an auto-execution mandate).
+  reference: `engine/rules/worktree-workflow.md` (reference only — not an auto-execution mandate).
 
 The default safety rule still holds: **do not edit `myhospital-fe/` or `myhospital-be/` directly — all
 normal code changes go in a `worktrees/<slug>/…`** that the user created manually, unless the
@@ -65,7 +95,7 @@ Owner-Authorized Bypass Protocol above is explicitly invoked.
 ## Agent Shortcuts & Tool Routing (proactive — so the user need not memorize commands)
 
 The user should speak naturally or use short prompts; the agent maps intent → the right harness tool
-and **uses it proactively**. Full cheat-sheet + short-prompt aliases: **`docs/guides/agent-shortcuts.md`**
+and **uses it proactively**. Full cheat-sheet + short-prompt aliases: **`engine/agent-shortcuts.md`**
 — read it and treat its aliases as triggers.
 
 Compact routing (intent → tool; auto-use unless marked user-driven):
@@ -112,7 +142,7 @@ session.
 Obey them **by instruction even where no enforcement hook exists** (hooks are per-tool; this file
 is the cross-tool source of truth). Claude Code *also* enforces them via
 `.claude/hooks/myhospital_guard.py` (PreToolUse); the same script is payload-tolerant and can be
-wired into another tool's hook system — see `harness/rules/cross-tool-enforcement.md`.
+wired into another tool's hook system — see `engine/rules/cross-tool-enforcement.md`.
 
 - **No git history mutation:** `git commit`, `git push`, `git reset --hard`, `git clean -f…`,
   `git checkout -- <file>` — **including the `git -C <path> …` form.** (Allowed: `git pull`,
@@ -145,7 +175,7 @@ Do not work around a blocked rule by inventing a different pattern.
 
 Before implementation:
 
-- Find existing code with **CodeGraph first** (broad "how/where/what-calls/what-breaks" exploration), then a **bounded** `rg -l` for exact strings — never broad-scan all of FE/BE and dump output. Reuse project patterns instead of inventing. Full policy + command table: **`harness/rules/source-discovery.md`**.
+- Find existing code with **CodeGraph first** (broad "how/where/what-calls/what-breaks" exploration), then a **bounded** `rg -l` for exact strings — never broad-scan all of FE/BE and dump output. Reuse project patterns instead of inventing. Full policy + command table: **`engine/rules/source-discovery.md`**.
 - For FE UI/component work, run or read `myhospital-fe/docs/components/component-inventory.generated.md` and update it with `npm run components:index` if stale or missing.
 - For BE data access, inspect existing service/query patterns around the target entity before writing queries.
 
@@ -154,7 +184,7 @@ Before implementation:
 When a module / dirty worktree / changeset is finished and needs an audit before merge, use the
 **`mh-review`** harness. Goal: maximize first-pass recall so review converges in **≤3 rounds**
 (1 round = audit → fix → verify), instead of many. Tool-neutral policy lives in
-**`harness/review/`** (plain `.md`, every tool reads it by path; the conventions it checks against live in `harness/rules/`) —
+**`engine/review/`** (plain `.md`, every tool reads it by path; the conventions it checks against live in `engine/rules/`) —
 every tool (Claude, Codex, opencode) follows the same protocol and emits the same findings file:
 
 - **`protocol.md`** — the ≤3-round runbook (scope freeze → partitioned audit → adversarial verify →
@@ -178,7 +208,7 @@ Rationale + feasibility analysis: `docs/harness/notes/review-harness-feasibility
 
 ## Source-Code Discovery (CodeGraph)
 
-Source code is explored with **CodeGraph** — a local, pre-indexed code knowledge graph — **not** graphify and **not** a broad `rg` dump. Canonical policy + full command table: **`harness/rules/source-discovery.md`**.
+Source code is explored with **CodeGraph** — a local, pre-indexed code knowledge graph — **not** graphify and **not** a broad `rg` dump. Canonical policy + full command table: **`engine/rules/source-discovery.md`**.
 
 - **Order:** CodeGraph first for any "how does X work / where is X / what calls X / what breaks if I change X" question → bounded `rg -l` / `ast-grep` for an exact string in a known small scope → read files only after narrowing to a few candidates. Treat CodeGraph-returned source as already read unless you need exact lines to edit/quote.
 - **Tools:** MCP tools `codegraph_explore` / `codegraph_node` / `codegraph_search` / `codegraph_callers` when the agent has them; otherwise the CLI `codegraph explore|query|node|callers|callees|impact|affected` from inside an indexed repo.
@@ -195,7 +225,7 @@ is built at `graphify-out/graph.json`. It maps **design intent and spec relation
   directly is always an acceptable substitute. It is **never** a prerequisite for reading or searching code.
 - **Never use graphify for code.** For FE/BE **source** use **CodeGraph** (broad exploration) plus a
   bounded `rg` / `fd` / `bat` (exact strings); for `.docx`/`.pdf` use `rga`. The graph does **not**
-  contain code. Source-code discovery policy: `harness/rules/source-discovery.md`.
+  contain code. Source-code discovery policy: `engine/rules/source-discovery.md`.
 - When you do use it: `graphify query "<question>"`, `graphify explain "<node>"`,
   `graphify path "A" "B"`, `graphify affected "<node>"` (no API key needed). Treat `INFERRED` edges as unverified.
 - **The current graph is STALE and must not be trusted blindly.** It was built on Windows
@@ -353,7 +383,7 @@ Rules:
 - graphify is **optional** and scoped to `docs/`+`specs/` **design intent — not code**. Use it only for a
   docs/specs design-decision/relationship question, and only as an alternative to reading the spec directly.
   For source code use **CodeGraph** (broad) + bounded `rg`/`fd`/`bat` (exact) — see
-  `harness/rules/source-discovery.md`; for `.docx`/`.pdf` use `rga`. Never run graphify before reading source code.
+  `engine/rules/source-discovery.md`; for `.docx`/`.pdf` use `rga`. Never run graphify before reading source code.
 - **Trust check:** the current graph is Windows-built and stale (see *Knowledge Graph (graphify)* above).
   Confirm `graphify-out/.graphify_root` matches this workspace — or run `python scripts/harness_doctor.py` —
   before relying on graph output; if it does not match, read the source docs instead.

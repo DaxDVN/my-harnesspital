@@ -1,0 +1,54 @@
+---
+name: mh-implement
+description: Guided, convention-safe FEATURE implementation for a MyHospital module (FE/BE), in a worktree. Shift-left harness — loads the live conventions BEFORE writing code, reuses existing patterns, and self-reviews its own diff so mh-review converges fast. Use when building a new page/feature/module or extending one. Trigger "/mh-implement", "implement feature X", "build page/module Y", "triển khai feature".
+---
+
+# mh-implement — orchestrator (DEV side)
+
+Companion to **`mh-review`**. Where mh-review *finds* issues after the fact, mh-implement *prevents* them at write-time (shift-left = the strongest lever for ≤3-round convergence, per `docs/harness/notes/review-harness-feasibility-2026-06-16.md` §7.2). For **bug-fixing** use **`mh-fix`** instead — different stance (repro-first vs reuse-first).
+
+## Boundary — scaffold vs implement vs fix
+- **`/mh-implement` (this)** — build/extend a whole **feature** (multi-file; needs reuse + DoD + self-review). **Calls `/mh-scaffold`** at B3 when it needs a fresh canonical skeleton.
+- **`/mh-scaffold`** — emit ONE canonical pattern to paste (single endpoint/service/page/form). No orchestration. Use standalone when you only need the *shape*, not a feature.
+- **`/mh-fix`** — fix a known **bug** (repro-first), not build new.
+
+> Rule of thumb: *feature → implement (uses scaffold) · one pattern → scaffold · bug → fix.*
+
+Bundle docs in this folder: **[preflight.md](./preflight.md)** (reuse discovery), **[definition-of-done.md](./definition-of-done.md)** (the gate). Live convention source of truth: `engine/rules/frontend-rules-conventions-patterns.md` (FE) + `backend-rules-conventions-patterns.md` (BE). FE reality spine (memory `fe-live-conventions-vs-stale-docs` + audit `velvet/notes/myhospital-fe-convention-audit-2026-06-15.md`): RQ-via-adapter + `useMasterData` + id-only + shadcn. **Do NOT trust `ARCHITECTURE-OVERVIEW.md` / `BEST-PRACTICES-NEW-PAGE.md` — both stale (audit V10).**
+
+## B0 — Scope & worktree
+Follow the Session Start Protocol: `python scripts/worktree.py list`, confirm slug/slot, **work in `worktrees/<slug>/fe|be`** — never edit `myhospital-fe/` or `myhospital-be/` directly (guard hook enforces). If a spec module exists, read `specs/<module>/{02-requirements,03-ui,06-decision-log,08-api}.md` — Confirmed requirements + decisions are the business source of truth. FE+BE work → BE contract first, regen FE DTO/client, then FE usage.
+
+## B1 — Pre-flight discovery (anti-reinvent) — see [preflight.md](./preflight.md)
+Mandatory before writing. Reuse beats authoring. In short: read `myhospital-fe/docs/components/component-inventory.generated.md` + `docs/reuse/reuse-catalog.generated.md`, CodeGraph/`rg` for the target area, and pick the **warehouse exemplar — its GOOD parts only**:
+- ✅ COPY: routing (`lazy`+`Suspense`+`LayoutSelector`+Provider), mutation hooks `adapter.useXxx({successMessage, invalidateQueries, onSuccess})`, table (`useReactTable`+`EnhancedDataGrid`+`useMemo` cols), shadcn UI, RHF+`zodResolver`+dirty-guard.
+- ❌ DO NOT COPY (audit §4): monolithic 600+-line page files, `useState`-only context as a data layer, schema inlined in the page, `models.ts` that only re-exports DTOs.
+
+## B2 — Convention contract (shift-left) — print BEFORE coding
+Emit a short per-task contract = the subset of rules that apply, so you bind yourself up front. Always include the spine, plus whatever the task touches:
+- Server state via the module **adapter** (`extends GeneratedApiClient`); **no `fetch`/`axios`/manual `JsonServiceClient`/bearer** in UI (cookie `ss-id` already). Reference/dropdown data via **`useMasterData([Entity])`** — never an ad-hoc query.
+- Every list/master mutation invalidates **both** `invalidateQueries` **and** `invalidateMasterDataEntity(...)`.
+- **Reference by Id**, not name/code: `find(x => String(x.Id) === value)`. Business rules from **BE flags / generated `Constants.ts`** (`IsDefault`/`Requires*`/`*Option`), never hardcoded strings (audit V3 — e.g. no `=== 'kinh'`).
+- Tables → `EnhancedDataGrid`; forms → RHF + `zodResolver` + schema factory `getXxxFormSchema(t?)` in `forms/`; status → `StatusBadge`+`STATUS_REGISTRY`; permission → `useUserPermissions().can(...)`; i18n → `useIntl`/`useTranslation` (no new hardcoded VN text).
+- **No FE money/stock/cost/posted/balance computation.** No new global-state lib. No edits to routing roots / providers / generated files / configs without approval.
+
+## B3 — Implement
+Build against the contract, reusing what B1 found. For a brand-new skeleton (module / list-page / form-sheet / adapter / routing) use **`/mh-scaffold`** — it emits the canonical FE+BE shapes (replaces the broken `npm run create:page`/`create:module`, audit V9). For independent bounded sub-tasks, delegate to the **`mh-implementer`** subagent (Agent tool) — one per disjoint file/scope, in the SAME worktree. Keep page files split (wrapper + `components/*-content.tsx`), not monolithic.
+
+## B4 — Definition-of-Done gate — see [definition-of-done.md](./definition-of-done.md)
+Run the deterministic floor + types/lint:
+- `python scripts/mh_scan --root worktrees/<slug>/fe --scope <changed...> --format summary` — the unified FE+BE scanner; FE rules flag dead `@/lib/dtos/dtos` import (FE-V1, HIGH), raw `fetch()` (FE-V2), master-data name-compare like `=== 'kinh'` (FE-V3), `serviceStackClient.*` in a component.
+- `npx tsc --noEmit` (from the worktree fe) — catches FE-V1 + contract drift.
+- scoped `npx eslint <changed> --no-fix` — **never `npm run lint`**.
+- regen DTO/client if contract changed; `npm run components:index` if UI added.
+
+Fix every HIGH/BLOCK before B5; advisory WARN each fixed or justified (audit §6 exception, with a comment).
+
+## B5 — Self-review-diff (M3)
+Before handing off, run `mh-review` on **only your diff** (scope = the changed files): `git -C worktrees/<slug>/fe diff --name-only <base>` → invoke mh-review with that explicit file set. Fix what it flags now — do not push regressions to a later round. Then summarize: files changed, contract items honored, validation commands run + results, residual risks.
+
+## Safety
+Worktree-only edits; honor the guard hook (no git history mutation, no recursive delete, no new deps, no editing generated files). Report actual validation run (Validation Contract). If a required DTO/constant/permission is missing → **stop, report a BE/API contract blocker** (do not hand-write or work around). If a business rule is ambiguous → route to `specs/<module>/05-open-questions.md`, do not invent it.
+
+## Learning loop
+After mh-review closes the feature, promote any new/recurring mistake to the cheapest layer (`mh-review/protocol.md §7`): guard/ESLint/ast-grep (deterministic) → `agent-rules/*` (convention) → `mh-review/checklist.md` "Known bug-classes" → auto-memory.

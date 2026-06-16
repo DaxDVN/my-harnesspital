@@ -249,9 +249,9 @@ def check_codegraph() -> None:
             "(root .gitignore excludes FE/BE/worktrees). Run `codegraph uninit` here.")
 
     # Discovery policy wired into the harness.
-    policy = r / "harness/rules/source-discovery.md"
+    policy = r / "engine/rules/source-discovery.md"
     add(OK if policy.exists() else WARN, "codegraph-policy",
-        "harness/rules/source-discovery.md present" if policy.exists() else "source-discovery.md MISSING")
+        "engine/rules/source-discovery.md present" if policy.exists() else "source-discovery.md MISSING")
     for name in ("AGENTS.md", "CLAUDE.md"):
         p = r / name
         if p.exists():
@@ -302,7 +302,7 @@ def check_convention_scan() -> None:
 
 
 def check_convention_truth() -> None:
-    """Canon = harness/rules (authoritative). convention_truth --strict FAILs only if a CANON doc
+    """Canon = engine/rules (authoritative). convention_truth --strict FAILs only if a CANON doc
     drifts from code; the stale project myhospital-be/CONVENTIONS.md is advisory (INFO, canon
     supersedes — decision 2026-06-16), so it never demands a project edit."""
     ct = root() / "scripts" / "convention_truth.py"
@@ -312,8 +312,8 @@ def check_convention_truth() -> None:
     code, out = _run([sys.executable, "scripts/convention_truth.py", "--strict"])
     summary = next((l for l in out.splitlines() if l.startswith("Summary:")), f"exit {code}")
     add(OK if code == 0 else WARN, "convention-truth",
-        "canon=harness/rules authoritative; project CONVENTIONS.md superseded (advisory only)" if code == 0
-        else f"CANON doc drift — {summary.strip()} → fix the harness/rules canon (run: python scripts/convention_truth.py)")
+        "canon=engine/rules authoritative; project CONVENTIONS.md superseded (advisory only)" if code == 0
+        else f"CANON doc drift — {summary.strip()} → fix the engine/rules canon (run: python scripts/convention_truth.py)")
 
 
 def check_opencode_guard() -> None:
@@ -337,6 +337,44 @@ def check_opencode_guard() -> None:
         else "present but NOT installed — symlink into ~/.config/opencode/plugin/ (see cross-tool-enforcement.md)")
 
 
+def check_brains() -> None:
+    """Self-learning tiers: main-brain (gated SoT), second-brain (open buffer), /promote skill."""
+    r = root()
+    mb = r / "main-brain"
+    if mb.exists() and (mb / "README.md").exists() and (mb / "knowledge.md").exists():
+        add(OK, "main-brain", "present (gated source of truth)")
+    elif mb.exists():
+        add(WARN, "main-brain", "main-brain/ present but README.md/knowledge.md incomplete")
+    else:
+        add(WARN, "main-brain", "main-brain/ missing (gated source-of-truth tier)")
+    sb = r / "second-brain"
+    if sb.exists() and (sb / "README.md").exists():
+        add(OK, "second-brain", "present (open learning buffer)")
+    elif sb.exists():
+        add(WARN, "second-brain", "second-brain/ present but README.md missing")
+    else:
+        add(WARN, "second-brain", "second-brain/ missing (learning buffer tier)")
+    promote = r / ".claude" / "skills" / "promote" / "SKILL.md"
+    add(OK if promote.exists() else WARN, "promote-skill",
+        "/promote present (owner-gated)" if promote.exists() else "/promote skill missing")
+
+
+def check_symlinks() -> None:
+    """Tool dirs must POINT into engine/ (canonical), not hold copies. Catches a broken/forgotten link."""
+    r = root()
+    for name in ("skills", "agents", "hooks", "workflows"):
+        link = r / ".claude" / name
+        target = r / "engine" / name
+        if not link.exists() and not link.is_symlink():
+            add(WARN, f"link:.claude/{name}", f"missing — should be a symlink → engine/{name}")
+        elif not link.is_symlink():
+            add(WARN, f"link:.claude/{name}", "real dir, not a symlink (assets should be canonical in engine/)")
+        elif not target.exists():
+            add(FAIL, f"link:.claude/{name}", f"dangling — engine/{name} missing")
+        else:
+            add(OK, f"link:.claude/{name}", f"→ engine/{name}")
+
+
 def main() -> int:
     strict = "--strict" in sys.argv[1:]
     print(f"MyHospital harness doctor — {root()}\n")
@@ -346,6 +384,7 @@ def main() -> int:
         check_graph_secrets, check_helpers_and_layouts, check_just,
         check_routing, check_legacy_isolation, check_codegraph,
         check_convention_scan, check_convention_truth, check_opencode_guard,
+        check_brains, check_symlinks,
     ):
         try:
             fn()

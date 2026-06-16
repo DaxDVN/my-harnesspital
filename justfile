@@ -39,7 +39,7 @@ harness-backup:
 # Scan ACTIVE harness files for stray Windows/macOS artifacts (concrete drive paths / cmdlets / invocations — not the word "powershell" in deprecation prose; excludes the legacy archive and self-referential pattern files).
 agent-audit:
     rg -n -g '!scripts/legacy-powershell/**' 'C:\\[A-Za-z]|D:\\[A-Za-z]|\\Users\\|/Users/|Get-ChildItem|textutil|pwsh -|powershell -' \
-        AGENTS.md CLAUDE.md .codex scripts docs/graphify-agent-guide.md docs/agent-rules myhospital-be/.claude \
+        AGENTS.md CLAUDE.md .codex scripts harness docs/graphify-agent-guide.md myhospital-be/.claude \
         || echo "agent-audit: clean (no active cross-OS artifacts)"
 
 # --- Worktrees ------------------------------------------------------------
@@ -94,7 +94,7 @@ z-install-layouts:
 
 # --- CodeGraph (source-code index) ----------------------------------------
 # Source code is explored with CodeGraph, indexed per code repo (never at root).
-# Policy + command table: docs/agent-rules/source-discovery.md
+# Policy + command table: engine/rules/source-discovery.md
 
 # Index status for both main repos (does not abort if a repo is not yet indexed).
 codegraph-status:

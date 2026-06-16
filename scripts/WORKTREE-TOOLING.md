@@ -19,7 +19,7 @@ Main FE/BE keep using `mssql-hospital` on `localhost,1433`.
 
 Source code is explored with **CodeGraph** (per-repo index), not a broad `rg` scan or graphify.
 `just codegraph-init-main` (one-time, main repos), `just codegraph-init-worktree <slug>` after
-creating a worktree, `just codegraph-status`. Policy: `harness/rules/source-discovery.md`.
+creating a worktree, `just codegraph-status`. Policy: `engine/rules/source-discovery.md`.
 
 ## Commands
 
@@ -56,7 +56,7 @@ Defaults when the user does not specify tools:
 - implementer: `opencode`
 
 Helpers live in `scripts/fish/myhospital-zellij.fish` (source once; see
-`harness/rules/worktree-workflow.md` for the full intent→command map):
+`engine/rules/worktree-workflow.md` for the full intent→command map):
 
 ```fish
 zorch <slug> <orchestrator_tool>

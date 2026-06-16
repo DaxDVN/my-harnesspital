@@ -13,7 +13,7 @@ Design mirrors `.claude/hooks/myhospital_guard.py`:
   - **string-testable**: every classifier runs on a text fixture in --self-test,
     so the pack can't silently rot (checked by harness_doctor).
 
-Output is compatible with `harness/review/findings-schema.md`
+Output is compatible with `engine/review/findings-schema.md`
 (severity / dimension / location / title / evidence).
 """
 from __future__ import annotations

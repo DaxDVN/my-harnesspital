@@ -3,7 +3,7 @@
 // Makes opencode enforce the SAME BLOCK rules as Claude Code / Codex by shelling
 // out to the shared guard script (.claude/hooks/myhospital_guard.py). Single
 // source of truth = that Python script; this is just the opencode wiring.
-// See harness/rules/cross-tool-enforcement.md.
+// See engine/rules/cross-tool-enforcement.md.
 //
 // Install (copy or symlink into opencode's plugin dir):
 //   mkdir -p ~/.config/opencode/plugin
