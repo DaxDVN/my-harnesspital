@@ -22,128 +22,77 @@ Slot map (for reference when creating or selecting):
 | 3 | :3003 | :5003 | localhost,1436 |
 | 4 | :3004 | :5004 | localhost,1437 |
 
-**`myhospital-fe/` and `myhospital-be/` are main branches — zero code edits there, ever.** All changes go into a worktree under `worktrees/<slug>/fe` or `worktrees/<slug>/be`.
+**Default:** `myhospital-fe/` and `myhospital-be/` are main branches — do not edit them directly. All normal changes go into a worktree under `worktrees/<slug>/fe` or `worktrees/<slug>/be`.
 
-If no worktree exists yet for the task, follow the **Multi-Agent Worktree + Zellij Workflow Protocol** below.
+### Owner-Authorized Bypass Protocol
+
+The workspace owner may explicitly authorize bypassing harness rules for the current session, including
+direct work in `myhospital-fe/` or `myhospital-be/`, when maintenance or recovery requires it.
+
+When the user explicitly says they allow bypass (for example: "cho phép bypass", "bypass rule",
+"override harness", or equivalent wording):
+
+- Treat the relevant harness block as `WARN` instead of `BLOCK` for that session and continue.
+- State the bypassed rule and the reason in the final response.
+- Keep the smallest practical scope: do only the requested maintenance/recovery work.
+- Continue to avoid needless destructive actions. If an action is destructive and not explicitly requested,
+  ask for confirmation first.
+- Generated/managed files should still be regenerated rather than hand-edited unless the owner explicitly
+  asks for emergency manual intervention.
+
+Worktree/Zellij is **user-driven** (manual) — see **`docs/guides/worktree-zellij-manual.md`**. Agents must **not** auto-create or auto-open worktrees/sessions; print the command for the user to run.
 
 PowerShell is deprecated in this workspace. Do not use `powershell`, `pwsh`, or `*.ps1` as the primary runtime.
 
-## Multi-Agent Worktree + Zellij Workflow Protocol
+## Worktree + Zellij — USER-DRIVEN (manual; agents do NOT auto-run)
 
-User-facing rule: the user should not need to remember long worktree commands. When the user asks to create, setup, prepare, join, attach, cleanup, or sync a worktree, treat it as a workflow execution request and run the appropriate command when terminal access is available.
+Worktree and Zellij are **driven by the user**, not automated by the agent. The user wants explicit
+control over creating / opening / cleaning worktrees and Zellij sessions.
 
-### Intent routing
+**Agent rules:**
+- Do **NOT** auto-run `worktree.py` (create/cleanup/sync), `zorch`, `zimpl`, `zkillwt`, or any Zellij
+  command in response to intent words ("create / join / setup / cleanup / sync worktree").
+- When the user asks about worktrees/Zellij: **print the exact command for them to run** (fish syntax)
+  and/or point to the manual guide. Execute a command **only** if the user explicitly says "run it /
+  do it for me" for that specific command.
+- Step-by-step the user follows: **`docs/guides/worktree-zellij-manual.md`**. Low-level command
+  reference: `harness/rules/worktree-workflow.md` (reference only — not an auto-execution mandate).
 
-- `create`, `tạo`, `setup worktree mới`, `chuẩn bị worktree mới`, `mở task <slug> slot <n>` = create worktree. Run `python scripts/worktree.py create`.
-- `join`, `mở lại`, `attach`, `vào worktree đang có` = join existing. Do not create. Run `python scripts/worktree.py list`, check the existing worktree, then open sessions.
-- `cleanup`, `xóa`, `dọn worktree` = destructive cleanup. Ask/confirm first; kill related Zellij sessions only if requested; then run `python scripts/worktree.py cleanup`.
-- `sync DB`, `sync database` = run `python scripts/worktree.py sync-db` with the requested slot/path.
-- `sync main`, `sync branch chính` = run `python scripts/worktree.py sync-main`.
+The default safety rule still holds: **do not edit `myhospital-fe/` or `myhospital-be/` directly — all
+normal code changes go in a `worktrees/<slug>/…`** that the user created manually, unless the
+Owner-Authorized Bypass Protocol above is explicitly invoked.
 
-### Create worktree behavior
+## Agent Shortcuts & Tool Routing (proactive — so the user need not memorize commands)
 
-When the user asks to create a worktree and provides enough `slug` + `slot`, the agent must run:
+The user should speak naturally or use short prompts; the agent maps intent → the right harness tool
+and **uses it proactively**. Full cheat-sheet + short-prompt aliases: **`docs/guides/agent-shortcuts.md`**
+— read it and treat its aliases as triggers.
 
-```fish
-cd /home/dax/Documents/arabica/roast
-python scripts/worktree.py create --slug <slug> --slot <slot>
-```
+Compact routing (intent → tool; auto-use unless marked user-driven):
 
-If the user says the worktree should be light, quick, dry, no DB sync, or no FE install, run:
+| Intent | Tool the agent uses |
+|---|---|
+| scaffold endpoint/service/listing/error path · new FE page/list/form/module | skill **`/mh-scaffold`** |
+| implement / build a feature/page/module | skill **`/mh-implement`** (in a worktree the user opened) |
+| fix a bug / a review finding before merge | skill **`/mh-fix`** |
+| BE convention scan (bug-classes) | **`just mh-scan`** (signal-first; `--advisory` full; `--fail-on high` CI) |
+| FE structural rules (raw fetch / dead dtos / name-compare / no-axios) | **`just mh-scan`** (ast-grep bridge, FE-gated) |
+| harness health · convention drift · snapshot | **`just doctor`** · **`just convention-truth`** · **`just harness-backup`** |
+| "where/how/what-calls X", locate code | **CodeGraph** (`codegraph_explore` / `codegraph explore`) then bounded `rg` |
+| CodeGraph index status / sync | **`just codegraph-status`** / **`just codegraph-sync-main`** |
+| regenerate FE DTOs / client | **`npm run dtos:update`** / **`client:generate`** (FE worktree) |
 
-```fish
-cd /home/dax/Documents/arabica/roast
-python scripts/worktree.py create --slug <slug> --slot <slot> --skip-db-sync --skip-fe-install
-```
-
-If the user only wants a preview/check first, run:
-
-```fish
-cd /home/dax/Documents/arabica/roast
-python scripts/worktree.py create --slug <slug> --slot <slot> --skip-db-sync --skip-fe-install --dry-run
-```
-
-Do not respond with “you can run this command” when the current agent has permission to run terminal commands. Run it, then report the result.
-
-### Missing information
-
-- If `slug` is missing, ask the user for the slug.
-- If `slot` is missing, first run:
-
-```fish
-cd /home/dax/Documents/arabica/roast
-python scripts/worktree.py list
-```
-
-Then propose a reasonable empty slot. If the slot still cannot be inferred, ask the user to choose one.
-- If orchestrator/implementer tools are missing, default to `orchestrator=claude` and `implementer=opencode`, and state that default.
-
-### After create worktree
-
-After successful creation, validate:
-
-```fish
-cd /home/dax/Documents/arabica/roast
-python scripts/worktree.py list
-test -d worktrees/<slug>/be; and echo "OK be"
-test -d worktrees/<slug>/fe; and echo "OK fe"
-```
-
-Then provide/open the two Zellij sessions. 1 worktree = 2 sessions: orchestrator + implementer.
-
-Open the sessions with the helper functions (defined in
-`scripts/fish/myhospital-zellij.fish` — source it once, see
-`docs/agent-rules/worktree-workflow.md`):
-
-```fish
-zorch <slug> <orchestrator_tool>
-zimpl <slug> <implementer_tool>
-```
-
-`zorch`/`zimpl` print a clear error if the worktree or `zellij` is missing. If the helpers
-are not sourced, use this fish-compatible fallback (references the repo layout files directly):
-
-```fish
-cd /home/dax/Documents/arabica/roast/worktrees/<slug>
-zellij attach mh-<slug>-orch-<orchestrator_tool> 2>/dev/null; or zellij --session mh-<slug>-orch-<orchestrator_tool> --layout ../../scripts/zellij/myhospital-orch.kdl
-```
-
-```fish
-cd /home/dax/Documents/arabica/roast/worktrees/<slug>
-zellij attach mh-<slug>-impl-<implementer_tool> 2>/dev/null; or zellij --session mh-<slug>-impl-<implementer_tool> --layout ../../scripts/zellij/myhospital-impl.kdl
-```
-
-The helpers are only for opening sessions; they do not replace `scripts/worktree.py create`.
-Full intent→command map: **`docs/agent-rules/worktree-workflow.md`**.
-
-### Join existing worktree behavior
-
-For requests like `join lại worktree bed`, run/list/check the existing worktree. Do not create:
-
-```fish
-cd /home/dax/Documents/arabica/roast
-python scripts/worktree.py list
-```
-
-Then open sessions with defaults unless the user specified tools:
-
-```fish
-zorch bed claude
-zimpl bed opencode
-```
-
-For requests like `mở implementer bed bằng composer`, do not create. List/check, then open only the requested session:
-
-```fish
-zimpl bed composer
-```
+**USER-DRIVEN — never auto-run (print the command / point to the guide):**
+- **Review** — `/mh-review` is **explicit only**: run it solely when the user asks for a review/audit by
+  name (confirm scope first). Do **not** auto-trigger it after implement/fix.
+- **Worktree / Zellij** — see the user-driven rule above + `docs/guides/worktree-zellij-manual.md`.
 
 ## Scope Routing
 
 - Work under `myhospital-fe/`: read and obey `myhospital-fe/CLAUDE.md`.
 - Work under `myhospital-be/`: read and obey `myhospital-be/CONVENTIONS.md`; if a package-level `AGENTS.md` is later added, obey it too.
 - Work spanning FE and BE: load both harnesses, then implement BE contract first, regenerate FE DTO/client second, and validate both sides.
-- If a rule conflicts with the user's explicit instruction in the current thread, stop and report the conflict before editing.
+- If a rule conflicts with the user's explicit instruction in the current thread, stop and report the conflict before editing, unless the Owner-Authorized Bypass Protocol has been explicitly invoked for this session.
 
 ## Severity Model
 
@@ -154,6 +103,30 @@ Agents must classify any risky decision before editing:
 - `INFO`: normal convention guidance. Follow it unless local code proves a more specific pattern.
 
 When uncertain whether a rule is `BLOCK` or `WARN`, treat it as `BLOCK` until the local harness says otherwise.
+
+## Forbidden Actions (ALL agents & tools)
+
+Hard `BLOCK` rules for **every** agent — Claude Code, Codex, opencode, Cursor, and any other, unless
+the Owner-Authorized Bypass Protocol has been explicitly invoked for the relevant action in the current
+session.
+Obey them **by instruction even where no enforcement hook exists** (hooks are per-tool; this file
+is the cross-tool source of truth). Claude Code *also* enforces them via
+`.claude/hooks/myhospital_guard.py` (PreToolUse); the same script is payload-tolerant and can be
+wired into another tool's hook system — see `harness/rules/cross-tool-enforcement.md`.
+
+- **No git history mutation:** `git commit`, `git push`, `git reset --hard`, `git clean -f…`,
+  `git checkout -- <file>` — **including the `git -C <path> …` form.** (Allowed: `git pull`,
+  `git status`, `git add`, `git worktree …`, `git branch -D`, `git checkout <branch>`.)
+- **No recursive delete:** `rm -r` / `-rf` / `-fr` / `--recursive` without explicit user approval.
+- **No new dependencies:** `npm|pnpm|yarn|bun install|add <pkg>`, `dotnet add package` without
+  approval. (Allowed: bare `npm install` / `npm ci` to restore an existing lockfile.)
+- **No hand-editing generated/managed files:** generated FE DTO/client/`Constants.ts` and BE EF
+  migrations — regenerate instead (`npm run dtos:update`, `npm run client:generate`;
+  `dotnet ef migrations add`). Applies in the main repos **and** in `worktrees/<slug>/…`.
+- **No direct edits to `myhospital-fe/` or `myhospital-be/` by default** — all normal changes go in a worktree. Owner-authorized bypass may permit direct maintenance/recovery work in main repos for the current session.
+
+Explicitly ALLOWED (never block — implementers need these): run/kill/restart dev servers
+(`npm run dev`, `dotnet run`, `kill`, `pkill`), build/test, and DTO/client regen.
 
 ## Stop Protocol
 
@@ -172,9 +145,45 @@ Do not work around a blocked rule by inventing a different pattern.
 
 Before implementation:
 
-- Search existing code first with `rg`; reuse project patterns instead of inventing.
+- Find existing code with **CodeGraph first** (broad "how/where/what-calls/what-breaks" exploration), then a **bounded** `rg -l` for exact strings — never broad-scan all of FE/BE and dump output. Reuse project patterns instead of inventing. Full policy + command table: **`harness/rules/source-discovery.md`**.
 - For FE UI/component work, run or read `myhospital-fe/docs/components/component-inventory.generated.md` and update it with `npm run components:index` if stale or missing.
 - For BE data access, inspect existing service/query patterns around the target entity before writing queries.
+
+## Review Harness (mh-review) — cross-tool
+
+When a module / dirty worktree / changeset is finished and needs an audit before merge, use the
+**`mh-review`** harness. Goal: maximize first-pass recall so review converges in **≤3 rounds**
+(1 round = audit → fix → verify), instead of many. Tool-neutral policy lives in
+**`harness/review/`** (plain `.md`, every tool reads it by path; the conventions it checks against live in `harness/rules/`) —
+every tool (Claude, Codex, opencode) follows the same protocol and emits the same findings file:
+
+- **`protocol.md`** — the ≤3-round runbook (scope freeze → partitioned audit → adversarial verify →
+  dedup → bounded completeness check → fix with self-review → verify → learning loop).
+- **`checklist.md`** — the 10 review dimensions (D1–D10) + accumulated bug-classes (the *maturing*
+  rule fabric; bug-classes get promoted here / into the convention docs / into guard+ESLint after
+  each module so recall rises over time).
+- **`findings-schema.md`** — the single findings `.md` interchange format + status lifecycle +
+  coverage ledger. Output goes to `docs/audit/<module>-review-v<round>-<date>.md`.
+
+Key principle: **recall comes from partition** (one focused reviewer per dimension), **not from
+re-auditing many times** — a single broad reviewer hits an attention bottleneck and surfaces only the
+most salient issues. Audit rounds are **read-only**; fixes happen only in a worktree.
+
+- **Claude:** invoke the **`/mh-review`** skill (orchestrates the partition via the `mh-reviewer`
+  subagent; optional `workflow.js` power-mode needs the Workflow tool).
+- **Codex / opencode / others:** follow `protocol.md` directly; fan out reviewers by dimension; write
+  the findings file per `findings-schema.md` so the fix session (any tool) can consume it.
+
+Rationale + feasibility analysis: `docs/harness/notes/review-harness-feasibility-2026-06-16.md`.
+
+## Source-Code Discovery (CodeGraph)
+
+Source code is explored with **CodeGraph** — a local, pre-indexed code knowledge graph — **not** graphify and **not** a broad `rg` dump. Canonical policy + full command table: **`harness/rules/source-discovery.md`**.
+
+- **Order:** CodeGraph first for any "how does X work / where is X / what calls X / what breaks if I change X" question → bounded `rg -l` / `ast-grep` for an exact string in a known small scope → read files only after narrowing to a few candidates. Treat CodeGraph-returned source as already read unless you need exact lines to edit/quote.
+- **Tools:** MCP tools `codegraph_explore` / `codegraph_node` / `codegraph_search` / `codegraph_callers` when the agent has them; otherwise the CLI `codegraph explore|query|node|callers|callees|impact|affected` from inside an indexed repo.
+- **Indexes are per code repo**, never at root (the root `.gitignore` excludes `myhospital-fe/`, `myhospital-be/`, `worktrees/`): `myhospital-be/`, `myhospital-fe/`, and an **active** `worktrees/<slug>/{be,fe}`. CodeGraph honors each repo's `.gitignore`, skips `node_modules`/build output/files > 1 MB, and auto-syncs on edit (~2 s debounce). `just codegraph-status` checks them; `just doctor` includes CodeGraph health.
+- **Never** broad-scan all of FE/BE with `rg`/`fd` and dump output. **Never** use graphify for source code — graphify is docs/specs design intent only (and currently stale).
 
 ## Knowledge Graph (graphify)
 
@@ -184,8 +193,9 @@ is built at `graphify-out/graph.json`. It maps **design intent and spec relation
 - **Optional, not mandatory.** graphify is a convenience for *docs/specs design-intent* questions
   (admission, inpatient, bed-day, BHYT-BHTM relationships, locked decisions). Reading the spec file
   directly is always an acceptable substitute. It is **never** a prerequisite for reading or searching code.
-- **Never use graphify for code.** For FE/BE **source** use `rg` / `fd` / `bat`; for `.docx`/`.pdf` use `rga`.
-  The graph does **not** contain code.
+- **Never use graphify for code.** For FE/BE **source** use **CodeGraph** (broad exploration) plus a
+  bounded `rg` / `fd` / `bat` (exact strings); for `.docx`/`.pdf` use `rga`. The graph does **not**
+  contain code. Source-code discovery policy: `harness/rules/source-discovery.md`.
 - When you do use it: `graphify query "<question>"`, `graphify explain "<node>"`,
   `graphify path "A" "B"`, `graphify affected "<node>"` (no API key needed). Treat `INFERRED` edges as unverified.
 - **The current graph is STALE and must not be trusted blindly.** It was built on Windows
@@ -198,7 +208,7 @@ is built at `graphify-out/graph.json`. It maps **design intent and spec relation
   above) or when it cannot confirm freshness. It only *flags* — it never rebuilds. When it fires, tell the
   user the graph is stale and prefer the source docs; rebuild on Linux with `/graphify` only when a fresh
   graph is actually needed. Build scope is fixed by the root `.graphifyignore`.
-- Full usage for every agent (Codex, Antigravity, Grok, Gemini, Cursor — via CLI / MCP / `graphify install`):
+- Full usage for every supported agent (Codex, Antigravity, Grok, Cursor — via CLI / MCP / `graphify install`):
   see **`docs/graphify-agent-guide.md`**.
 
 ## Spec-Driven Requirement & Design Protocol
@@ -342,7 +352,8 @@ When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"
 Rules:
 - graphify is **optional** and scoped to `docs/`+`specs/` **design intent — not code**. Use it only for a
   docs/specs design-decision/relationship question, and only as an alternative to reading the spec directly.
-  For code use `rg`/`fd`/`bat`; for `.docx`/`.pdf` use `rga`. Never run graphify before reading source code.
+  For source code use **CodeGraph** (broad) + bounded `rg`/`fd`/`bat` (exact) — see
+  `harness/rules/source-discovery.md`; for `.docx`/`.pdf` use `rga`. Never run graphify before reading source code.
 - **Trust check:** the current graph is Windows-built and stale (see *Knowledge Graph (graphify)* above).
   Confirm `graphify-out/.graphify_root` matches this workspace — or run `python scripts/harness_doctor.py` —
   before relying on graph output; if it does not match, read the source docs instead.

@@ -19,6 +19,14 @@ default:
 doctor:
     python scripts/harness_doctor.py
 
+# Deterministic BE convention scan (audit bug-classes). Usage: just mh-scan  |  just mh-scan --only auth_coverage --format md
+mh-scan *ARGS:
+    python scripts/mh_scan {{ARGS}}
+
+# Doc-vs-code convention drift check (flags a stale CONVENTIONS.md).
+convention-truth:
+    python scripts/convention_truth.py
+
 # Short git status of both main repos.
 status:
     git -C myhospital-fe status --short
@@ -60,6 +68,10 @@ wt-sync-main *ARGS:
 wt-sync-db slug slot *ARGS:
     python scripts/worktree.py sync-db --slot {{slot}} --be-path worktrees/{{slug}}/be {{ARGS}}
 
+# Run a worktree backend with its .env loaded safely. Usage: just wt-run-be bed --no-build
+wt-run-be slug *ARGS:
+    python scripts/worktree.py run-be --be-path worktrees/{{slug}}/be {{ARGS}}
+
 # Remove a clean worktree (prompts). Usage: just wt-cleanup bed  (add --delete-branch to free the slug)
 wt-cleanup slug *ARGS:
     python scripts/worktree.py cleanup --slug {{slug}} {{ARGS}}
@@ -79,6 +91,44 @@ z-install-layouts:
     mkdir -p ~/.config/zellij/layouts
     cp scripts/zellij/myhospital-orch.kdl scripts/zellij/myhospital-impl.kdl ~/.config/zellij/layouts/
     @echo "Installed myhospital-orch / myhospital-impl layouts."
+
+# --- CodeGraph (source-code index) ----------------------------------------
+# Source code is explored with CodeGraph, indexed per code repo (never at root).
+# Policy + command table: docs/agent-rules/source-discovery.md
+
+# Index status for both main repos (does not abort if a repo is not yet indexed).
+codegraph-status:
+    -cd myhospital-be && codegraph status
+    -cd myhospital-fe && codegraph status
+
+# One-time: build the CodeGraph index for both main repos.
+codegraph-init-main:
+    cd myhospital-be && codegraph init
+    cd myhospital-fe && codegraph init
+
+# Force incremental sync for both main repos (auto-sync usually handles this).
+codegraph-sync-main:
+    cd myhospital-be && codegraph sync
+    cd myhospital-fe && codegraph sync
+
+# Build the CodeGraph index for an active worktree (be+fe). Usage: just codegraph-init-worktree bed
+codegraph-init-worktree slug:
+    cd worktrees/{{slug}}/be && codegraph init
+    cd worktrees/{{slug}}/fe && codegraph init
+
+# Index status for a worktree. Usage: just codegraph-status-worktree bed
+codegraph-status-worktree slug:
+    -cd worktrees/{{slug}}/be && codegraph status
+    -cd worktrees/{{slug}}/fe && codegraph status
+
+# Force sync a worktree's indexes. Usage: just codegraph-sync-worktree bed
+codegraph-sync-worktree slug:
+    cd worktrees/{{slug}}/be && codegraph sync
+    cd worktrees/{{slug}}/fe && codegraph sync
+
+# Wire CodeGraph MCP server into installed agents (re-runnable). Preview a target with --print-config.
+codegraph-install:
+    codegraph install --target=auto --location=global --yes
 
 # --- graphify -------------------------------------------------------------
 

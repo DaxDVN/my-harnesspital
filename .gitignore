@@ -49,3 +49,4 @@ coverage/
 
 # --- Runtime locks ---
 .claude/scheduled_tasks.lock
+.aider*

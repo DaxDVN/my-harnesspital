@@ -1,0 +1,7 @@
+id: mh-no-raw-fetch-tsx
+language: tsx
+severity: warning
+message: "Raw fetch() in FE — route through a module adapter (extends GeneratedApiClient) + useMasterData. Audit V2/V5."
+note: "Legit exceptions (audit §6): blob/media in result-viewers, query-provider metadata, retail-log, common upload apiForm. Justify with a comment if intentional."
+rule:
+  pattern: fetch($$$)

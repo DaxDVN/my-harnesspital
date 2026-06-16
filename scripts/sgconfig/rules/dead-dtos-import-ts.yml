@@ -1,0 +1,10 @@
+id: mh-dead-dtos-import-ts
+language: typescript
+severity: error
+message: "Import from '@/lib/dtos/dtos' — that path does not exist. Real path: '@/lib/dtos/generated-dtos'. Build-breaking. Audit V1."
+rule:
+  kind: import_statement
+  has:
+    kind: string
+    stopBy: end
+    regex: "@/lib/dtos/dtos"

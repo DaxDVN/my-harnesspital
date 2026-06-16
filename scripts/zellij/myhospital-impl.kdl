@@ -26,7 +26,7 @@ layout {
         pane split_direction="vertical" {
             pane size="65%" name="BE Dev/Build/Test" cwd="be" {
                 command "fish"
-                args "-c" "echo 'Backend implementer shell (commands are hints, run them yourself)'; echo '  dotnet run --project MyHospital --no-launch-profile'; echo '  dotnet test'; echo; exec fish"
+                args "-c" "echo 'Backend implementer shell (commands are hints, run them yourself)'; echo '  cd ..; python ../../scripts/worktree.py run-be --be-path be'; echo '  cd be; dotnet test'; echo; exec fish"
             }
             pane size="35%" name="BE Scratch" cwd="be" {
                 command "fish"

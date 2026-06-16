@@ -15,6 +15,12 @@ PowerShell scripts from the Windows workflow are deprecated. Keep new automation
 
 Main FE/BE keep using `mssql-hospital` on `localhost,1433`.
 
+## Source-code search (CodeGraph)
+
+Source code is explored with **CodeGraph** (per-repo index), not a broad `rg` scan or graphify.
+`just codegraph-init-main` (one-time, main repos), `just codegraph-init-worktree <slug>` after
+creating a worktree, `just codegraph-status`. Policy: `harness/rules/source-discovery.md`.
+
 ## Commands
 
 Agents should execute these commands directly when users ask for worktree workflow actions. The user should not need to remember long create commands.
@@ -50,7 +56,7 @@ Defaults when the user does not specify tools:
 - implementer: `opencode`
 
 Helpers live in `scripts/fish/myhospital-zellij.fish` (source once; see
-`docs/agent-rules/worktree-workflow.md` for the full intent→command map):
+`harness/rules/worktree-workflow.md` for the full intent→command map):
 
 ```fish
 zorch <slug> <orchestrator_tool>
@@ -74,8 +80,7 @@ Zellij helpers do not replace `scripts/worktree.py create`; they run after a wor
 ## Run A Worktree
 
 ```fish
-cd worktrees/fix-admission-birthdate/be
-dotnet run --project MyHospital --no-launch-profile
+python scripts/worktree.py run-be --be-path worktrees/fix-admission-birthdate/be
 ```
 
 ```fish

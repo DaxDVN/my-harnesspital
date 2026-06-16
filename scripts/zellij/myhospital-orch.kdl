@@ -17,7 +17,7 @@ layout {
     tab name="orch" focus=true {
         pane name="Orchestrator Agent" {
             command "fish"
-            args "-c" "echo 'ORCHESTRATOR SESSION'; echo 'Run: claude / codex / gemini'; echo 'Role: analyze, plan, review, cross-check'; echo; exec fish"
+            args "-c" "echo 'ORCHESTRATOR SESSION'; echo 'Run: claude / codex / agy'; echo 'Role: analyze, plan, review, cross-check'; echo; exec fish"
         }
     }
 

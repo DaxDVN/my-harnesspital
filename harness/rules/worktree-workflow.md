@@ -64,10 +64,31 @@ zellij attach mh-<slug>-orch-claude 2>/dev/null; or zellij --session mh-<slug>-o
 | "kill sessions của bed" | `zkillwt bed` |
 | "sync main branches" | `python scripts/worktree.py sync-main` (skips repos not on master/main; add `--checkout` to switch) |
 | "reset DB slot 1 cho bed" | `python scripts/worktree.py sync-db --slot 1 --be-path worktrees/bed/be` (preview with `--dry-run`) |
+| "run BE của bed" | `python scripts/worktree.py run-be --be-path worktrees/bed/be` or `just wt-run-be bed` (loads `.env` without shell-sourcing it) |
 | "regen DTO FE sau khi BE contract đổi" | in `worktrees/bed/fe` (implementer): `npm run dtos:update` then `npm run client:generate` |
 
 `just` equivalents also exist: `just wt-create bed 1`, `just wt-create-lite bed 1`,
 `just wt-list`, `just wt-sync-main --dry-run`, `just wt-cleanup bed`, `just z-sessions`.
+
+## CodeGraph index (per worktree)
+
+Source-code exploration uses **CodeGraph**, indexed **per code repo** (full policy:
+`harness/rules/source-discovery.md`). A worktree's `be`/`fe` are separate working
+trees, so each gets its own `.codegraph/` index when the worktree becomes an active task.
+
+| You say… | Agent runs |
+|---|---|
+| (after `wtcreate bed 1`) "index bed cho codegraph" | `just codegraph-init-worktree bed` → `codegraph init` in `worktrees/bed/be` + `.../fe` |
+| "codegraph status của bed" | `just codegraph-status-worktree bed` |
+| "sync codegraph bed" | `just codegraph-sync-worktree bed` (only if status shows stale) |
+
+- After **create**, optionally `just codegraph-init-worktree <slug>` to build the index up
+  front (otherwise the first `codegraph` call in that repo initializes lazily).
+- On **join**, prefer `just codegraph-status-worktree <slug>`; init only if it reports no index.
+- CodeGraph honors each repo's `.gitignore` and **auto-syncs on edit** (~2 s debounce), so you
+  rarely re-init or re-sync by hand.
+- The stable main repos are indexed once via `just codegraph-init-main`. **Never** index the
+  workspace root (root `.gitignore` excludes FE/BE/worktrees, so a root index sees no code).
 
 ## Notes & current caveats
 

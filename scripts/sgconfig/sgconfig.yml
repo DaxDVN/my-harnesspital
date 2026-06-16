@@ -1,0 +1,6 @@
+# ast-grep project config for the MyHospital FE structural lint pack.
+# Run: ast-grep scan -c scripts/sgconfig/sgconfig.yml <path-to-fe-or-files>
+# Bridged into scripts/mh_scan (run_fe_ast_grep) — the unified FE+BE deterministic floor for mh-implement/mh-fix/mh-review.
+# Rules encode FE-audit anti-patterns (velvet/notes/myhospital-fe-convention-audit-2026-06-15.md).
+ruleDirs:
+  - rules

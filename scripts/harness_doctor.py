@@ -14,6 +14,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -31,11 +32,28 @@ def add(status: str, name: str, detail: str = "") -> None:
     _results.append((status, name, detail))
 
 
+def env_with_dotnet_tools() -> dict[str, str]:
+    env = os.environ.copy()
+    tools_dir = Path.home() / ".dotnet" / "tools"
+    if tools_dir.exists():
+        current_path = env.get("PATH", "")
+        paths = current_path.split(os.pathsep) if current_path else []
+        tools_path = str(tools_dir)
+        if tools_path not in paths:
+            env["PATH"] = os.pathsep.join([current_path, tools_path]) if current_path else tools_path
+    return env
+
+
+def which(name: str) -> str | None:
+    return shutil.which(name, path=env_with_dotnet_tools().get("PATH"))
+
+
 def _run(argv: list[str], timeout: int = 30) -> tuple[int, str]:
     try:
         proc = subprocess.run(
             argv, cwd=str(root()), stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout,
+            env=env_with_dotnet_tools(),
         )
         return proc.returncode, proc.stdout
     except Exception as exc:  # noqa: BLE001
@@ -46,13 +64,18 @@ def check_tools() -> None:
     required = ["python", "git"]
     recommended = ["docker", "dotnet", "npm", "just", "graphify", "zellij", "fish", "rg"]
     for tool in required:
-        if shutil.which(tool):
+        if which(tool):
             add(OK, f"tool:{tool}", "on PATH")
         else:
             add(FAIL, f"tool:{tool}", "REQUIRED, not on PATH")
     for tool in recommended:
-        add(OK if shutil.which(tool) else WARN, f"tool:{tool}",
-            "on PATH" if shutil.which(tool) else "recommended, not on PATH")
+        add(OK if which(tool) else WARN, f"tool:{tool}",
+            "on PATH" if which(tool) else "recommended, not on PATH")
+
+    x_path = which("x")
+    add(OK if x_path else WARN, "tool:x", "ServiceStack DTO CLI on PATH" if x_path else "needed for npm run dtos:update")
+    code, out = _run(["dotnet", "ef", "--version"], timeout=10)
+    add(OK if code == 0 else WARN, "tool:dotnet-ef", out.strip() if code == 0 else "needed for worktree.py sync-db")
 
 
 def check_root_versioning() -> None:
@@ -202,6 +225,118 @@ def check_legacy_isolation() -> None:
         "no active .ps1 runtime refs" if not hits else f".ps1 referenced in {hits}")
 
 
+def check_codegraph() -> None:
+    """CodeGraph = the source-code knowledge graph (per code repo; root is NOT indexed)."""
+    r = root()
+    # Binary + version.
+    if shutil.which("codegraph"):
+        code, out = _run(["codegraph", "--version"], timeout=20)
+        ver = out.strip().splitlines()[-1] if out.strip() else f"exit {code}"
+        add(OK if code == 0 else WARN, "codegraph:bin",
+            f"on PATH ({ver})" if code == 0 else f"on PATH but --version failed: {ver}")
+    else:
+        add(WARN, "codegraph:bin", "not on PATH — source-code graph unavailable. "
+            "Install: curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh")
+
+    # Per-repo indexes. The workspace root must NOT be indexed (root .gitignore excludes FE/BE/worktrees).
+    for repo in ("myhospital-be", "myhospital-fe"):
+        if (r / repo).exists():
+            idx = r / repo / ".codegraph"
+            add(OK if idx.exists() else INFO, f"codegraph-index:{repo}",
+                "indexed (.codegraph/ present)" if idx.exists() else "no index yet — run `just codegraph-init-main`")
+    if (r / ".codegraph").exists():
+        add(WARN, "codegraph-root", ".codegraph/ at workspace ROOT — root should not be indexed "
+            "(root .gitignore excludes FE/BE/worktrees). Run `codegraph uninit` here.")
+
+    # Discovery policy wired into the harness.
+    policy = r / "harness/rules/source-discovery.md"
+    add(OK if policy.exists() else WARN, "codegraph-policy",
+        "harness/rules/source-discovery.md present" if policy.exists() else "source-discovery.md MISSING")
+    for name in ("AGENTS.md", "CLAUDE.md"):
+        p = r / name
+        if p.exists():
+            body = p.read_text(encoding="utf-8", errors="ignore")
+            ok = "CodeGraph" in body and "source-discovery.md" in body
+            add(OK if ok else WARN, f"codegraph-doc:{name}",
+                "references CodeGraph + source-discovery.md" if ok else "missing CodeGraph/source-discovery reference")
+
+    # Anti-pattern: harness must not tell agents to broad-scan with rg as the primary code finder.
+    agents = r / "AGENTS.md"
+    if agents.exists():
+        body = agents.read_text(encoding="utf-8", errors="ignore")
+        bad = "Search existing code first with `rg`" in body
+        add(WARN if bad else OK, "codegraph-antipattern",
+            "AGENTS.md still leads code discovery with rg — should lead with CodeGraph" if bad
+            else "no rg-first broad-scan instruction in AGENTS.md")
+
+    # Best-effort: is the CodeGraph MCP server wired into any installed agent's config?
+    home = Path.home()
+    candidates = [
+        home / ".claude.json",
+        home / ".codex" / "config.toml",
+        home / ".config" / "opencode" / "opencode.jsonc",
+        home / ".config" / "opencode" / "opencode.json",
+        home / ".config" / "opencode" / "config.json",
+    ]
+    wired = []
+    for c in candidates:
+        try:
+            if c.exists() and "codegraph" in c.read_text(encoding="utf-8", errors="ignore").lower():
+                wired.append(c.name)
+        except Exception:  # noqa: BLE001
+            pass
+    add(OK if wired else INFO, "codegraph-mcp",
+        f"MCP wired in: {', '.join(wired)}" if wired
+        else "MCP not detected in agent configs — run `codegraph install` (or `just codegraph-install`)")
+
+
+def check_convention_scan() -> None:
+    """mh_scan — the deterministic convention scanner pack (audit bug-classes)."""
+    sc = root() / "scripts" / "mh_scan" / "scanners.py"
+    if not sc.exists():
+        add(WARN, "mh-scan", "scripts/mh_scan/ missing (deterministic convention floor)")
+        return
+    code, out = _run([sys.executable, "scripts/mh_scan", "--self-test"])
+    add(OK if code == 0 else FAIL, "mh-scan:selftest",
+        out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+
+
+def check_convention_truth() -> None:
+    """Canon = harness/rules (authoritative). convention_truth --strict FAILs only if a CANON doc
+    drifts from code; the stale project myhospital-be/CONVENTIONS.md is advisory (INFO, canon
+    supersedes — decision 2026-06-16), so it never demands a project edit."""
+    ct = root() / "scripts" / "convention_truth.py"
+    if not ct.exists():
+        add(INFO, "convention-truth", "scripts/convention_truth.py absent")
+        return
+    code, out = _run([sys.executable, "scripts/convention_truth.py", "--strict"])
+    summary = next((l for l in out.splitlines() if l.startswith("Summary:")), f"exit {code}")
+    add(OK if code == 0 else WARN, "convention-truth",
+        "canon=harness/rules authoritative; project CONVENTIONS.md superseded (advisory only)" if code == 0
+        else f"CANON doc drift — {summary.strip()} → fix the harness/rules canon (run: python scripts/convention_truth.py)")
+
+
+def check_opencode_guard() -> None:
+    """The opencode guard plugin must be symlinked in to enforce cross-tool (Claude/Codex already wired)."""
+    plugin = root() / "scripts" / "opencode" / "myhospital-guard.js"
+    if not plugin.exists():
+        add(INFO, "opencode-guard", "scripts/opencode/myhospital-guard.js absent")
+        return
+    dest = Path.home() / ".config" / "opencode" / "plugin"
+    installed = False
+    if dest.exists():
+        for p in dest.iterdir():
+            try:
+                if "myhospital-guard" in p.name or (p.is_symlink() and "myhospital-guard" in os.readlink(p)):
+                    installed = True
+                    break
+            except Exception:  # noqa: BLE001
+                pass
+    add(OK if installed else INFO, "opencode-guard",
+        "installed in ~/.config/opencode/plugin/" if installed
+        else "present but NOT installed — symlink into ~/.config/opencode/plugin/ (see cross-tool-enforcement.md)")
+
+
 def main() -> int:
     strict = "--strict" in sys.argv[1:]
     print(f"MyHospital harness doctor — {root()}\n")
@@ -209,7 +344,8 @@ def main() -> int:
         check_tools, check_root_versioning, check_json, check_pycompile,
         check_guard_selftest, check_worktree_cli, check_graphify_trust,
         check_graph_secrets, check_helpers_and_layouts, check_just,
-        check_routing, check_legacy_isolation,
+        check_routing, check_legacy_isolation, check_codegraph,
+        check_convention_scan, check_convention_truth, check_opencode_guard,
     ):
         try:
             fn()

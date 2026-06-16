@@ -1,3 +1,16 @@
 {
-  "hooks": {}
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -c 'if test -f .claude/hooks/myhospital_guard.py; then exec python3 .claude/hooks/myhospital_guard.py; fi'",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
 }

@@ -1,0 +1,17 @@
+id: mh-masterdata-name-compare-ts
+language: typescript
+severity: warning
+message: "String-literal compare inside .find() — likely matching master-data by name/code instead of a BE flag (IsDefault/Requires*/*Option) or Id. Audit V3."
+note: "Prefer masterData.X.find(x => x.IsDefault) or compare by String(x.Id)."
+rule:
+  all:
+    - pattern: $A === $B
+    - inside:
+        kind: call_expression
+        stopBy: end
+        has:
+          field: function
+          regex: 'find'
+constraints:
+  B:
+    kind: string

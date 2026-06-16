@@ -1,0 +1,7 @@
+id: mh-servicestackclient-in-component
+language: tsx
+severity: warning
+message: "Direct serviceStackClient.* in a component bypasses the adapter layer (no React Query, no error normalization). Audit V2."
+note: "warehouse inventory-form-sheet.tsx:306 is an APPROVED race-avoidance exception (commented). Justify any new use; prefer adapter.useXxx hooks."
+rule:
+  pattern: serviceStackClient.$METHOD($$$)

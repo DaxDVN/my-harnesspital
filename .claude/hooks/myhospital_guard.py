@@ -40,6 +40,8 @@ FE = r"(?:myhospital-fe|worktrees/[^/]+/fe)"
 BE = r"(?:myhospital-be|worktrees/[^/]+/be)"
 FE_MAIN = r"myhospital-fe"
 BE_MAIN = r"myhospital-be"
+WT_FE = r"worktrees/[^/]+/fe"
+WT_BE = r"worktrees/[^/]+/be"
 
 _DEP_CMDS = {"npm", "pnpm", "yarn", "bun"}
 _DEP_SUBS = {"install", "i", "add"}
@@ -158,20 +160,76 @@ def edit_rule(file_path: str, text: str) -> str | None:
     return None
 
 
-def evaluate(event: dict[str, Any]) -> str | None:
-    tool = str(event.get("tool_name") or "")
-    tool_input = event.get("tool_input") or {}
+def _parse(event: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Extract (tool_lower, tool_input) tolerantly across agent tools.
+    Claude: {tool_name, tool_input:{...}}. Others: {tool|name, params|arguments|input:{...}}."""
+    tool = str(event.get("tool_name") or event.get("tool") or event.get("name") or "")
+    tool_input = event.get("tool_input")
     if not isinstance(tool_input, dict):
-        return None
-    if tool == "Bash":
-        return bash_rule(str(tool_input.get("command") or ""))
-    if tool in {"Write", "Edit", "MultiEdit"}:
-        file_path = ""
-        for name in ("file_path", "path"):
-            if tool_input.get(name) is not None:
-                file_path = _norm(tool_input[name])
+        for alt in ("params", "arguments", "input"):
+            cand = event.get(alt)
+            if isinstance(cand, dict):
+                tool_input = cand
                 break
-        return edit_rule(file_path, edit_text(tool_input))
+    if not isinstance(tool_input, dict):
+        tool_input = {}
+    return tool.lower(), tool_input
+
+
+def _file_path(tool_input: dict[str, Any]) -> str:
+    for name in ("file_path", "path"):
+        if tool_input.get(name) is not None:
+            return _norm(tool_input[name])
+    return ""
+
+
+def evaluate(event: dict[str, Any]) -> str | None:
+    tool_lower, tool_input = _parse(event)
+    command = tool_input.get("command") or event.get("command") or ""
+    if tool_lower == "bash" or (not tool_lower and command):
+        return bash_rule(str(command))
+    if tool_lower in {"write", "edit", "multiedit"}:
+        return edit_rule(_file_path(tool_input), edit_text(tool_input))
+    return None
+
+
+# --- Advisory (WARN, NEVER blocks) -----------------------------------------
+# Shift-left nudge for edits INSIDE a worktree, where real dev happens (the
+# block-level convention heuristics above are main-repo-only, so they never fire
+# there). Maps to BE-audit bug-classes (velvet/notes/...-2026-06-15.md, V-ids).
+# Advisory only: printed to stderr, exit 0 — must never wedge a session.
+def advise_edit(file_path: str, text: str) -> str | None:
+    if _imatch(file_path, rf"{WT_BE}/.*\.cs$"):
+        hits: list[str] = []
+        if _imatch(text, r"throw\s+new\s+Exception\b"):
+            hits.append("raw Exception -> BusinessException+ErrorCodes (V12)")
+        if _imatch(text, r'new\s+BusinessException\(\s*"'):
+            hits.append("string-literal error code -> ErrorCodes.* (V3)")
+        if _imatch(text, r"BeginTransactionAsync|TransactionScope"):
+            hits.append("new DB transaction -> no-transaction rule, legacy-only (V6)")
+        if _imatch(text, r"\bParse(String|Boolean|Numeric)Equality\b|\bParseContains\b|\bParseInOperator\b"):
+            hits.append("legacy listing parse -> [FilterField]+ParseAllFilters (V4)")
+        if _imatch(text, r"Dictionary\s*<\s*string\s*,\s*object"):
+            hits.append("Dictionary<string,object> at contract -> typed DTO (V13)")
+        if hits:
+            return "BE convention (worktree): " + "; ".join(hits)
+    if _imatch(file_path, rf"{WT_FE}/.*\.(ts|tsx)$"):
+        hits: list[str] = []
+        if _imatch(text, r"from\s+['\"]@/lib/dtos/dtos['\"]"):
+            hits.append("dead import '@/lib/dtos/dtos' -> '@/lib/dtos/generated-dtos' (build-breaking, FE-V1)")
+        if _imatch(text, r"\bfetch\s*\(|from\s+['\"]axios['\"]|\baxios\."):
+            hits.append("network in UI -> RQ adapter + useMasterData (FE-V2)")
+        if _imatch(text, r"from\s+['\"](zustand|jotai|redux|mobx|react-icons|react-modal)['\"]"):
+            hits.append("banned lib -> approved stack only (no new global-state/icon/modal libs)")
+        if hits:
+            return "FE convention (worktree): " + "; ".join(hits)
+    return None
+
+
+def evaluate_advisory(event: dict[str, Any]) -> str | None:
+    tool_lower, tool_input = _parse(event)
+    if tool_lower in {"write", "edit", "multiedit"}:
+        return advise_edit(_file_path(tool_input), edit_text(tool_input))
     return None
 
 
@@ -227,6 +285,14 @@ def _self_test() -> int:
         edit("docs/notes.md", "anything"),
         edit("scripts/foo.py", "import os"),
     ]
+    # advisory cases: must NOT block (evaluate None) but SHOULD emit an advisory note
+    advised = [
+        (edit("worktrees/bed/be/Services/XService.cs", 'throw new Exception("x");'), "BE convention"),
+        (edit("worktrees/bed/be/Apis/XApi.cs", 'throw new BusinessException("LIT", "m");'), "error code"),
+        (edit("worktrees/bed/be/Services/YService.cs", "using var tx = await Db.Database.BeginTransactionAsync();"), "transaction"),
+        (edit("worktrees/bed/fe/src/components/X.tsx", "const r = await fetch('/api')"), "FE convention"),
+        (edit("worktrees/bed/fe/src/x.tsx", "import { HelloResponse } from '@/lib/dtos/dtos';"), "FE-V1"),
+    ]
     failures = 0
     for ev in blocked:
         if evaluate(ev) is None:
@@ -237,7 +303,15 @@ def _self_test() -> int:
         if rule is not None:
             failures += 1
             print(f"FAIL expected ALLOW: {ev['tool_input']} -> {rule}")
-    total = len(blocked) + len(allowed)
+    for ev, want in advised:
+        if evaluate(ev) is not None:
+            failures += 1
+            print(f"FAIL advisory case must NOT block: {ev['tool_input']}")
+        note = evaluate_advisory(ev)
+        if not note or want not in note:
+            failures += 1
+            print(f"FAIL expected ADVISORY containing {want!r}: got {note!r}")
+    total = len(blocked) + len(allowed) + 2 * len(advised)
     if failures:
         print(f"self-test: {failures}/{total} FAILED")
         return 1
@@ -263,6 +337,13 @@ def main() -> int:
         return 0  # fail open: a guard bug must never wedge a session
     if rule:
         deny(rule)
+    try:
+        note = evaluate_advisory(event)
+    except Exception:
+        note = None
+    if note:
+        print(f"ADVISORY: {note} — verify: python scripts/mh_scan --scope <file> --format summary",
+              file=sys.stderr)
     return 0
 
 

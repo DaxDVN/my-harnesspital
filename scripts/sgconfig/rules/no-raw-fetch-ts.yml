@@ -1,0 +1,7 @@
+id: mh-no-raw-fetch-ts
+language: typescript
+severity: warning
+message: "Raw fetch() in FE — route through a module adapter (extends GeneratedApiClient) + useMasterData. Audit V2/V5."
+note: "Legit exceptions (audit §6): blob/media, query-provider metadata, retail-log. retail-customer-adapter.ts is a known deviation, not a pattern to copy."
+rule:
+  pattern: fetch($$$)

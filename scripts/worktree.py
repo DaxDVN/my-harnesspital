@@ -87,6 +87,75 @@ def require_command(name: str) -> None:
         raise ToolError(f"Required command {name!r} was not found on PATH.")
 
 
+def with_dotnet_tools_on_path(env: dict[str, str]) -> dict[str, str]:
+    """Make dotnet global tools available to child processes.
+
+    The workspace relies on tools such as `dotnet ef` and ServiceStack `x`.
+    Dotnet installs them under ~/.dotnet/tools, but non-interactive agent
+    sessions do not always include that directory in PATH.
+    """
+    tools_dir = Path.home() / ".dotnet" / "tools"
+    if not tools_dir.exists():
+        return env
+    current_path = env.get("PATH", "")
+    paths = current_path.split(os.pathsep) if current_path else []
+    tools_path = str(tools_dir)
+    if tools_path not in paths:
+        env["PATH"] = os.pathsep.join([current_path, tools_path]) if current_path else tools_path
+    return env
+
+
+def ensure_dotnet_sdk_workaround(be_path: Path, *, dry_run: bool = False) -> None:
+    """Keep older feature branches buildable with the installed .NET SDK.
+
+    SDK 10.0.108 can fail net10.0 restores with NETSDK1226 unless this property
+    is present. Main has it, but older feature worktrees may not.
+    """
+    props = be_path / "Directory.Build.props"
+    if not props.exists():
+        print(f"Warning: {props} not found; cannot apply SDK restore workaround.")
+        return
+    content = props.read_text(encoding="utf-8")
+    if "AllowMissingPrunePackageData" in content:
+        return
+    marker = "<PropertyGroup>"
+    insertion = (
+        "    <!-- Work around SDK 10.0.108 missing prune-package metadata for net10.0 restore. -->\n"
+        "    <AllowMissingPrunePackageData>true</AllowMissingPrunePackageData>\n"
+    )
+    if marker not in content:
+        raise ToolError(f"Cannot apply SDK restore workaround; missing {marker} in {props}")
+    updated = content.replace(marker, marker + "\n" + insertion, 1)
+    print(f"> patch {props} (AllowMissingPrunePackageData)")
+    if not dry_run:
+        props.write_text(updated, encoding="utf-8")
+
+
+def python_has_module(python_exe: str, module_name: str) -> bool:
+    proc = subprocess.run(
+        [python_exe, "-c", f"import {module_name}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return proc.returncode == 0
+
+
+def ensure_db_sync_python(python_exe: str, *, dry_run: bool = False) -> str:
+    """Return a Python executable that can run DB export/import helpers."""
+    if dry_run or python_has_module(python_exe, "pymssql"):
+        return python_exe
+
+    venv_dir = Path("/tmp") / f"myhospital-db-sync-py{sys.version_info.major}{sys.version_info.minor}"
+    venv_python = venv_dir / "bin" / "python"
+    if not venv_python.exists():
+        print(f"> create Python venv for DB sync: {venv_dir}")
+        run([sys.executable, "-m", "venv", str(venv_dir)])
+    if not python_has_module(str(venv_python), "pymssql"):
+        print("> install DB sync dependency: pymssql")
+        run([str(venv_python), "-m", "pip", "install", "pymssql"])
+    return str(venv_python)
+
+
 def format_cmd(argv: Iterable[object]) -> str:
     return " ".join(str(part) for part in argv)
 
@@ -138,7 +207,7 @@ def run(
     print(f"> {redact_cmd(argv)}")
     if dry_run:
         return subprocess.CompletedProcess(argv, 0, "", "")
-    merged_env = os.environ.copy()
+    merged_env = with_dotnet_tools_on_path(os.environ.copy())
     if env:
         merged_env.update(env)
     return subprocess.run(
@@ -187,6 +256,30 @@ def read_env_lines(path: Path) -> list[str]:
     if not path.exists():
         return []
     return path.read_text(encoding="utf-8").splitlines()
+
+
+def parse_env_file(path: Path) -> dict[str, str]:
+    """Parse a simple KEY=VALUE .env file without invoking a shell."""
+    values: dict[str, str] = {}
+    if not path.exists():
+        raise ToolError(f"Env file not found: {path}")
+    for line_no, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        if "=" not in line:
+            raise ToolError(f"Invalid .env line {path}:{line_no}: missing '='")
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", key):
+            raise ToolError(f"Invalid .env key {path}:{line_no}: {key!r}")
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+            value = value[1:-1]
+        values[key] = value
+    return values
 
 
 def set_env_line(lines: list[str], name: str, value: object) -> list[str]:
@@ -380,7 +473,10 @@ def init_db_slots(args: argparse.Namespace) -> None:
         wait_sql_container(cfg.container_name, password)
         print(f"Ready: SQL Server slot {slot} on localhost,{cfg.sql_port}")
     print()
-    print("DB slots are ready.")
+    if args.dry_run:
+        print("DB slot dry-run complete. No containers were created or started.")
+    else:
+        print("DB slots are ready.")
 
 
 def git_skip_worktree_files(repo: Path) -> list[str]:
@@ -489,8 +585,22 @@ def create_worktree(args: argparse.Namespace) -> None:
         )
         print(f"Using migration source: {migration_source.path} ({migration_source.label})")
 
+    fe_source_ref = f"refs/remotes/origin/{args.fe_base}"
+    be_source_ref = f"refs/remotes/origin/{args.be_base}"
+    run(["git", "-C", str(fe_repo), "fetch", "origin", f"+refs/heads/{args.fe_base}:{fe_source_ref}"], dry_run=args.dry_run)
+    run(["git", "-C", str(be_repo), "fetch", "origin", f"+refs/heads/{args.be_base}:{be_source_ref}"], dry_run=args.dry_run)
+
     for repo, ref, label in ((fe_repo, args.fe_base, "FE base"), (be_repo, args.be_base, "BE base")):
-        run(["git", "-C", str(repo), "rev-parse", "--verify", f"{ref}^{{commit}}"], capture=True)
+        proc = run(
+            ["git", "-C", str(repo), "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            capture=True,
+            check=False,
+        )
+        if proc.returncode != 0:
+            run(
+                ["git", "-C", str(repo), "rev-parse", "--verify", f"refs/remotes/origin/{ref}^{{commit}}"],
+                capture=True,
+            )
         print(f"{label} OK: {ref}")
 
     for repo, branch, label in ((fe_repo, fe_branch, "FE branch"), (be_repo, be_branch, "BE branch")):
@@ -510,11 +620,6 @@ def create_worktree(args: argparse.Namespace) -> None:
                     "or pass --allow-port-in-use."
                 )
 
-    fe_source_ref = f"refs/remotes/origin/{args.fe_base}"
-    be_source_ref = f"refs/remotes/origin/{args.be_base}"
-    run(["git", "-C", str(fe_repo), "fetch", "origin", f"+refs/heads/{args.fe_base}:{fe_source_ref}"], dry_run=args.dry_run)
-    run(["git", "-C", str(be_repo), "fetch", "origin", f"+refs/heads/{args.be_base}:{be_source_ref}"], dry_run=args.dry_run)
-
     # Everything below mutates local state. Track what we create so a failure on
     # either side rolls back cleanly instead of leaving a half-built worktree
     # that blocks the next retry ("folder already exists").
@@ -528,6 +633,7 @@ def create_worktree(args: argparse.Namespace) -> None:
         run(["git", "-C", str(be_repo), "worktree", "add", "-b", be_branch, str(be_worktree), be_source_ref], dry_run=args.dry_run)
         if not args.dry_run:
             created.append((be_repo, be_branch, be_worktree))
+        ensure_dotnet_sdk_workaround(be_worktree, dry_run=args.dry_run)
 
         remove_telerik_from_solution(be_worktree, dry_run=args.dry_run)
 
@@ -633,8 +739,8 @@ def create_worktree(args: argparse.Namespace) -> None:
     print(f"BE: {be_worktree}")
     print()
     print("Run BE:")
-    print(f"  cd {be_worktree}")
-    print("  dotnet run --project MyHospital --no-launch-profile")
+    print(f"  cd {root}")
+    print(f"  python scripts/worktree.py run-be --be-path {be_worktree}")
     print()
     print("Run FE:")
     print(f"  cd {fe_worktree}")
@@ -674,6 +780,9 @@ def sync_db(args: argparse.Namespace) -> None:
     assert_safe_sql_name(args.target_database)
     for command in ("git", "docker", "dotnet", args.python):
         require_command(command)
+    db_python = ensure_db_sync_python(args.python, dry_run=args.dry_run)
+    ensure_dotnet_sdk_workaround(be_path, dry_run=args.dry_run)
+    run(["dotnet", "ef", "--version"], dry_run=args.dry_run, capture=True)
 
     backup_dir = Path(args.backup_dir).resolve() if args.backup_dir else root / "_db-backups"
     if not args.dry_run:
@@ -737,7 +846,7 @@ def sync_db(args: argparse.Namespace) -> None:
             "OUTPUT_FILE": backup_file,
         }
     ):
-        run([args.python, "Scripts/export_db_data.py"], cwd=be_path, dry_run=args.dry_run)
+        run([db_python, "Scripts/export_db_data.py"], cwd=be_path, dry_run=args.dry_run)
 
     print()
     print(f"Clearing target DB objects in slot {args.slot}")
@@ -750,7 +859,7 @@ def sync_db(args: argparse.Namespace) -> None:
             "DB_PASSWORD": args.sql_password,
         }
     ):
-        run([args.python, "Scripts/drop_db_objects.py"], cwd=be_path, dry_run=args.dry_run)
+        run([db_python, "Scripts/drop_db_objects.py"], cwd=be_path, dry_run=args.dry_run)
 
     target_connection = sql_connection_string(
         cfg.sql_port,
@@ -897,12 +1006,32 @@ def sync_db(args: argparse.Namespace) -> None:
             "DB_PASSWORD": args.sql_password,
         }
     ):
-        run([args.python, "Scripts/import_db_data.py", str(backup_file)], cwd=be_path, dry_run=args.dry_run)
+        run([db_python, "Scripts/import_db_data.py", str(backup_file)], cwd=be_path, dry_run=args.dry_run)
 
     print()
-    print("DB sync complete.")
-    print(f"Target: localhost,{cfg.sql_port}/{args.target_database}")
-    print(f"Backup kept at: {backup_file}")
+    if args.dry_run:
+        print("DB sync dry-run complete. No backup, schema reset, migration, or import was executed.")
+        print(f"Target preview: localhost,{cfg.sql_port}/{args.target_database}")
+        print(f"Backup preview path: {backup_file}")
+    else:
+        print("DB sync complete.")
+        print(f"Target: localhost,{cfg.sql_port}/{args.target_database}")
+        print(f"Backup kept at: {backup_file}")
+
+
+def run_be(args: argparse.Namespace) -> None:
+    be_path = Path(args.be_path).resolve()
+    env_file = Path(args.env_file).resolve() if args.env_file else be_path / ".env"
+    if not be_path.exists():
+        raise ToolError(f"BE path not found: {be_path}")
+    require_command("dotnet")
+    ensure_dotnet_sdk_workaround(be_path)
+    env_values = parse_env_file(env_file)
+    project = args.project or "MyHospital/MyHospital.csproj"
+    cmd = ["dotnet", "run", "--project", project, "--no-launch-profile"]
+    if args.no_build:
+        cmd.append("--no-build")
+    run(cmd, cwd=be_path, env=env_values)
 
 
 def cleanup(args: argparse.Namespace) -> None:
@@ -1104,6 +1233,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scan-worktrees", action="store_true", help="Allow scanning existing worktrees for migration sources.")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=sync_db)
+
+    p = sub.add_parser("run-be", help="Run a BE checkout with environment loaded from its .env file.")
+    p.add_argument("--be-path", required=True)
+    p.add_argument("--env-file")
+    p.add_argument("--project", default="MyHospital/MyHospital.csproj")
+    p.add_argument("--no-build", action="store_true")
+    p.set_defaults(func=run_be)
 
     p = sub.add_parser("cleanup", help="Remove a clean task worktree.")
     p.add_argument("--slug", required=True)

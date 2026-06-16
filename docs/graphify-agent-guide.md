@@ -1,6 +1,6 @@
 # Graphify — Hướng dẫn cho coding agent
 
-> File này hướng dẫn **mọi agent** (Claude Code, Codex CLI/desktop, Grok, Antigravity, Gemini, Cursor…)
+> File này hướng dẫn **mọi agent** (Claude Code, Codex CLI/desktop, Grok, Antigravity, Cursor…)
 > cách dùng knowledge graph mà graphify đã build cho workspace này.
 > Trỏ tới từ `AGENTS.md` (mục *Knowledge Graph*) và `CLAUDE.md`.
 
@@ -11,6 +11,8 @@
 - Graph đã build nằm ở **`graphify-out/graph.json`**.
 - Đây là **knowledge graph của `docs/` + `specs/`** (133 file, ~250K từ) — tức là **bản đồ của tài
   liệu BA / spec / quyết định thiết kế / task slices / convention**, **KHÔNG phải graph của code FE/BE**.
+- **Tìm/hiểu source code FE/BE → dùng CodeGraph, KHÔNG dùng graphify** (xem
+  `harness/rules/source-discovery.md`). graphify chỉ cho design intent của docs/specs.
 - Cách dùng nhanh nhất cho **bất kỳ agent nào có shell**:
   ```fish
   graphify query "<câu hỏi>"        # trả về vùng đồ thị liên quan, KHÔNG cần API key
@@ -31,7 +33,7 @@
 | Spec admission/inpatient (`specs/admission/**`) | Source code FE (`myhospital-fe/src`) |
 | Spec bed-day billing (`specs/ipd_bed*/**`) | Source code BE (`myhospital-be/**`) |
 | Task plan & audit (`docs/tasks`, `docs/session-notes`) | Test runtime, log, build artifact |
-| Agent rules / convention (`docs/agent-rules`, `AGENTS.md`, `CLAUDE.md`) | Hình ảnh / screenshot (đã loại) |
+| Agent rules / convention (`harness/rules`, `AGENTS.md`, `CLAUDE.md`) | Hình ảnh / screenshot (đã loại) |
 | Quyết định đã chốt (`_DECISIONS.md`), override của architect | `worktrees/`, `trash/`, `bin/`, `obj/`, `node_modules` (đã loại) |
 
 > **Hệ quả quan trọng:** graph này giúp trả lời câu hỏi về **ý định thiết kế, quan hệ giữa các spec,
@@ -120,7 +122,7 @@ Khi agent muốn tự duyệt (NetworkX, code riêng): load `graphify-out/graph.
 > graphify claude install     # cài Claude integration cho project hiện tại
 > ```
 > Platform được hỗ trợ: `claude, codex, opencode, kilo, aider, copilot, claw, droid, trae, trae-cn,`
-> `hermes, kiro, pi, codebuddy, antigravity, antigravity-windows, windows, kimi, amp, devin, gemini, cursor`.
+> `hermes, kiro, pi, codebuddy, antigravity, antigravity-windows, windows, kimi, amp, devin, cursor`.
 > (**Grok build** không có installer → dùng Cách A/B.)
 
 ### Claude Code
@@ -144,8 +146,8 @@ Khi agent muốn tự duyệt (NetworkX, code riêng): load `graphify-out/graph.
 - Không có installer riêng → **Cách A** (đọc `GRAPH_REPORT.md`) + **Cách B** (chạy `graphify query`).
 - Nếu Grok hỗ trợ MCP, dùng Cách C.
 
-### Gemini / Cursor
-- `graphify gemini install` hoặc `graphify cursor install`. Còn lại giống trên.
+### Cursor
+- `graphify cursor install`. Còn lại giống trên.
 
 ---
 
@@ -198,7 +200,7 @@ Graph hiện tại được build với phạm vi **`docs/` + `specs/`, loại `
   # Trong Claude Code (có skill + LLM để chạy subagent trích xuất):
   /graphify .          # rồi chọn lại scope docs+specs, loại noise như lần đầu
   ```
-  hoặc dùng Gemini key + CLI:
+  hoặc dùng LLM key + CLI:
   ```fish
   set -x GEMINI_API_KEY "..."; graphify update .   # cập nhật, không cần subagent
   ```
@@ -245,4 +247,4 @@ obj/
 | Cài skill vào Claude | `graphify claude install` |
 
 Tất cả lệnh duyệt (`query/path/explain/affected`) **không cần API key**. Chỉ build ngữ nghĩa mới (semantic
-extraction) và `label` mới cần LLM (Gemini key hoặc host LLM của Claude Code chạy subagent).
+extraction) và `label` mới cần LLM (API key phù hợp hoặc host LLM của Claude Code chạy subagent).

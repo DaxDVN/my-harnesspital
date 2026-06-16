@@ -39,6 +39,15 @@ function wtcreate --description 'Create a worktree: wtcreate <slug> <slot> [extr
     command python $MYHOSPITAL_ROOT/scripts/worktree.py create --slug $argv[1] --slot $argv[2] $argv[3..-1]
 end
 
+function wtrunbe --description 'Run backend with .env loaded safely: wtrunbe <slug> [extra run-be flags]'
+    if test (count $argv) -lt 1
+        echo "usage: wtrunbe <slug> [extra worktree.py run-be flags]" >&2
+        echo "  e.g. wtrunbe bed --no-build" >&2
+        return 2
+    end
+    command python $MYHOSPITAL_ROOT/scripts/worktree.py run-be --be-path $MYHOSPITAL_ROOT/worktrees/$argv[1]/be $argv[2..-1]
+end
+
 function _mh_open_session --description 'internal: open a worktree Zellij session'
     # args: role(orch|impl) default_tool slug [tool]
     set -l role $argv[1]

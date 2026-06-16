@@ -1,0 +1,10 @@
+id: mh-no-axios-import-ts
+language: typescript
+severity: error
+message: "Import from 'axios' — use the module adapter (extends GeneratedApiClient) + useMasterData, not axios. FE-V2. (Lifted from the FE ESLint pack to the harness ast-grep floor — enforced by mh_scan, no project eslint.config change needed.)"
+rule:
+  kind: import_statement
+  has:
+    kind: string
+    stopBy: end
+    regex: "['\"]axios['\"]"

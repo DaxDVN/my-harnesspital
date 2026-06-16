@@ -34,7 +34,8 @@ HARNESS_INCLUDES = [
     ".claude",
     ".codex",
     "scripts",
-    "docs/agent-rules",
+    "harness",
+    "docs/harness",
     "docs/graphify-agent-guide.md",
     # Small graphify metadata kept for forensic/provenance record (not the graph itself).
     "graphify-out/.graphify_root",

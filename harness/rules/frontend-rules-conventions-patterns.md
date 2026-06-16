@@ -57,6 +57,8 @@ Use this order during reviews:
    - `docs/components/component-inventory.generated.md`
    - `docs/reuse/reuse-catalog.generated.md`
 
+**Stale project docs — do NOT trust:** `myhospital-fe/ARCHITECTURE-OVERVIEW.md` and `myhospital-fe/BEST-PRACTICES-NEW-PAGE.md` predate the live app (audit V10: bearer-vs-cookie auth, Infinity-vs-`staleTime:0`, Context+reducer-vs-RQ-adapter, dead `demo`/`samples`). **This canon + live code override them** — the warning is recorded here at the harness layer instead of editing those project files. See memory `fe-live-conventions-vs-stale-docs`.
+
 If generated DTOs/client disagree with `api.md`, stop and report the contract mismatch.
 Do not compensate in FE by hand-writing DTOs, constants, hooks, or request types.
 If the current task explicitly conflicts with a `BLOCK`/forbidden rule, use the stop protocol
@@ -107,6 +109,8 @@ Treat uncertainty between `BLOCK` and `WARN` as `BLOCK` until the harness or a h
 - Prefer `cn()` for conditional class names.
 
 ## Canonical Warehouse Inventory References
+
+> ⚠️ **Warehouse is a PARTIAL exemplar** (FE audit `velvet/notes/myhospital-fe-convention-audit-2026-06-15.md` §4). COPY: routing (`lazy`+`Suspense`+`LayoutSelector`+Provider), mutation hooks `adapter.useXxx({successMessage, invalidateQueries, onSuccess})`, `useReactTable`+`EnhancedDataGrid`+`useMemo` columns, shadcn UI, RHF+`zodResolver`+dirty-guard. **DO NOT copy:** monolithic 600+-line page files (split wrapper + `components/*-content.tsx`), `useState`-only context used as a data layer (data belongs in RQ hooks / `useMasterData`), schema inlined in the page (put it in `forms/<x>-schema.ts`), `models.ts` that only re-exports DTOs, or the hardcoded `'Doing'` status string at `inventory-form-sheet.tsx:188` (use `Statuses.*`).
 
 Treat these files as the first implementation reference, then verify broader project patterns with `rg`:
 
@@ -211,6 +215,18 @@ Reference helpers:
 - `src/modules/common/hooks/use-default-vat.ts`
 
 Do not add a separate API call for dropdown/reference lists if the entity is available as master data.
+
+**No name/code string compare against master data (BLOCK — FE-V3).** Resolve defaults and business rules
+by BE flag or `Id`, never by comparing a name/code literal — the DB can rename and the FE fails silently.
+
+```ts
+// BAD (FE-V3): masterData.MasterEthnicity.find(e => e.EthnicityName?.toLowerCase() === 'kinh')  // patient-admin-info-block.tsx:225
+// GOOD: masterData.MasterEthnicity.find(e => e.IsDefault)                                       // flag from BE
+// Reference selection by Id, not object: find(x => String(x.Id) === formValue)
+```
+Use the BE flags (`IsDefault`, `RequiresCitizenId`, `RequiresTransferInfo`, `HealthInsuranceOption`,
+`CommercialInsuranceOption`, `IsForeign`) and generated `Constants.ts` enums. `mh_scan` flags the literal
+`=== '<x>'`-inside-`.find()` shape as `FE-V3`.
 
 ## OData And Pagination
 
@@ -424,7 +440,8 @@ Docs-only extraction:
 UI/code changes:
 
 - Run `npm run components:index` before/after material UI work.
-- Run `npx tsc --noEmit` from `myhospital-fe/`.
+- Run `npx tsc --noEmit` from `myhospital-fe/` (catches the dead `@/lib/dtos/dtos` import, FE-V1).
+- Run the deterministic floor: `python scripts/mh_scan --root worktrees/<slug>/fe --scope <changed> --format summary` (FE-V1/V2/V3 via ast-grep pack in `scripts/sgconfig/`).
 - Run scoped ESLint only, e.g. `npx eslint src/path/to/file.tsx --fix`.
 - Never run `npm run lint`.
 - For visible UI changes, run dev server and verify in browser.

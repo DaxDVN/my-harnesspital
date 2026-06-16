@@ -15,6 +15,13 @@ The current runtime is Python, not PowerShell. The user shell is fish, but scrip
 
 Main FE/BE keep using `mssql-hospital` on `localhost,1433`.
 
+## Source-code search (CodeGraph)
+
+Explore source with **CodeGraph**, not a broad `rg` dump or graphify. Indexes are per code
+repo (`myhospital-be/`, `myhospital-fe/`, and an active `worktrees/<slug>/{be,fe}`), never at
+root. After creating a worktree, `just codegraph-init-worktree <slug>`; check with
+`just codegraph-status`. Full policy + command table: `harness/rules/source-discovery.md`.
+
 ## List Worktrees
 
 ```fish
@@ -77,7 +84,7 @@ Default tools:
 
 Helpers (`zorch`/`zimpl`/`zls`/`zkillwt`/`wtlist`/`wtcreate`/`wtjoin`) live in
 `scripts/fish/myhospital-zellij.fish` — source it once (see
-`docs/agent-rules/worktree-workflow.md`), then:
+`harness/rules/worktree-workflow.md`), then:
 
 ```fish
 zorch <slug> <orchestrator_tool>
@@ -118,8 +125,14 @@ zimpl bed composer
 ## Run Backend
 
 ```fish
-cd worktrees/fix-admission-birthdate/be
-dotnet run --project MyHospital --no-launch-profile
+python scripts/worktree.py run-be --be-path worktrees/fix-admission-birthdate/be
+```
+
+Shortcuts:
+
+```fish
+just wt-run-be fix-admission-birthdate --no-build
+wtrunbe fix-admission-birthdate --no-build
 ```
 
 ## Run Frontend
