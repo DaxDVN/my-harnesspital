@@ -122,7 +122,7 @@ Latest real probes:
 - OpenCode MCP list exposes `codegraph` only; browser automation is CLI-based through `agent-browser`, not MCP.
 - OpenCode agent list exposes `webfetch`, `websearch`, and `bash` capabilities.
 - OpenCode agent list also shows project-local skill permission for `agent-browser`.
-- `agent-browser` is available at `/home/dax/Documents/arabica/tools/agentflow-opencode/.agentflow/bin/agent-browser`.
+- `agent-browser` is available at `/home/dax/Documents/arabica/tools/progressive-test/.agentflow/bin/agent-browser`.
 - Firefox exists at `/usr/bin/firefox`.
 - `agent-browser` Chrome exists at `/home/dax/.agent-browser/browsers/chrome-149.0.7827.115`.
 
@@ -148,7 +148,7 @@ Conclusion: current environment can run browser automation through Vercel Labs `
 
 ## Harness integration + envelope/triage/orchestration (2026-06-16, Opus 4.8)
 
-Moved the whole tool into the harness: `engine/workflows/agentflow-opencode/` (relative ROOT = `parents[2]`,
+Moved the whole tool into the harness: `engine/workflows/progressive-test/` (relative ROOT = `parents[2]`,
 so the move was self-contained; doctor + smoke pass from the new location). Driven by the new owner-invoked
 `engine/skills/agentflow/SKILL.md` orchestrator skill (Claude reaches it via the `.claude/skills`→`engine/skills` symlink).
 

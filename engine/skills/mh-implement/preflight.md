@@ -12,7 +12,7 @@ Goal: never author what already exists, and copy the *right* pattern. Reuse is t
 - Else bounded `rg -l` / `fd` for the exact symbol/area (never broad-dump FE). `engine/rules/source-discovery.md` is the full policy.
 
 ## 3. Exemplar selection — warehouse, GOOD parts only
-Canonical refs (from `frontend-rules-conventions-patterns.md`): `src/modules/warehouse/{adapters/warehouse-adapter.ts, warehouse-routing.tsx, pages/inventory/inventory-list-page.tsx, pages/inventory/inventory-form-sheet.tsx, components/*}`.
+Canonical refs (from `frontend.md`): `src/modules/warehouse/{adapters/warehouse-adapter.ts, warehouse-routing.tsx, pages/inventory/inventory-list-page.tsx, pages/inventory/inventory-form-sheet.tsx, components/*}`.
 
 Audit `velvet/notes/myhospital-fe-convention-audit-2026-06-15.md §4` — warehouse is a **PARTIAL exemplar**:
 

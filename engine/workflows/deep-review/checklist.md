@@ -24,13 +24,13 @@ Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-
 
 ## D2 — be-conventions · Tier: **Sonnet**
 - **Applies-to:** BE (`*.cs`, `worktrees/*/be/**`).
-- **Sources:** `engine/rules/backend-rules-conventions-patterns.md`, `myhospital-be/CONVENTIONS.md`.
+- **Sources:** `engine/rules/backend.md`, `myhospital-be/CONVENTIONS.md`.
 - **Check:** BaseService\<T\> + helper (GetAllByTenant…)? **Không transaction/lock** (write-order + idempotent + derived)? **Không N+1** (load-all + Dictionary lookup)? 1 query/bảng/API? Multi-tenant scope (TenantId+HospitalId)? Soft-delete + audit auto (không set tay)? Listing API declarative (`[FilterField]`, ODataRequest, PagingDataSource\<T\>)? Request DTO `\<Verb\>\<Resource\>Request` + IReturn? `[RequireAuth(...)]` + `[Tag]`? ValidationHelper + BusinessException(ErrorCodes)?
 - **Known bug-classes:** N+1 trong loop; `BeginTransactionAsync`/`IProcessLockService` lén; thiếu tenant scope → rò dữ liệu viện khác; set CreatedAt/UpdatedBy tay; endpoint thiếu RequireAuth; `throw Exception` thay BusinessException; `ErrorCodes` string-literal thay vì hằng số `[scanner:error_code_literal]` (ClaudeAnalyzeService.cs:30, PrescriptionHoldService.cs:186); listing API dùng `GetAll`/vòng lặp thay declarative `[scanner:legacy_listing]` (CTApi, MRIApi, XRayApi); API controller quá béo — business logic inline thay service `[scanner:fat_api]` (CashierApi.cs:140); service không có interface (không thể mock/swap) `[manual]` (BedService, Configure.AppHost.cs:94).
 
 ## D3 — fe-conventions · Tier: **Sonnet**
 - **Applies-to:** FE (`*.ts/*.tsx`, `worktrees/*/fe/**`).
-- **Sources:** `engine/rules/frontend-rules-conventions-patterns.md`, `myhospital-fe/CLAUDE.md`.
+- **Sources:** `engine/rules/frontend.md`, `myhospital-fe/CLAUDE.md`.
 - **Check:** server-state qua React Query **adapter** (không `fetch`/`axios` trong UI)? mutation kèm invalidation? dùng EnhancedDataGrid (không tự dựng grid)? **không global state** (Zustand/Jotai/Redux) khi chưa duyệt? **không tính tiền/tồn ở FE**? không permission-fallback logic? form/routing/permission theo rule? id-only props + useMasterData?
 - **Known bug-classes:** gọi `fetch`/`axios` trực tiếp `[scanner:mh-no-raw-fetch]` (legacy §6: result-viewers/query-provider/retail-log OK); mutation không invalidate query → UI stale; FE tự cộng tiền/tồn; bypass EnhancedDataGrid; thêm Zustand không xin phép; hard-code chuỗi tiếng Việt (i18n); so master-data theo name/code `=== 'kinh'` thay vì `IsDefault`/flag/Id `[scanner:mh-masterdata-name-compare]` (FE-V3, patient-admin-info-block.tsx:225); form `useForm` thiếu `zodResolver` dù schema tồn tại `[manual]` (FE-V4, ct-page.tsx:189); `serviceStackClient.*` gọi thẳng trong component `[scanner:mh-servicestackclient-in-component]` (ngoại lệ duyệt: inventory-form-sheet.tsx:306).
 
@@ -42,13 +42,13 @@ Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-
 
 ## D5 — data-access · Tier: **Sonnet**
 - **Applies-to:** BE (+ FE nếu query phức tạp).
-- **Sources:** `backend-rules-conventions-patterns.md` (DB&Query), code service quanh entity.
+- **Sources:** `backend.md` (DB&Query), code service quanh entity.
 - **Check:** N+1 (chéo D2); transaction boundary (đúng là KHÔNG dùng — kiểm có lén không); GlobalQueryFilter soft-delete không bị bypass (`IgnoreQueryFilters`?); tenant filter không rò; số query/API hợp lý; index/scan lớn.
 - **Known bug-classes:** `IgnoreQueryFilters` làm lộ bản ghi đã xóa; query trong vòng lặp; thiếu HospitalId trong filter; query lọc thiếu HospitalId/TenantId trên entity kế thừa Base — data rò giữa các viện `[scanner:missing_hospital_scope]` (DoctorService.cs:92, ProductService.cs:249); `BeginTransactionAsync`/`IProcessLockService` lén `[scanner:new_transaction]`; hard-delete bằng `Remove()`/`ExecuteDeleteAsync` thay soft-delete `[scanner:hard_delete]` (mitigated nếu entity không có DeletedAt — xác nhận); `DeletedAt` set tay thay vì để BaseService/interceptor xử lý `[scanner:redundant_softdelete]`.
 
 ## D6 — security-pii · Tier: **Sonnet**
 - **Applies-to:** both.
-- **Sources:** `backend-rules-conventions-patterns.md` (auth), code logging.
+- **Sources:** `backend.md` (auth), code logging.
 - **Check:** **không log** số thẻ BHYT / CCCD / mã bệnh nhân / payload hồ sơ (HIS PHI); endpoint không `[AllowAnonymous]` nhầm; authz đúng function/action; không injection (SQL string-concat, dynamic); không lộ secret/connection string; không trả field nhạy cảm thừa trong DTO.
 - **Known bug-classes:** `Console.WriteLine`/logger in mã BN; `[AllowAnonymous]` sót; nối chuỗi SQL; trả cả entity thay vì DTO; endpoint thiếu `[RequireAuth(...)]` hoàn toàn (không có cả `[AllowAnonymous]` — có thể là quên, không phải chủ ý) `[scanner:auth_coverage]` (DiagnosticsApi.cs, PaymentMerchantConfigApi.cs).
 
@@ -72,7 +72,7 @@ Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-
 
 ## D10 — component-reuse-state · Tier: **Haiku→Sonnet**
 - **Applies-to:** FE.
-- **Sources:** `myhospital-fe/docs/components/component-inventory.generated.md` (chạy `npm run components:index` nếu thiếu/cũ), `frontend-rules-conventions-patterns.md`.
+- **Sources:** `myhospital-fe/docs/components/component-inventory.generated.md` (chạy `npm run components:index` nếu thiếu/cũ), `frontend.md`.
 - **Check:** component đã có trong inventory chưa (tránh trùng lặp)? provider hierarchy đúng? dùng design-system default (shadcn) thay vì tự chế? state đặt đúng tầng?
 - **Known bug-classes:** dựng lại component đã có; provider đặt sai tầng; tự style thay vì shadcn default; copy nguyên page warehouse nguyên khối (600+ dòng) thay vì split wrapper+content / context `useState`-only làm data layer `[manual]` (FE audit §4).
 

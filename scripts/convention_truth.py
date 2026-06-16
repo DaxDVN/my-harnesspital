@@ -3,7 +3,7 @@
 
 The BE audit (`velvet/notes/myhospital-be-conventions-audit-2026-06-15.md`)
 found `myhospital-be/CONVENTIONS.md` factually wrong in 5 places (D1–D6) while
-`engine/rules/backend-rules-conventions-patterns.md` was largely correct.
+`engine/rules/backend.md` was largely correct.
 Because `mh-review` D2 trusts those docs, a stale doc poisons review.
 
 This checker asserts each documented claim against the live code and flags the
@@ -21,7 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 CONV = ROOT / "myhospital-be" / "CONVENTIONS.md"
-BE_RULES = ROOT / "engine" / "rules" / "backend-rules-conventions-patterns.md"
+BE_RULES = ROOT / "engine" / "rules" / "backend.md"
 FUNCTIONS = ROOT / "myhospital-be" / "MyHospital.Utilities" / "Constants" / "Functions.cs"
 MODELS = ROOT / "myhospital-be" / "MyHospital.ServiceInterface" / "Models"
 
@@ -152,7 +152,7 @@ def main() -> int:
         print(f"  [{status:4}] {name.ljust(width)}  {detail}")
     print(f"\nSummary: {counts[OK]} OK, {counts[WARN]} WARN, {counts[INFO]} INFO, {counts[FAIL]} FAIL")
     if counts[INFO]:
-        print("Note: CANON = engine/rules/backend-rules-conventions-patterns.md (authoritative, verified correct). "
+        print("Note: CANON = engine/rules/backend.md (authoritative, verified correct). "
               "The 'doc:*' items are the SUPERSEDED myhospital-be/CONVENTIONS.md (legacy) — advisory only, "
               "NO project edit required (decision 2026-06-16; canon supersedes). "
               "Optional hygiene diff kept at docs/harness/pending/CONVENTIONS.fixed.md.")

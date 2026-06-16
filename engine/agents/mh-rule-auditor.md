@@ -1,5 +1,5 @@
 ---
-name: myhospital-rule-auditor
+name: mh-rule-auditor
 description: Read-only auditor for MyHospital FE/BE convention violations. Use after a plan or diff when you need an independent check of BLOCK/WARN rule compliance without modifying files.
 tools: Read, Glob, Grep, Bash
 model: haiku

@@ -14,7 +14,7 @@ Companion to **`mh-review`**. Where mh-review *finds* issues after the fact, mh-
 
 > Rule of thumb: *feature → implement (uses scaffold) · one pattern → scaffold · bug → fix.*
 
-Bundle docs in this folder: **[preflight.md](./preflight.md)** (reuse discovery), **[definition-of-done.md](./definition-of-done.md)** (the gate). Live convention source of truth: `engine/rules/frontend-rules-conventions-patterns.md` (FE) + `backend-rules-conventions-patterns.md` (BE). FE reality spine (memory `fe-live-conventions-vs-stale-docs` + audit `velvet/notes/myhospital-fe-convention-audit-2026-06-15.md`): RQ-via-adapter + `useMasterData` + id-only + shadcn. **Do NOT trust `ARCHITECTURE-OVERVIEW.md` / `BEST-PRACTICES-NEW-PAGE.md` — both stale (audit V10).**
+Bundle docs in this folder: **[preflight.md](./preflight.md)** (reuse discovery), **[definition-of-done.md](./definition-of-done.md)** (the gate). Live convention source of truth: `engine/rules/frontend.md` (FE) + `backend.md` (BE). FE reality spine (memory `fe-live-conventions-vs-stale-docs` + audit `velvet/notes/myhospital-fe-convention-audit-2026-06-15.md`): RQ-via-adapter + `useMasterData` + id-only + shadcn. **Do NOT trust `ARCHITECTURE-OVERVIEW.md` / `BEST-PRACTICES-NEW-PAGE.md` — both stale (audit V10).**
 
 ## B0 — Scope & worktree
 Follow the Session Start Protocol: `python scripts/worktree.py list`, confirm slug/slot, **work in `worktrees/<slug>/fe|be`** — never edit `myhospital-fe/` or `myhospital-be/` directly (guard hook enforces). If a spec module exists, read `specs/<module>/{02-requirements,03-ui,06-decision-log,08-api}.md` — Confirmed requirements + decisions are the business source of truth. FE+BE work → BE contract first, regen FE DTO/client, then FE usage.
@@ -51,4 +51,4 @@ Before handing off, run `mh-review` on **only your diff** (scope = the changed f
 Worktree-only edits; honor the guard hook (no git history mutation, no recursive delete, no new deps, no editing generated files). Report actual validation run (Validation Contract). If a required DTO/constant/permission is missing → **stop, report a BE/API contract blocker** (do not hand-write or work around). If a business rule is ambiguous → route to `specs/<module>/05-open-questions.md`, do not invent it.
 
 ## Learning loop
-After mh-review closes the feature, promote any new/recurring mistake to the cheapest layer (`mh-review/protocol.md §7`): guard/ESLint/ast-grep (deterministic) → `agent-rules/*` (convention) → `mh-review/checklist.md` "Known bug-classes" → auto-memory.
+After mh-review closes the feature, promote any new/recurring mistake to the cheapest layer (`engine/workflows/deep-review/protocol.md §7`): guard/ESLint/ast-grep (deterministic) → `engine/rules/*` (convention) → `engine/workflows/deep-review/checklist.md` "Known bug-classes" → auto-memory.

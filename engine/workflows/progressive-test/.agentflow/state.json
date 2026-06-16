@@ -1,0 +1,29 @@
+{
+  "current_round": "round-smoke-1781624378-99651",
+  "state": "DONE",
+  "scenario": "mock-login-flow",
+  "executor": {
+    "runtime": "opencode",
+    "model": "mimo-v2.5",
+    "provider": "xiaomi-token-plan-sgp",
+    "call_method": "bash-wrapper"
+  },
+  "codex_review_count": 0,
+  "max_codex_reviews": 2,
+  "rca_revision_count": 0,
+  "max_rca_revisions": 2,
+  "budget": {
+    "max_rounds": 5,
+    "max_total_minutes": 180,
+    "max_opencode_iterations_per_round": 2
+  },
+  "artifacts": {
+    "bug_packet": ".agentflow/rounds/round-smoke-1781624378-99651/01-bug-packet.json",
+    "rca_plan": ".agentflow/rounds/round-smoke-1781624378-99651/02-rca-plan.json",
+    "codex_review": null,
+    "approved_plan": ".agentflow/rounds/round-smoke-1781624378-99651/04-approved-plan.md",
+    "implementation_report": ".agentflow/rounds/round-smoke-1781624378-99651/05-implementation-report.json",
+    "retest_report": ".agentflow/rounds/round-smoke-1781624378-99651/06-retest-report.json"
+  },
+  "last_error": null
+}

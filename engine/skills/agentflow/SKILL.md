@@ -5,7 +5,7 @@ description: Owner-invoked ONLY — autonomous FE-bug-fix loop. Claude is the LE
 
 # agentflow — orchestrator (envelope-router)
 
-Drive the agentflow loop in `engine/workflows/agentflow-opencode/`. **Owner-invoked, explicit-only** (like
+Drive the agentflow loop in `engine/workflows/progressive-test/`. **Owner-invoked, explicit-only** (like
 `/mh-review`): never self-trigger — it's a long autonomous loop that spends tokens and edits source.
 
 ## Your role: ROUTER, not reader
@@ -15,7 +15,7 @@ receipt), and `validate-artifact`/`validate-envelope` exit results. You **must N
 the specialized agent reads those. (Only exception: explicit DEBUG when something is stuck.) This keeps your
 context lean over many rounds. You decide the next step from the envelope's `verdict`/`next` + validator pass.
 
-`BIN=engine/workflows/agentflow-opencode/.agentflow/bin`. You call OpenCode ONLY through `$BIN/*` wrappers
+`BIN=engine/workflows/progressive-test/.agentflow/bin`. You call OpenCode ONLY through `$BIN/*` wrappers
 (never raw `opencode run`). RCA and Codex are NOT OpenCode — you spawn them directly (below).
 
 ## Preconditions
@@ -31,7 +31,7 @@ context lean over many rounds. You decide the next step from the envelope's `ver
 2. **CLASSIFY** → `$BIN/classify <round>` (deterministic). Output:
    - `TRIVIAL` → it already wrote `04-approved-plan.md` (constrained import-only fix). `$BIN/write-envelope approved-plan …/04-approved-plan.md`; `$BIN/update-state <round> DIRECT_PATCH_APPROVED approved_plan=…` → go to **IMPLEMENT** (skip RCA + Codex).
    - `NEEDS_RCA` → `$BIN/update-state <round> RCA_RUNNING` → step 3.
-3. **RCA (Opus subagent)** → spawn an **Agent** (model opus) with the bug-packet *path* + `…/.agentflow/prompts-or-instructions/rca-agent-instructions.md`. It reads the payload + targeted code (CodeGraph/rg) and writes `02-rca-plan.json`. Then YOU: `$BIN/validate-artifact rca-plan …` + `$BIN/write-envelope rca-plan …` + `$BIN/validate-envelope …`. Read the rca envelope:
+3. **RCA (registered agent)** → spawn the **`mh-rca`** agent (Agent tool, `subagent_type: mh-rca`, model opus) with the bug-packet *path*. It reads the payload + targeted code (CodeGraph/rg) and writes `02-rca-plan.json`. Then YOU: `$BIN/validate-artifact rca-plan …` + `$BIN/write-envelope rca-plan …` + `$BIN/validate-envelope …`. Read the rca envelope:
    - `verdict=DIRECT_PATCH` (`requires_codex_review=false`) → `$BIN/build-approved-plan <round>` → step 5.
    - `verdict=CODEX_REQUIRED` → `$BIN/update-state <round> CODEX_REVIEW_REQUIRED` → step 4.
    - `MORE_EVIDENCE` → back to TEST (more evidence). `HUMAN_DECISION` → stop, report to owner.
@@ -53,4 +53,4 @@ context lean over many rounds. You decide the next step from the envelope's `ver
 
 ## Honest note
 Mock (`AGENTFLOW_MOCK_OPENCODE=1`) proves the wiring; the FIRST real end-to-end run (real mimo fix quality +
-agent-browser on the owner's FE) is the owner's gate. See `engine/workflows/agentflow-opencode/WORKFLOW.md`.
+agent-browser on the owner's FE) is the owner's gate. See `engine/workflows/progressive-test/WORKFLOW.md`.

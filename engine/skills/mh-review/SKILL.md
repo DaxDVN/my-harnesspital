@@ -5,7 +5,7 @@ description: Exhaustive ≤3-round code review for a MyHospital module, dirty wo
 
 # mh-review — orchestrator
 
-Run the harness. The cross-tool review knowledge lives in **`engine/review/`** (neutral — Codex/opencode read it natively too): **[protocol.md](engine/review/protocol.md)** (the ≤3-round runbook), **[checklist.md](engine/review/checklist.md)** (10 dimensions D1–D10), **[findings-schema.md](engine/review/findings-schema.md)** (output format). This skill (`SKILL.md` + `workflow.js`) is the Claude driver. Full rationale: `docs/harness/notes/review-harness-feasibility-2026-06-16.md`.
+Run the harness. The cross-tool review knowledge lives in **`engine/workflows/deep-review/`** (neutral — Codex/opencode read it natively too): **[protocol.md](engine/workflows/deep-review/protocol.md)** (the ≤3-round runbook), **[checklist.md](engine/workflows/deep-review/checklist.md)** (10 dimensions D1–D10), **[findings-schema.md](engine/workflows/deep-review/findings-schema.md)** (output format). This skill (`SKILL.md`) is the Claude driver; the optional power-mode workflow lives at `engine/workflows/deep-review/workflow.js`. Full rationale: `docs/harness/notes/review-harness-feasibility-2026-06-16.md`.
 
 **Core idea:** recall comes from **partition** (fan out one focused reviewer per dimension), NOT from re-auditing many times. One `/mh-review` call = one thorough audit that returns near-max findings. Rounds 2–3 only mop up.
 
@@ -25,7 +25,7 @@ Print the frozen scope (file-groups + Confirmed requirements) before proceeding.
 ## Step 2 — Partitioned audit (the fan-out)
 For each dimension D1–D10 that **applies** to the scope (check `applies-to` in checklist):
 - Spawn an `mh-reviewer` subagent via the **Agent tool**, at the **tier** the checklist lists for that dimension (`model: haiku|sonnet|opus`).
-- Inject into its prompt: the dimension id+name, the scope file-list, and "read your dimension's entry in engine/review/checklist.md".
+- Inject into its prompt: the dimension id+name, the scope file-list, and "read your dimension's entry in engine/workflows/deep-review/checklist.md".
 - **Spawn all applicable dimensions in ONE message (parallel Agent calls)** so they run concurrently. For D1 (business-logic) on a high-risk module, spawn 2–3 independent reviewers and union their findings.
 
 Collect each reviewer's structured output (COVERAGE + FINDINGS + NOTES).
@@ -57,4 +57,4 @@ Offer to promote each new/recurring bug-class to the cheapest layer: guard-hook/
 Audit (rounds 1 & 3) is **strictly read-only** — never edit code. Honor the guard hook (no git history mutation, no recursive delete, no editing generated files). Never edit `myhospital-fe/` or `myhospital-be/` directly. Report actual commands run (Validation Contract).
 
 ## Optional power-mode
-`workflow.js` in this dir is a deterministic Workflow-tool version of Steps 2–5 (parallel fan-out + adversarial verify + loop-until-dry completeness). It needs the Workflow tool (explicit opt-in / "ultracode"). The skill path above works without it.
+`engine/workflows/deep-review/workflow.js` is a deterministic Workflow-tool version of Steps 2–5 (parallel fan-out + adversarial verify + loop-until-dry completeness) — invoke via the Workflow tool with `scriptPath: engine/workflows/deep-review/workflow.js`. It needs the Workflow tool (explicit opt-in / "ultracode"). The skill path above works without it. (Composition: `engine/workflows/deep-review/manifest.json` + `engine/REGISTRY.md`.)

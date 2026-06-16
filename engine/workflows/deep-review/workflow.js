@@ -1,7 +1,7 @@
 // mh-review — power-mode audit engine (OPTIONAL · needs the Workflow tool / explicit opt-in).
 // Deterministic version of SKILL.md Steps 2–5: partitioned fan-out → adversarial verify → dedup
 // → bounded loop-until-dry completeness. Returns structured findings; the CALLER writes the
-// findings .md per engine/review/findings-schema.md (workflows can't write files).
+// findings .md per engine/workflows/deep-review/findings-schema.md (workflows can't write files).
 //
 // Invoke with args = { module: "<name>", base: "<branch/sha>", scope: ["file", ...] }.
 // If scope is omitted a scout agent computes it (git diff against base).
@@ -39,7 +39,7 @@ const SCOPE_SCHEMA = { type: 'object', required: ['files'], properties: {
   module: { type: 'string' }, files: { type: 'array', items: { type: 'string' } },
 } }
 
-// 10 dimensions — see engine/review/checklist.md. Reviewer self-marks N/A when not applicable.
+// 10 dimensions — see engine/workflows/deep-review/checklist.md. Reviewer self-marks N/A when not applicable.
 const DIMENSIONS = [
   { key: 'D1', name: 'business-logic', tier: 'opus' },
   { key: 'D2', name: 'be-conventions', tier: 'sonnet' },
@@ -80,9 +80,9 @@ const fileList = scope.map((f) => ` - ${f}`).join('\n')
 const reviewed = await pipeline(
   DIMENSIONS,
   (d) => agent(
-    `You are the ${d.key} (${d.name}) reviewer. Read your dimension's entry in engine/review/checklist.md and review ONLY these files through that single lens:
+    `You are the ${d.key} (${d.name}) reviewer. Read your dimension's entry in engine/workflows/deep-review/checklist.md and review ONLY these files through that single lens:
 ${fileList}
-Module spec dir: specs/${module}/. Enumerate before ranking. Attest coverage for EVERY file (FINDING/CLEAN/N/A). Cite live evidence for BLOCK/HIGH (rule-hit/spec/exemplar); doc-only → cap at MED. Output per engine/review/findings-schema.md.`,
+Module spec dir: specs/${module}/. Enumerate before ranking. Attest coverage for EVERY file (FINDING/CLEAN/N/A). Cite live evidence for BLOCK/HIGH (rule-hit/spec/exemplar); doc-only → cap at MED. Output per engine/workflows/deep-review/findings-schema.md.`,
     { label: `audit:${d.key}`, phase: 'Audit', agentType: 'mh-reviewer', model: d.tier, schema: REVIEW_SCHEMA },
   ),
   (review, d) => {

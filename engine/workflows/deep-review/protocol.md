@@ -76,7 +76,7 @@ Output scope = `{file-group}` × `{requirement Confirmed}`.
 
 Mỗi bug-class **mới/tái diễn** → promote theo mức rẻ nhất:
 1. **Deterministic được?** → guard-hook rule / ESLint rule ⇒ bắt miễn phí mãi.
-2. **Convention?** → `engine/rules/frontend|backend-rules-conventions-patterns.md` ⇒ implementer sai ít hơn (shift-left).
+2. **Convention?** → `engine/rules/frontend|backend.md` ⇒ implementer sai ít hơn (shift-left).
 3. **Chiều/pattern mới?** → thêm vào [checklist.md](./checklist.md) mục "Known bug-classes" của chiều ⇒ recall/pass ↑.
 4. **Lỗi agent lặp?** → auto-memory (`type: feedback`).
 

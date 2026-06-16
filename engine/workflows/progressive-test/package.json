@@ -1,5 +1,5 @@
 {
-  "name": "agentflow-opencode",
+  "name": "progressive-test",
   "version": "0.1.0",
   "private": true,
   "description": "Standalone OpenCode agentflow harness with Vercel Labs agent-browser support.",

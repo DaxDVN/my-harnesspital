@@ -184,7 +184,7 @@ Before implementation:
 When a module / dirty worktree / changeset is finished and needs an audit before merge, use the
 **`mh-review`** harness. Goal: maximize first-pass recall so review converges in **≤3 rounds**
 (1 round = audit → fix → verify), instead of many. Tool-neutral policy lives in
-**`engine/review/`** (plain `.md`, every tool reads it by path; the conventions it checks against live in `engine/rules/`) —
+**`engine/workflows/deep-review/`** (plain `.md`, every tool reads it by path; the conventions it checks against live in `engine/rules/`) —
 every tool (Claude, Codex, opencode) follows the same protocol and emits the same findings file:
 
 - **`protocol.md`** — the ≤3-round runbook (scope freeze → partitioned audit → adversarial verify →

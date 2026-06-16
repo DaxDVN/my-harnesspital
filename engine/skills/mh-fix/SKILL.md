@@ -7,7 +7,7 @@ description: Safe bug-fix companion to the mh-review harness. Drives fixing a fi
 
 Companion to `mh-review`. The review harness produces a findings file and a Coverage ledger; this skill **works off that file** to close findings safely — one at a time, severity-ordered, with a mandatory self-review of every fix-diff before marking FIXED. It is the dedicated Round-2 driver that `mh-review` protocol §4 describes but does not fully specify.
 
-Source-of-truth bundle: [`engine/review/protocol.md`](engine/review/protocol.md) · [`engine/review/findings-schema.md`](engine/review/findings-schema.md) · [`engine/review/checklist.md`](engine/review/checklist.md) · `AGENTS.md` Forbidden Actions.
+Source-of-truth bundle: [`engine/workflows/deep-review/protocol.md`](engine/workflows/deep-review/protocol.md) · [`engine/workflows/deep-review/findings-schema.md`](engine/workflows/deep-review/findings-schema.md) · [`engine/workflows/deep-review/checklist.md`](engine/workflows/deep-review/checklist.md) · `AGENTS.md` Forbidden Actions.
 
 ---
 
@@ -44,7 +44,7 @@ Use **CodeGraph** to locate the symbol/call-path (if indexed: `codegraph node <s
 
 Convention canon — highest authority first:
 
-1. `engine/rules/backend-rules-conventions-patterns.md` (BE) or `engine/rules/frontend-rules-conventions-patterns.md` (FE) — **these are the live convention spine**. Do NOT rely primarily on `myhospital-be/CONVENTIONS.md`; a prior audit found it wrong in places (audit record: `/home/dax/Documents/arabica/velvet/notes/myhospital-be-conventions-audit-2026-06-15.md`).
+1. `engine/rules/backend.md` (BE) or `engine/rules/frontend.md` (FE) — **these are the live convention spine**. Do NOT rely primarily on `myhospital-be/CONVENTIONS.md`; a prior audit found it wrong in places (audit record: `/home/dax/Documents/arabica/velvet/notes/myhospital-be-conventions-audit-2026-06-15.md`).
 2. `specs/<module>/{02-requirements,06-decision-log,07-schema,08-api}.md` for business/contract truth.
 3. Existing live code as exemplar — CodeGraph `callers`/`callees` to find the canonical pattern already in the codebase. Prefer reusing an existing helper or shape over inventing a new one. The `mh-scaffold` skill defines the right structural shape for new BE/FE artifacts when a new file is warranted.
 4. The finding's own `fix:` field is a recommendation, not a mandate — apply it only if it aligns with the above canon. If the finding's suggested fix conflicts with live conventions, use the canon and note the deviation.
@@ -69,7 +69,7 @@ The scanner pack catches (non-exhaustive): raw `Exception` catch/throw (V12), li
 
 **A fix that introduces a new scanner hit is not done.** Resolve the hit or explain why it is a false positive before proceeding.
 
-Then re-check the **relevant checklist dimension(s)** (`engine/review/checklist.md` D1–D10) on the diff only — not the whole scope. Confirm:
+Then re-check the **relevant checklist dimension(s)** (`engine/workflows/deep-review/checklist.md` D1–D10) on the diff only — not the whole scope. Confirm:
 
 - No new bug in the same dimension the finding lived in.
 - No cross-dimension regression (especially: D2/D5 for BE data-access, D3/D10 for FE state/reuse, D6 for auth).
@@ -129,8 +129,8 @@ Next step: Round 3 verify via mh-review | BA answer needed for DEFERRED-Q | noth
 After closing findings, for each bug-class that is **new** or **recurring** across modules, suggest promotion at the cheapest layer that can catch it:
 
 1. **Deterministic?** → propose a guard-hook rule (`.claude/hooks/myhospital_guard.py`) or ESLint rule — catches it free forever. Name the exact pattern to match.
-2. **Convention gap?** → propose an addition to `engine/rules/backend-rules-conventions-patterns.md` or `engine/rules/frontend-rules-conventions-patterns.md` — shifts the error left to implementers.
-3. **New dimension pattern?** → propose a "Known bug-class" line in `engine/review/checklist.md` under the correct D1–D10 dimension (with `file:line` exemplar if available) — raises Round-1 recall for future modules.
+2. **Convention gap?** → propose an addition to `engine/rules/backend.md` or `engine/rules/frontend.md` — shifts the error left to implementers.
+3. **New dimension pattern?** → propose a "Known bug-class" line in `engine/workflows/deep-review/checklist.md` under the correct D1–D10 dimension (with `file:line` exemplar if available) — raises Round-1 recall for future modules.
 4. **Agent mistake pattern?** → propose an auto-memory entry (`type: feedback`).
 
 Report suggestions as a numbered list; do not apply them unless the user confirms. Promotion decisions belong to the user.

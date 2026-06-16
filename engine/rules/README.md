@@ -5,8 +5,8 @@ The **sole canon** for MyHospital conventions, read by every agentic tool. When 
 ## Files
 | File | Role |
 |---|---|
-| `backend-rules-conventions-patterns.md` | **CANON BE** — BaseService, no-transaction/lock, no-N+1, tenant/hospital scope, ErrorCodes, `[RequireAuth]`, migration discipline. |
-| `frontend-rules-conventions-patterns.md` | **CANON FE** — RQ-via-adapter, `useMasterData`, id-only refs, shadcn, no FE money/stock math, RHF+zod, EnhancedDataGrid. |
+| `backend.md` | **CANON BE** — BaseService, no-transaction/lock, no-N+1, tenant/hospital scope, ErrorCodes, `[RequireAuth]`, migration discipline. |
+| `frontend.md` | **CANON FE** — RQ-via-adapter, `useMasterData`, id-only refs, shadcn, no FE money/stock math, RHF+zod, EnhancedDataGrid. |
 | `source-discovery.md` | CodeGraph-first + bounded `rg`/`fd`/`bat` policy (never broad-dump FE/BE). |
 | `cross-tool-enforcement.md` | How the guard tripwire wires into Claude / Codex / opencode. |
 | `worktree-workflow.md` | Worktree + Zellij orchestration; intent→command map. |

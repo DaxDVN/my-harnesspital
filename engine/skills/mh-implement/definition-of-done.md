@@ -18,7 +18,7 @@ python scripts/mh_scan --root worktrees/<slug>/fe --scope (git -C worktrees/<slu
 7. **Browser** — for visible UI, run the dev server and verify (smoke login: customer `HMU` / `admin` / `123456`).
 
 ## BE gate (if BE touched)
-- `dotnet build` clean. EF: change the model + `dotnet ef migrations add` (never hand-edit a generated migration). Conventions per `backend-rules-conventions-patterns.md` (BaseService, no transaction/lock, no N+1, tenant scope, soft-delete/audit auto).
+- `dotnet build` clean. EF: change the model + `dotnet ef migrations add` (never hand-edit a generated migration). Conventions per `backend.md` (BaseService, no transaction/lock, no N+1, tenant scope, soft-delete/audit auto).
 
 ## Pass criteria
 0 type errors · 0 ESLint errors on changed files · ast-grep warnings each either fixed or justified (audit §6 exception, with an `eslint-disable`/comment rationale — do not widen rules) · no committed `.bak` · generated artifacts regenerated not hand-edited. Then proceed to self-review-diff (B5/F4).

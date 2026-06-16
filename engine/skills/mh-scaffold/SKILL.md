@@ -402,7 +402,7 @@ Use `CreateUniqueCodeAsync(entity)` (BaseService.cs:702) — never generate code
 
 > Anchored to the **warehouse** module — but warehouse is a PARTIAL exemplar (FE audit §4):
 > copy its data/routing/table/form patterns, NOT its monolithic 600-line pages / `useState`-only
-> context / inline schema. Canon: `engine/rules/frontend-rules-conventions-patterns.md`.
+> context / inline schema. Canon: `engine/rules/frontend.md`.
 > Place code in `worktrees/<slug>/fe`, then `python scripts/mh_scan --root worktrees/<slug>/fe --scope <file> --format summary`.
 
 ## FE-1 — module skeleton (replaces broken `npm run create:module`/`create:page`, audit V9)
@@ -453,7 +453,7 @@ This skill emits template code for the user to paste into a worktree file
 (`worktrees/<slug>/be` or `worktrees/<slug>/fe`). It never edits `myhospital-be/` or
 `myhospital-fe/` directly — both are main branches, zero code edits ever (AGENTS.md hard BLOCK).
 
-Convention source of truth: `engine/rules/backend-rules-conventions-patterns.md` (BE),
-`engine/rules/frontend-rules-conventions-patterns.md` (FE).
+Convention source of truth: `engine/rules/backend.md` (BE),
+`engine/rules/frontend.md` (FE).
 Audit evidence: `velvet/notes/myhospital-be-conventions-audit-2026-06-15.md` (BE),
 `velvet/notes/myhospital-fe-convention-audit-2026-06-15.md` (FE).

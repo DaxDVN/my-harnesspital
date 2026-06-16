@@ -192,7 +192,7 @@ def command_config_value(argv):
 
 def command_doctor(argv):
     req=["README.md","WORKFLOW.md","IMPLEMENTATION_NOTES.md","package.json",".opencode/opencode.jsonc",".opencode/skills/agent-browser/SKILL.md",".agentflow/state.json",".agentflow/config.yaml",".agentflow/bin/agent-browser",".agentflow/bin/test-with-opencode",".agentflow/bin/implement-with-opencode",".agentflow/bin/retest-with-opencode",".agentflow/bin/validate-artifact",".agentflow/bin/update-state",".agentflow/bin/init-round",".agentflow/bin/summarize-round",".agentflow/bin/doctor",".agentflow/bin/capabilities",".agentflow/bin/probe-web-with-opencode",".agentflow/bin/probe-browser-with-opencode",".agentflow/bin/probe-agent-browser-with-opencode",".agentflow/vendor/agent-browser-package/bin/agent-browser.js",".agentflow/vendor/agent-browser-package/skill-data/core/SKILL.md","tests/mock-opencode","tests/run-smoke-tests"]
-    ok=True; print("agentflow-opencode doctor")
+    ok=True; print("progressive-test doctor")
     for rel in req:
         p=ROOT/rel
         if not p.exists(): print(f"FAIL missing {rel}"); ok=False

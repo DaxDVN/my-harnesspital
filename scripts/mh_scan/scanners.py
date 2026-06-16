@@ -5,7 +5,7 @@ Each scanner encodes ONE mechanical bug-class found in the BE audit
 (`velvet/notes/myhospital-be-conventions-audit-2026-06-15.md`, finding ids V1–V16).
 The pack is the harness's "deterministic floor": its findings (a) feed the
 `mh-review` reviewers as a per-dimension candidate list (recall up → fewer
-rounds), (b) back the `myhospital-rule-auditor` quick-check, (c) can gate CI.
+rounds), (b) back the `mh-rule-auditor` quick-check, (c) can gate CI.
 
 Design mirrors `.claude/hooks/myhospital_guard.py`:
   - `rg`-backed, pure-stdlib otherwise.
@@ -13,7 +13,7 @@ Design mirrors `.claude/hooks/myhospital_guard.py`:
   - **string-testable**: every classifier runs on a text fixture in --self-test,
     so the pack can't silently rot (checked by harness_doctor).
 
-Output is compatible with `engine/review/findings-schema.md`
+Output is compatible with `engine/workflows/deep-review/findings-schema.md`
 (severity / dimension / location / title / evidence).
 """
 from __future__ import annotations

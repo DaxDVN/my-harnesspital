@@ -1,4 +1,4 @@
-# agentflow-opencode
+# progressive-test
 
 Standalone MVP harness for a self-running E2E debug/repair workflow:
 
@@ -53,7 +53,7 @@ For this setup, `mimo-v2.5` is represented at the OpenCode CLI layer by the Xiao
 This tool vendors Vercel Labs `agent-browser@0.27.3` under `.agentflow/vendor/agent-browser-package` and exposes it via:
 
 ```bash
-cd /home/dax/Documents/arabica/tools/agentflow-opencode
+cd /home/dax/Documents/arabica/tools/progressive-test
 .agentflow/bin/agent-browser --version
 .agentflow/bin/agent-browser install
 ```
@@ -69,7 +69,7 @@ OpenCode sees `.opencode/skills/agent-browser/SKILL.md`; wrappers prepend `.agen
 ## Run Doctor
 
 ```bash
-cd /home/dax/Documents/arabica/tools/agentflow-opencode
+cd /home/dax/Documents/arabica/tools/progressive-test
 .agentflow/bin/doctor
 ```
 
@@ -78,7 +78,7 @@ Missing `opencode` or `agent-browser` is a warning if mock mode is available.
 ## Run Smoke Test
 
 ```bash
-cd /home/dax/Documents/arabica/tools/agentflow-opencode
+cd /home/dax/Documents/arabica/tools/progressive-test
 tests/run-smoke-tests
 ```
 
@@ -87,7 +87,7 @@ Smoke uses `AGENTFLOW_MOCK_OPENCODE=1` and validates the full contract loop.
 ## Run Real Wrapper
 
 ```bash
-cd /home/dax/Documents/arabica/tools/agentflow-opencode
+cd /home/dax/Documents/arabica/tools/progressive-test
 .agentflow/bin/init-round round-001 "admission-flow"
 .agentflow/bin/test-with-opencode round-001
 ```

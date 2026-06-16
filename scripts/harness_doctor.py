@@ -375,6 +375,35 @@ def check_symlinks() -> None:
             add(OK, f"link:.claude/{name}", f"→ engine/{name}")
 
 
+def check_registry() -> None:
+    """engine/REGISTRY.md + per-workflow manifest.json: every referenced agent/skill/rule must resolve to a pool file."""
+    r = root(); eng = r / "engine"
+    has_reg = (eng / "REGISTRY.md").exists()
+    add(OK if has_reg else WARN, "registry",
+        "engine/REGISTRY.md present" if has_reg else "engine/REGISTRY.md missing (inventory index)")
+    wf = eng / "workflows"
+    manifests = sorted(wf.glob("*/manifest.json")) if wf.exists() else []
+    if not manifests:
+        add(INFO, "registry:manifests", "no engine/workflows/*/manifest.json yet")
+        return
+    bad: list[str] = []
+    for m in manifests:
+        try:
+            d = json.loads(m.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            bad.append(f"{m.parent.name}: invalid JSON ({exc})"); continue
+        for field in ("name", "kind", "entry_skill", "agents", "rules"):
+            if field not in d: bad.append(f"{m.parent.name}: missing '{field}'")
+        es = d.get("entry_skill")
+        if es and not (eng / "skills" / es / "SKILL.md").exists(): bad.append(f"{m.parent.name}: entry_skill '{es}' not in engine/skills/")
+        for a in (d.get("agents") or []):
+            if not (eng / "agents" / f"{a}.md").exists(): bad.append(f"{m.parent.name}: agent '{a}' not in engine/agents/")
+        for ru in (d.get("rules") or []):
+            if not (eng / "rules" / f"{ru}.md").exists(): bad.append(f"{m.parent.name}: rule '{ru}' not in engine/rules/")
+    add(FAIL if bad else OK, "registry:manifests",
+        "; ".join(bad[:6]) if bad else f"{len(manifests)} workflow manifest(s); all entry_skill/agent/rule refs resolve")
+
+
 def main() -> int:
     strict = "--strict" in sys.argv[1:]
     print(f"MyHospital harness doctor — {root()}\n")
@@ -384,7 +413,7 @@ def main() -> int:
         check_graph_secrets, check_helpers_and_layouts, check_just,
         check_routing, check_legacy_isolation, check_codegraph,
         check_convention_scan, check_convention_truth, check_opencode_guard,
-        check_brains, check_symlinks,
+        check_brains, check_symlinks, check_registry,
     ):
         try:
             fn()
