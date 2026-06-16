@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "round_id",
+    "verdict",
+    "summary",
+    "blocking_issues",
+    "required_changes",
+    "optional_suggestions",
+    "checked_files",
+    "risk_assessment",
+    "final_instruction_to_claude"
+  ]
+}

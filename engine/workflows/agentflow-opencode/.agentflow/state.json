@@ -1,0 +1,29 @@
+{
+  "current_round": "round-consult-001",
+  "state": "TESTING",
+  "scenario": "Login (customer HMU / user admin / pass 123456), mở trang hội chẩn (IPD consultation), tạo 1 phiếu hội chẩn mới, điền field bắt buộc, bấm lưu; xác nhận lưu thành công không lỗi.",
+  "executor": {
+    "runtime": "opencode",
+    "model": "mimo-v2.5",
+    "provider": "xiaomi-token-plan-sgp",
+    "call_method": "bash-wrapper"
+  },
+  "codex_review_count": 0,
+  "max_codex_reviews": 2,
+  "rca_revision_count": 0,
+  "max_rca_revisions": 2,
+  "budget": {
+    "max_rounds": 5,
+    "max_total_minutes": 180,
+    "max_opencode_iterations_per_round": 2
+  },
+  "artifacts": {
+    "bug_packet": null,
+    "rca_plan": null,
+    "codex_review": null,
+    "approved_plan": null,
+    "implementation_report": null,
+    "retest_report": null
+  },
+  "last_error": null
+}

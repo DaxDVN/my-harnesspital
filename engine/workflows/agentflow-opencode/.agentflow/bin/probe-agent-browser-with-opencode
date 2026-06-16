@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+URL="${1:-https://example.com}"
+TS="$(date +%s)"
+OUT="$ROOT/.agentflow/logs/agent-browser-probe-$TS.log"
+SCREENSHOT="$ROOT/.agentflow/logs/agent-browser/opencode-agent-browser-$TS.png"
+mkdir -p "$ROOT/.agentflow/logs/agent-browser"
+PROMPT="Use the Vercel Labs agent-browser CLI only. Do not use Playwright MCP, webfetch, curl, raw HTTP, or config-file inspection. The command agent-browser is available on PATH. First run 'agent-browser skills get core'. Then navigate to $URL using 'agent-browser open', capture a snapshot with 'agent-browser snapshot -i', take a screenshot with 'agent-browser screenshot body $SCREENSHOT', close the browser, then return ONLY compact JSON with keys url, title, visible_text_excerpt, tool_used, screenshot_path, limitation. Mention agent-browser CLI in tool_used."
+CLI_MODEL="xiaomi-token-plan-sgp/mimo-v2.5"
+if ! command -v opencode >/dev/null 2>&1; then
+  echo "OPENCODE_NOT_FOUND" >&2
+  exit 127
+fi
+PATH="$ROOT/.agentflow/bin:$PATH" opencode run --model "$CLI_MODEL" "$PROMPT" | tee "$OUT"
+echo "WROTE $OUT"

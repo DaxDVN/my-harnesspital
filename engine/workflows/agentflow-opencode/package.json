@@ -1,0 +1,12 @@
+{
+  "name": "agentflow-opencode",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Standalone OpenCode agentflow harness with Vercel Labs agent-browser support.",
+  "scripts": {
+    "doctor": ".agentflow/bin/doctor",
+    "smoke": "tests/run-smoke-tests",
+    "capabilities": ".agentflow/bin/capabilities",
+    "agent-browser": ".agentflow/bin/agent-browser"
+  }
+}

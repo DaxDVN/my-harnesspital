@@ -1,0 +1,31 @@
+{
+  "round_id": "round-fixture",
+  "verdict": "DIRECT_PATCH",
+  "root_cause": "Fixture root cause from targeted code inspection.",
+  "evidence_supporting_root_cause": [
+    "fixture evidence"
+  ],
+  "affected_files": [
+    {
+      "path": "src/Fixture.tsx",
+      "reason": "contains failing handler"
+    }
+  ],
+  "allowed_files_to_modify": [
+    "src/Fixture.tsx"
+  ],
+  "files_to_inspect_but_not_modify": [],
+  "forbidden_changes": [
+    "Do not change API contract",
+    "Do not add dependency"
+  ],
+  "implementation_plan": [
+    "Update handler condition"
+  ],
+  "validation_plan": [
+    "Run fixture validation"
+  ],
+  "risk_level": "LOW",
+  "requires_codex_review": false,
+  "codex_review_questions": []
+}

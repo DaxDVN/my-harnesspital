@@ -1,0 +1,47 @@
+executor:
+  runtime: opencode
+  model: mimo-v2.5
+  cli_model: xiaomi-token-plan-sgp/mimo-v2.5
+  provider: xiaomi-token-plan-sgp
+  call_method: bash-wrapper
+  modes:
+    test: TEST_ONLY
+    implement: IMPLEMENT_ONLY
+    retest: RETEST_ONLY
+
+orchestrator:
+  runtime: claude-code
+  role: supervisor
+  can_edit_source: false
+  can_call_raw_opencode: false
+  allowed_bin_dir: .agentflow/bin
+
+codex:
+  enabled: true
+  max_review_loops_per_round: 2
+
+limits:
+  max_rounds_per_scenario: 5
+  max_rca_revisions_per_round: 2
+  max_opencode_implementation_attempts: 2
+  max_bug_packet_size_kb: 50
+  max_raw_log_size_kb: 500
+  require_retest_after_implementation: true
+
+capabilities:
+  required_for_e2e:
+    - agent-browser
+  supported_without_browser:
+    - webfetch
+    - websearch
+    - bash
+    - read
+    - write-artifacts
+  browser:
+    required: true
+    primary_tool: agent-browser
+    shim_path: .agentflow/bin/agent-browser
+    installed_version: 0.27.3
+    chrome_path: /home/dax/.agent-browser/browsers/chrome-149.0.7827.115
+    binary_names:
+      - agent-browser

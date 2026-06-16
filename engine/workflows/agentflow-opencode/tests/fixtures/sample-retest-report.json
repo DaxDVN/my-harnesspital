@@ -1,0 +1,21 @@
+{
+  "round_id": "round-fixture",
+  "status": "PASS",
+  "executor": {
+    "runtime": "opencode",
+    "model": "mimo-v2.5",
+    "call_method": "bash-wrapper"
+  },
+  "scenario": "fixture-flow",
+  "result": {
+    "expected": "Saved toast appears",
+    "actual": "Saved toast appears"
+  },
+  "evidence": {
+    "browser_snapshot_excerpt": "toast Saved",
+    "console_errors": [],
+    "network_errors": [],
+    "screenshot_paths": []
+  },
+  "failure_relation": "NOT_APPLICABLE"
+}

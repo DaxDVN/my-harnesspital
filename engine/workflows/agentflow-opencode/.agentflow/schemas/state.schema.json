@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "current_round",
+    "state",
+    "scenario",
+    "executor",
+    "codex_review_count",
+    "max_codex_reviews",
+    "rca_revision_count",
+    "max_rca_revisions",
+    "budget",
+    "artifacts",
+    "last_error"
+  ]
+}

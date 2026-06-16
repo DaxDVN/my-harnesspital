@@ -5,6 +5,11 @@ Canonical home for **named, standalone** Workflow-tool scripts. Like all harness
 tool resolves `{name: "<x>"}` to `<x>.js`). Running `.js` workflows is a **Claude Code feature** (Codex/
 opencode don't execute them), but the files still live here in `engine/` so there is one source.
 
+This folder ALSO hosts **orchestrated multi-agent subsystems** — self-contained workflow dirs with their
+own `bin/`/`lib/`/`schemas/` driven by a Claude orchestrator skill (e.g. `agentflow-opencode/`, run by the
+`/agentflow` skill: a Claude-orchestrated OpenCode/mimo + Opus-RCA + Codex-gate FE-bug-fix loop over file
+artifacts + envelopes). Same principle: one canonical source under `engine/`, every tool points in.
+
 ## Which folder a workflow goes in
 - **Bound to one skill** (it IS that skill's engine) → keep it in the skill dir:
   `engine/skills/<skill>/workflow.js` (e.g. `mh-review/workflow.js`). Do **not** move it here.
@@ -23,4 +28,5 @@ opencode don't execute them), but the files still live here in `engine/` so ther
    `worktrees/` (audit/read-only stays read-only).
 
 ## Current workflows
-- _(none standalone yet)_ — `engine/skills/mh-review/workflow.js` is skill-bound and stays in its skill dir.
+- `agentflow-opencode/` — orchestrated subsystem (FE-bug-fix loop; `/agentflow` skill). Envelope-native, hybrid-triage.
+- _(no standalone `.js` yet)_ — `engine/skills/mh-review/workflow.js` is skill-bound and stays in its skill dir.

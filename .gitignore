@@ -50,6 +50,13 @@ obj/
 .next/
 coverage/
 
+# --- agentflow-opencode subsystem (engine/workflows): track SOURCE; the global bin/ rule above
+#     would hide its wrappers, so re-include .agentflow/bin/; exclude the 73M vendored agent-browser
+#     package + per-round runtime output (re-vendor agent-browser on a fresh clone — see its NOTES). ---
+!engine/workflows/agentflow-opencode/.agentflow/bin/
+engine/workflows/agentflow-opencode/.agentflow/vendor/
+engine/workflows/agentflow-opencode/.agentflow/rounds/round-*/
+
 # --- Runtime locks ---
 .claude/scheduled_tasks.lock
 .aider*

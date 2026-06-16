@@ -1,0 +1,28 @@
+{
+  "round_id": "round-fixture",
+  "status": "IMPLEMENTED",
+  "executor": {
+    "runtime": "opencode",
+    "model": "mimo-v2.5",
+    "call_method": "bash-wrapper"
+  },
+  "plan_version": "04-approved-plan.md",
+  "files_changed": [
+    {
+      "path": "src/Fixture.tsx",
+      "summary": "Fixture patch"
+    }
+  ],
+  "steps_completed": [
+    "Step 1"
+  ],
+  "commands_run": [
+    {
+      "command": "fixture validate",
+      "status": "PASS",
+      "summary": "ok"
+    }
+  ],
+  "validation_result": "PASS",
+  "remaining_issues": []
+}
