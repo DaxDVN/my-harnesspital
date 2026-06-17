@@ -27,7 +27,8 @@ Agents should execute these commands directly when users ask for worktree workfl
 
 ```fish
 python scripts/worktree.py --help
-python scripts/worktree.py list
+python scripts/worktree.py list          # table: slug, slot, FE/BE/SQL ports
+python scripts/worktree.py info --slug fix-admission-birthdate
 python scripts/worktree.py init-db-slots
 python scripts/worktree.py create --slug fix-admission-birthdate --slot 1
 python scripts/worktree.py sync-db --slot 1 --be-path worktrees/fix-admission-birthdate/be
@@ -42,7 +43,7 @@ Use `--dry-run` before risky commands. `sync-db`, `cleanup`, and `sync-main` hav
 - `create`, `tạo`, `setup worktree mới`, `chuẩn bị worktree mới`, `mở task <slug> slot <n>`: run `python scripts/worktree.py create --slug <slug> --slot <slot>`.
 - Light/no DB sync requests: add `--skip-db-sync --skip-db-init --skip-fe-install` (touches no Docker/SQL).
 - Preview requests: add `--skip-db-sync --skip-fe-install --dry-run`.
-- `join`, `mở lại`, `attach`, `vào worktree đang có`: join existing; do not create. Run `python scripts/worktree.py list`, check the folder, then open Zellij sessions.
+- `join`, `mở lại`, `attach`, `vào worktree đang có`: join existing; do not create. Run `python scripts/worktree.py list`, use the printed slot/ports, check the folder, then open Zellij sessions.
 - `cleanup`, `xóa`, `dọn worktree`: confirm because this is destructive, then run cleanup.
 - `sync`: run `sync-main` or `sync-db` depending on whether the user asked about branches or database.
 
@@ -80,7 +81,7 @@ Zellij helpers do not replace `scripts/worktree.py create`; they run after a wor
 ## Run A Worktree
 
 ```fish
-python scripts/worktree.py run-be --be-path worktrees/fix-admission-birthdate/be
+python scripts/worktree.py run-be --slug fix-admission-birthdate
 ```
 
 ```fish

@@ -2,7 +2,7 @@
 
 The concise, authoritative knowledge the system carries everywhere. Like a person's brain: it holds
 **distilled lessons + key durable truths + a sense of what exists and when to use it** — and it **refers
-down to `engine/` (rules/protocols) and `.claude/skills` (the procedures)** for exact detail. It does NOT
+down to `engine/` (rules/protocols) and `engine/skills/` (procedures; `.claude/skills` is only a symlink/pointer into it)** for exact detail. It does NOT
 hold all the detail (that is what `engine/`, the skills, and `second-brain/` are for).
 
 ## Rules

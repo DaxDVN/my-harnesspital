@@ -28,6 +28,13 @@ root. After creating a worktree, `just codegraph-init-worktree <slug>`; check wi
 python scripts/worktree.py list
 ```
 
+`list` prints the canonical slug → slot → FE/BE/SQL routing table. Use `--plain`
+only for scripts that need legacy slug-only output.
+
+```fish
+python scripts/worktree.py info --slug fix-admission-birthdate
+```
+
 ## First-Time Setup DB Slots
 
 ```fish
@@ -63,6 +70,7 @@ The command:
 - Creates branch `feature/<slug>` in both repos.
 - Writes FE `.env` for the selected FE/BE ports.
 - Writes BE `.env` for the selected BE port and SQL slot.
+- Writes `.myhospital-worktree.json` so agents can resolve slug → slot/ports without guessing.
 - Optionally syncs slot DB from the main DB.
 
 ## Multi-Agent Zellij Sessions
@@ -125,7 +133,7 @@ zimpl bed composer
 ## Run Backend
 
 ```fish
-python scripts/worktree.py run-be --be-path worktrees/fix-admission-birthdate/be
+python scripts/worktree.py run-be --slug fix-admission-birthdate
 ```
 
 Shortcuts:

@@ -9,6 +9,7 @@ avoids fish/bash-specific syntax.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import shutil
@@ -27,6 +28,7 @@ DEFAULT_SQL_PASSWORD = os.environ.get("MYHOSPITAL_SQL_PASSWORD", "Hospital123!")
 DEFAULT_SERVICESTACK_LICENSE = (
     "TRIAL30WEB-e3JlZjpUUklBTDMwV0VCLG5hbWU6Ni8xNy8yMDI2IDUzZjcxZDcxNmQyNzQwOTJhOWY3ODVhN2I2OTE5MDk2LHR5cGU6VHJpYWwsbWV0YTowLGhhc2g6c1F6RWkzVGY3UzJOUmhXYno1b1Uwa3k5T1ZDbmRQS2FycmEvbk1WZW1ob2J4SCs3K25KLzBRY1Y5SGpoVEk1K2V5amxwN0ZvQllPM1Z1T00zdzl3VFpIb0tvZitQaERBVHVZMThYTngzbUhtaVE4OVVtQTlUSVVLakMwRmRYZ1lWdlgxaXNDWlBjdFRkZWUwNThKSXZ3bmoweGNRb2NzSkIwa2ZmbHlZQXh3PSxleHBpcnk6MjAyNi0wNy0xN30="
 )
+WORKTREE_META_FILE = ".myhospital-worktree.json"
 
 
 @dataclass(frozen=True)
@@ -318,6 +320,174 @@ def parse_env_file(path: Path) -> dict[str, str]:
             value = value[1:-1]
         values[key] = value
     return values
+
+
+def int_or_none(value: object | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(str(value))
+    except ValueError:
+        return None
+
+
+def url_port(value: str | None) -> int | None:
+    if not value:
+        return None
+    match = re.search(r":(\d+)(?:[/;]|$)", value)
+    return int(match.group(1)) if match else None
+
+
+def sql_connection_port(value: str | None) -> int | None:
+    if not value:
+        return None
+    match = re.search(r"\bServer\s*=\s*[^,;]+,\s*(\d+)", value, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def safe_parse_env(path: Path) -> tuple[dict[str, str], str | None]:
+    if not path.exists():
+        return {}, "missing"
+    try:
+        return parse_env_file(path), None
+    except ToolError as exc:
+        return {}, str(exc)
+
+
+def relative_to_root(path: Path) -> str:
+    root = workspace_root()
+    try:
+        return str(path.resolve().relative_to(root))
+    except ValueError:
+        return str(path)
+
+
+def write_worktree_metadata(
+    *,
+    task_root: Path,
+    slug: str,
+    cfg: SlotConfig,
+    fe_worktree: Path,
+    be_worktree: Path,
+    fe_branch: str,
+    be_branch: str,
+    dry_run: bool = False,
+) -> None:
+    metadata = {
+        "schema": 1,
+        "slug": slug,
+        "slot": cfg.slot,
+        "ports": {
+            "fe": cfg.fe_port,
+            "be": cfg.be_port,
+            "sql": cfg.sql_port,
+        },
+        "urls": {
+            "fe": f"http://localhost:{cfg.fe_port}",
+            "be": f"http://localhost:{cfg.be_port}",
+        },
+        "db": {
+            "server": "localhost",
+            "port": cfg.sql_port,
+            "database": cfg.database_name,
+            "container": cfg.container_name,
+            "volume": cfg.volume_name,
+        },
+        "paths": {
+            "root": relative_to_root(task_root),
+            "fe": relative_to_root(fe_worktree),
+            "be": relative_to_root(be_worktree),
+        },
+        "branches": {
+            "fe": fe_branch,
+            "be": be_branch,
+        },
+    }
+    path = task_root / WORKTREE_META_FILE
+    print(f"> write {path}")
+    if dry_run:
+        return
+    path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def collect_worktree_info(task_root: Path) -> dict[str, object]:
+    meta_path = task_root / WORKTREE_META_FILE
+    metadata: dict[str, object] = {}
+    errors: list[str] = []
+    if meta_path.exists():
+        try:
+            metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            errors.append(f"bad-meta:{exc.lineno}")
+    else:
+        errors.append("no-meta")
+
+    fe_env, fe_error = safe_parse_env(task_root / "fe" / ".env")
+    be_env, be_error = safe_parse_env(task_root / "be" / ".env")
+    if fe_error:
+        errors.append(f"fe-env:{fe_error}")
+    if be_error:
+        errors.append(f"be-env:{be_error}")
+
+    meta_ports = metadata.get("ports") if isinstance(metadata.get("ports"), dict) else {}
+    meta_urls = metadata.get("urls") if isinstance(metadata.get("urls"), dict) else {}
+    meta_db = metadata.get("db") if isinstance(metadata.get("db"), dict) else {}
+
+    fe_port = int_or_none(fe_env.get("VITE_DEV_PORT")) or url_port(str(meta_urls.get("fe", ""))) or int_or_none(meta_ports.get("fe"))
+    be_port = (
+        url_port(fe_env.get("VITE_BACKEND_URL"))
+        or url_port(be_env.get("ASPNETCORE_URLS"))
+        or url_port(str(meta_urls.get("be", "")))
+        or int_or_none(meta_ports.get("be"))
+    )
+    sql_port = (
+        sql_connection_port(be_env.get("ConnectionStrings__DefaultConnection"))
+        or int_or_none(meta_db.get("port"))
+        or int_or_none(meta_ports.get("sql"))
+    )
+
+    candidates: list[tuple[str, int]] = []
+    if fe_port is not None and 3001 <= fe_port <= 3004:
+        candidates.append(("fe", fe_port - 3000))
+    if be_port is not None and 5001 <= be_port <= 5004:
+        candidates.append(("be", be_port - 5000))
+    if sql_port is not None and 1434 <= sql_port <= 1437:
+        candidates.append(("sql", sql_port - 1433))
+    meta_slot = int_or_none(metadata.get("slot"))
+    if meta_slot is not None:
+        candidates.append(("meta", meta_slot))
+
+    unique_slots = sorted({slot for _label, slot in candidates})
+    missing = []
+    if fe_port is None:
+        missing.append("fe")
+    if be_port is None:
+        missing.append("be")
+    if sql_port is None:
+        missing.append("sql")
+
+    if len(unique_slots) == 1 and not missing:
+        status = "OK"
+        slot: int | None = unique_slots[0]
+    elif len(unique_slots) > 1:
+        status = "MISMATCH " + ",".join(f"{label}=slot{slot}" for label, slot in candidates)
+        slot = None
+    else:
+        status = "MISSING " + ",".join(missing or ["slot"])
+        slot = unique_slots[0] if unique_slots else None
+    if errors and status == "OK":
+        status = "OK " + ",".join(errors)
+    elif errors:
+        status = status + " " + ",".join(errors)
+
+    return {
+        "slug": task_root.name,
+        "slot": slot,
+        "fe_port": fe_port,
+        "be_port": be_port,
+        "sql_port": sql_port,
+        "status": status,
+    }
 
 
 def set_env_line(lines: list[str], name: str, value: object) -> list[str]:
@@ -682,8 +852,10 @@ def create_worktree(args: argparse.Namespace) -> None:
         fe_lines = read_env_lines(fe_template)
         fe_lines = set_env_line(fe_lines, "VITE_DEV_PORT", cfg.fe_port)
         fe_lines = set_env_line(fe_lines, "VITE_BACKEND_URL", f"http://localhost:{cfg.be_port}")
+        fe_lines = set_env_line(fe_lines, "VITE_CDN_URL", f"http://localhost:{cfg.be_port}")
         fe_lines = set_env_line(fe_lines, "VITE_INDEXEDDB_VERSION", 100 + args.slot)
         fe_lines = set_env_line(fe_lines, "VITE_DEV_PERSIST_ALL", "true")
+        fe_lines = set_env_line(fe_lines, "VITE_HOSPITAL_TEMPLATE_URL", f"http://localhost:{cfg.fe_port}/import-templates/")
         write_lines(fe_worktree / ".env", fe_lines, dry_run=args.dry_run)
 
         target_connection = sql_connection_string(cfg.sql_port, database=cfg.database_name, password=args.sql_password)
@@ -705,10 +877,21 @@ def create_worktree(args: argparse.Namespace) -> None:
         be_lines = read_env_lines(be_repo / ".env")
         be_lines = set_env_line(be_lines, "ASPNETCORE_ENVIRONMENT", "Development")
         be_lines = set_env_line(be_lines, "ASPNETCORE_URLS", f"http://localhost:{cfg.be_port}")
+        be_lines = set_env_line(be_lines, "MyHospital__LoginUrl", f"http://localhost:{cfg.fe_port}/login")
         be_lines = set_env_line(be_lines, "ConnectionStrings__DefaultConnection", target_connection)
         be_lines = set_env_line(be_lines, "ConnectionStrings__ReadOnlyConnection", target_connection)
         be_lines = set_env_line(be_lines, "CORS_ORIGINS", cors_origins)
         write_lines(be_worktree / ".env", be_lines, dry_run=args.dry_run)
+        write_worktree_metadata(
+            task_root=task_root,
+            slug=slug,
+            cfg=cfg,
+            fe_worktree=fe_worktree,
+            be_worktree=be_worktree,
+            fe_branch=fe_branch,
+            be_branch=be_branch,
+            dry_run=args.dry_run,
+        )
 
         for rel in ("MyHospital/LocalBootstrap.cs", "nuget.config"):
             src = be_repo / rel
@@ -1059,7 +1242,9 @@ def sync_db(args: argparse.Namespace) -> None:
 
 
 def run_be(args: argparse.Namespace) -> None:
-    be_path = Path(args.be_path).resolve()
+    if bool(args.slug) == bool(args.be_path):
+        raise ToolError("Pass exactly one of --slug or --be-path.")
+    be_path = (workspace_root() / "worktrees" / safe_slug(args.slug) / "be").resolve() if args.slug else Path(args.be_path).resolve()
     env_file = Path(args.env_file).resolve() if args.env_file else be_path / ".env"
     if not be_path.exists():
         raise ToolError(f"BE path not found: {be_path}")
@@ -1147,15 +1332,45 @@ def cleanup(args: argparse.Namespace) -> None:
     print(f"Cleanup complete for {slug!r}.")
 
 
-def list_worktrees(_args: argparse.Namespace) -> None:
+def list_worktrees(args: argparse.Namespace) -> None:
     root = workspace_root()
     worktrees_root = root / "worktrees"
     if not worktrees_root.exists():
         print("No worktrees directory found.")
         return
-    for child in sorted(worktrees_root.iterdir(), key=lambda p: p.name):
-        if child.is_dir() and child.name != "_db-backups":
+    children = [child for child in sorted(worktrees_root.iterdir(), key=lambda p: p.name) if child.is_dir() and child.name != "_db-backups"]
+    if not children:
+        print("No active worktrees.")
+        return
+    if args.plain:
+        for child in children:
             print(child.name)
+        return
+    rows = [collect_worktree_info(child) for child in children]
+    print(f"{'slug':<22} {'slot':<4} {'FE':<22} {'BE':<22} {'SQL':<24} status")
+    for row in rows:
+        slot = row["slot"] if row["slot"] is not None else "?"
+        fe = f"http://localhost:{row['fe_port']}" if row["fe_port"] else "?"
+        be = f"http://localhost:{row['be_port']}" if row["be_port"] else "?"
+        sql = f"localhost,{row['sql_port']}/MyHospital" if row["sql_port"] else "?"
+        print(f"{row['slug']:<22} {slot!s:<4} {fe:<22} {be:<22} {sql:<24} {row['status']}")
+
+
+def info_worktree(args: argparse.Namespace) -> None:
+    root = workspace_root()
+    slug = safe_slug(args.slug)
+    task_root = root / "worktrees" / slug
+    if not task_root.exists():
+        raise ToolError(f"Task worktree folder not found: {task_root}")
+    row = collect_worktree_info(task_root)
+    print(f"slug={row['slug']}")
+    print(f"slot={row['slot'] if row['slot'] is not None else '?'}")
+    print(f"fe_url={'http://localhost:' + str(row['fe_port']) if row['fe_port'] else '?'}")
+    print(f"be_url={'http://localhost:' + str(row['be_port']) if row['be_port'] else '?'}")
+    print(f"sql={'localhost,' + str(row['sql_port']) + '/MyHospital' if row['sql_port'] else '?'}")
+    print(f"fe_path={relative_to_root(task_root / 'fe')}")
+    print(f"be_path={relative_to_root(task_root / 'be')}")
+    print(f"status={row['status']}")
 
 
 def sync_main(args: argparse.Namespace) -> None:
@@ -1229,7 +1444,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("list", help="List active task worktrees.")
+    p.add_argument("--plain", action="store_true", help="Print only slugs for scripts that need legacy output.")
     p.set_defaults(func=list_worktrees)
+
+    p = sub.add_parser("info", help="Print slot, ports, URLs, and paths for one worktree slug.")
+    p.add_argument("--slug", required=True)
+    p.set_defaults(func=info_worktree)
 
     p = sub.add_parser("init-db-slots", help="Create/start SQL Server containers for worktree slots.")
     p.add_argument("--slots", type=int, nargs="+", default=[1, 2, 3], choices=[1, 2, 3, 4])
@@ -1275,7 +1495,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.set_defaults(func=sync_db)
 
     p = sub.add_parser("run-be", help="Run a BE checkout with environment loaded from its .env file.")
-    p.add_argument("--be-path", required=True)
+    p.add_argument("--slug", help="Task worktree slug; resolves to worktrees/<slug>/be.")
+    p.add_argument("--be-path")
     p.add_argument("--env-file")
     p.add_argument("--project", default="MyHospital/MyHospital.csproj")
     p.add_argument("--no-build", action="store_true")

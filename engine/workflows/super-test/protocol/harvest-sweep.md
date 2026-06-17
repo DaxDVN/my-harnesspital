@@ -13,7 +13,7 @@ anything in this phase. You self-drive — there is no external orchestrator; th
 ```
 for each flow/feature in the test map (and any reachable flow you discover):
   1. open route / set up preconditions (agent-browser)
-  2. run the flow's actions (click/fill/select/wait); capture snapshot + console + network
+  2. run the flow's actions (click/fill/select/wait); **for a form/multi-input step, apply step-level fuzzing** (see below); capture snapshot + console + network
   3. PASS  → update 02-coverage-map.md (status PASS) → next flow
   4. BUG   → append 04-bug-catalog.md (full entry, see format) + save evidence/ →
              try a bypass (see policy) →
@@ -22,6 +22,15 @@ for each flow/feature in the test map (and any reachable flow you discover):
   5. update 00-super-test-state.md counts + current frontier
   6. stop condition met → write 07-opus-request.md, set state CALLING_OPUS, STOP (do not RCA/fix)
 ```
+
+## Step-level fuzzing (vary behavior WITHIN a step; the FLOW stays fixed)
+The flow (step order) is fixed, but real users fill a form in varied orders/values — order-dependent bugs hide
+behind the linear fill. For each **form / multi-input step**: first **evaluate field dependencies** (what enables/
+constrains what), then test **2–3 DISTINCT dependency-aware fill orders/values** before submit (NOT full
+combinatorial). Record each tried scenario in **`<run-dir>/fuzz-ledger.md`**; before choosing, READ it (+ any
+prior run dirs) and pick UNSEEN combos (cross-round no-repeat — fall back to a prior one only when the legal
+space is exhausted). On a bug, record the EXACT order+values in the bug's repro steps. Full contract:
+`engine/workflows/_shared/step-fuzzing.md`.
 
 ## You MAY (harvest mode)
 agent-browser navigate/act · read snapshot/console/network · screenshot · append bug-catalog / coverage-map /
