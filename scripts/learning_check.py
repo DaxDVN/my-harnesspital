@@ -49,10 +49,14 @@ def warn(msg: str) -> None:
     WARN_COUNT += 1
     print(f"  [WARN] {msg}")
 
+_SELFTEST = False
+
+
 def fail(msg: str) -> None:
     global FAIL_COUNT
     FAIL_COUNT += 1
-    print(f"  [FAIL] {msg}", file=sys.stderr)
+    prefix = "[EXPECTED_FAIL]" if _SELFTEST else "[FAIL]"
+    print(f"  {prefix} {msg}", file=sys.stderr)
 
 
 def parse_frontmatter(text: str) -> dict | None:
@@ -166,6 +170,31 @@ def check_main_brain_size() -> None:
         ok(f"main-brain/knowledge.md size: {size} chars (within {MAIN_BRAIN_SIZE_BUDGET})")
 
 
+def check_expiry() -> None:
+    """V1: surface expired provisional learnings — they need revalidation, promotion, or deletion."""
+    print("\n--- Check 6: expired provisional learnings (revalidate) ---")
+    from datetime import date as _date
+    skip = {"README.md", "INDEX.md"}
+    found = 0
+    for md in sorted(SECOND_BRAIN.glob("*.md")):
+        if md.name in skip:
+            continue
+        fm = parse_frontmatter(md.read_text(encoding="utf-8"))
+        if not fm or fm.get("status", "").strip() != "provisional":
+            continue
+        exp = fm.get("expires", "").strip().strip('"').strip("'")
+        if not exp:
+            continue
+        try:
+            if _date.today() >= _date.fromisoformat(exp[:10]):
+                warn(f"{md.name}: expired ({exp}) — revalidate, /promote, or delete")
+                found += 1
+        except ValueError:
+            pass
+    if found == 0:
+        ok("no expired provisional learnings")
+
+
 def check_no_promote_unlock() -> None:
     print("\n--- Check 5: no agent-created .promote-unlock ---")
     if PROMOTE_UNLOCK.exists():
@@ -203,8 +232,9 @@ def self_test() -> None:
         PROMOTE_UNLOCK     = mb / ".promote-unlock"
 
         # Reset counters
-        global FAIL_COUNT, WARN_COUNT
-        orig_fc, orig_wc = FAIL_COUNT, WARN_COUNT
+        global FAIL_COUNT, WARN_COUNT, _SELFTEST
+        orig_fc, orig_wc, orig_st = FAIL_COUNT, WARN_COUNT, _SELFTEST
+        _SELFTEST = True  # negative cases below print [EXPECTED_FAIL], not [FAIL]
 
         try:
             # --- good entry ---
@@ -263,6 +293,18 @@ def self_test() -> None:
             PROMOTE_UNLOCK.unlink()
             print("  [PASS] stale .promote-unlock caught")
 
+            # --- expired provisional learning warns ---
+            exp = sb / "2020-01-01-expired.md"
+            exp.write_text(
+                '---\ntitle: "e"\ndate: "2020-01-01"\nstatus: provisional\nsource: conversation\n'
+                'scope: workspace\nconfidence: low\nowner_confirmed: false\nproposed_target: reject\n'
+                'expires: "2020-01-02"\n---\n# What\nx\n', encoding="utf-8")
+            WARN_COUNT = 0
+            check_expiry()
+            assert WARN_COUNT == 1, "expired entry not warned"
+            exp.unlink()
+            print("  [PASS] expired learning warned")
+
         finally:
             SECOND_BRAIN        = orig_sb
             MAIN_BRAIN          = orig_mb
@@ -270,6 +312,7 @@ def self_test() -> None:
             PROMOTE_UNLOCK      = orig_pu
             FAIL_COUNT          = orig_fc
             WARN_COUNT          = orig_wc
+            _SELFTEST           = orig_st
 
     print("=== All tests passed ===")
 
@@ -294,6 +337,7 @@ def main() -> None:
     check_no_provisional_as_canon()
     check_main_brain_size()
     check_no_promote_unlock()
+    check_expiry()
 
     print(f"\nResult: {FAIL_COUNT} failure(s), {WARN_COUNT} warning(s)")
     if FAIL_COUNT:

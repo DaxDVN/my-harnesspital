@@ -19,7 +19,7 @@ This policy exists to stop two expensive anti-patterns:
 | **rg / fd / bat** | **Bounded, exact** search in a **known, small** scope (`rg -l`, a single package, a few files). | Broad "scan the whole FE/BE and dump" discovery. |
 | **ast-grep** | Structural / AST pattern search when text search is too blunt. | Plain string lookups (use `rg -l`). |
 | **rga** | Exact keyword inside `.docx` / `.pdf`. | Source code. |
-| **graphify** | `docs/`+`specs/` **design/business** relationships — *only when the graph is fresh* (it is currently STALE; see graphify guide). | Source code. Anything in `myhospital-fe/`, `myhospital-be/`, `worktrees/`. |
+| **graphify** | `docs/`+`specs/` **design/business** relationships — *only when the graph is present and fresh*. The graph may be **ABSENT** (currently `graphify-out/` does not exist → `harness_doctor.py` reports `no graph.json`); if absent, skip graphify entirely and read the source docs. Any earlier graph was Windows-built and stale. See graphify guide. | Source code. Anything in `myhospital-fe/`, `myhospital-be/`, `worktrees/`. |
 
 ## Discovery order for SOURCE CODE
 
@@ -71,9 +71,10 @@ rg -l "AdmissionOrder" worktrees/<slug>/be | head -20
 
 - **`rga`** for an exact keyword inside `.docx` / `.pdf` (BA docs).
 - **graphify** *only* for a docs/specs **design-decision / relationship** question, and
-  *only* when the graph is fresh — it is currently STALE (Windows-built). Reading the
-  spec file directly is always an acceptable substitute. graphify is **never** required
-  before reading or searching code.
+  *only* when the graph is present and fresh. The graph may be **ABSENT** (currently
+  `graphify-out/` does not exist) — if so, skip graphify and read the source docs; any
+  earlier graph was Windows-built and stale. Reading the spec file directly is always an
+  acceptable substitute. graphify is **never** required before reading or searching code.
 
   ```fish
   graphify query "Ngày giường nội trú được tính theo rule nghiệp vụ nào?"

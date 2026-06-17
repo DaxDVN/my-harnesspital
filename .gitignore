@@ -48,6 +48,7 @@ build/
 bin/
 obj/
 .next/
+.vite/
 coverage/
 
 # --- progressive-test subsystem (engine/workflows): track SOURCE; the global bin/ rule above
@@ -56,6 +57,9 @@ coverage/
 !engine/workflows/progressive-test/.agentflow/bin/
 engine/workflows/progressive-test/.agentflow/vendor/
 engine/workflows/progressive-test/.agentflow/rounds/round-*/
+# probe/runtime screenshots + logs are evidence artifacts, not workflow source — keep the dir, drop the contents
+engine/workflows/progressive-test/.agentflow/logs/**
+!engine/workflows/progressive-test/.agentflow/logs/.gitkeep
 
 # --- SDLC workflows (impact-analysis/bug-fix/technical-design/task-slicing/incremental-impl):
 #     track the workflow SOURCE, ignore per-run round artifacts (envelopes/payloads). ---

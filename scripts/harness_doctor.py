@@ -478,6 +478,19 @@ def check_learning() -> None:
         code, out = _run([sys.executable, str(p), "--self-test"])
         add(OK if code == 0 else FAIL, f"learning:{name}",
             out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+    th = root() / "engine" / "hooks" / "learning_trigger.py"
+    if th.exists():
+        code, out = _run([sys.executable, str(th), "--self-test"])
+        add(OK if code == 0 else FAIL, "learning:trigger-hook",
+            out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+        st = root() / ".claude" / "settings.json"
+        body = st.read_text(encoding="utf-8", errors="ignore") if st.exists() else ""
+        wired = "learning_trigger" in body and "UserPromptSubmit" in body
+        add(OK if wired else WARN, "learning:trigger-wired",
+            "UserPromptSubmit → learning_trigger (auto-capture nudge)" if wired
+            else "learning_trigger NOT wired as UserPromptSubmit in settings.json")
+    else:
+        add(WARN, "learning:trigger-hook", "engine/hooks/learning_trigger.py missing (auto-capture nudge)")
     sb = root() / "second-brain"
     add(OK if sb.exists() else WARN, "learning:second-brain",
         "second-brain/ present (provisional intake buffer)" if sb.exists() else "second-brain/ missing")
@@ -499,6 +512,12 @@ def check_maturity() -> None:
     else:
         add(OK, "maturity", f"{len(levels)} workflows declare maturity ("
             + ", ".join(f"{k}={v}" for k, v in sorted(levels.items())) + ")")
+    # H2-07: surface UNPROVEN-e2e workflows separately so a green dashboard doesn't imply they're proven.
+    proven = {"smoke-tested", "real-run-proven", "production-default"}
+    unproven = sorted(k for k, v in levels.items() if v not in proven)
+    if unproven:
+        add(INFO, "maturity:unproven",
+            f"{len(unproven)} UNPROVEN e2e (scaffolded — owner-invoke only, first real run = gate): {', '.join(unproven)}")
 
 
 def check_codex_guard_wiring() -> None:

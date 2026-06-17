@@ -69,6 +69,7 @@ def load_entries(sb: Path) -> list[dict]:
             continue
         fm["_file"] = md.name
         fm["_stale"] = is_stale(fm)
+        fm["_recurrence"] = text.count("## Seen again")
         entries.append(fm)
     return entries
 
@@ -113,24 +114,29 @@ def main() -> None:
         print("OPEN provisional: (none matching filters)")
         return
 
+    conf_rank = {"high": 3, "medium": 2, "low": 1}
+    # Rank the owner's promote queue: recurring first, then high-confidence.
+    entries.sort(key=lambda e: (-e.get("_recurrence", 0), -conf_rank.get(e.get("confidence", ""), 0), e["_file"]))
     stale_entries = [e for e in entries if e["_stale"]]
+    ready = [e for e in entries if e.get("confidence") == "high" or e.get("_recurrence", 0) >= 1]
+    other = [e for e in entries if e not in ready]
 
-    print(f"OPEN provisional: {len(entries)} entrie(s)")
-    if stale_entries:
-        print(f"  *** {len(stale_entries)} stale (expires date passed) ***")
-    print()
+    def _fmt(e) -> str:
+        slug  = e["_file"].replace(".md", "")
+        marks = (" [STALE]" if e["_stale"] else "") + (f" [seen×{e['_recurrence'] + 1}]" if e.get("_recurrence") else "")
+        return (f"- {slug}{marks}\n    title:  {e.get('title', '(no title)')}\n"
+                f"    target: {e.get('proposed_target', '?')}  |  confidence: {e.get('confidence', '?')}  |  source: {e.get('source', '?')}")
 
-    for e in entries:
-        slug   = e["_file"].replace(".md", "")
-        target = e.get("proposed_target", "?")
-        conf   = e.get("confidence", "?")
-        src    = e.get("source", "?")
-        title  = e.get("title", "(no title)")
-        stale_marker = " [STALE]" if e["_stale"] else ""
-        print(f"- {slug}{stale_marker}")
-        print(f"    title:  {title}")
-        print(f"    target: {target}  |  confidence: {conf}  |  source: {src}")
-        print()
+    print(f"OPEN provisional: {len(entries)} entrie(s)" + (f"  ·  {len(stale_entries)} stale" if stale_entries else ""))
+    if ready:
+        print(f"\n⚑ READY FOR OWNER REVIEW ({len(ready)}) — recurring or high-confidence; consider /promote:")
+        for e in ready:
+            print(_fmt(e))
+    if other:
+        print(f"\nOther provisional ({len(other)}):")
+        for e in other:
+            print(_fmt(e))
+    print("\n(Promotion is OWNER-only: review, then run /promote. Agents NEVER write main-brain.)")
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +197,11 @@ def _self_test() -> None:
             stale = [e for e in entries if e["_stale"]]
             assert len(stale) == 0, "stale detection wrong on non-stale entry"
             print("  [PASS] stale detection works on non-stale entry")
+
+            # Recurrence count (V1: 'Seen again' sections rank the queue)
+            good.write_text(good.read_text(encoding="utf-8") + "\n## Seen again (2026-06-18)\n- again\n", encoding="utf-8")
+            assert load_entries(sb)[0]["_recurrence"] == 1, "recurrence not counted"
+            print("  [PASS] recurrence counted")
 
         finally:
             SECOND_BRAIN = orig

@@ -24,6 +24,9 @@ from typing import Iterable
 
 
 DEFAULT_SQL_PASSWORD = os.environ.get("MYHOSPITAL_SQL_PASSWORD", "Hospital123!")
+DEFAULT_SERVICESTACK_LICENSE = (
+    "TRIAL30WEB-e3JlZjpUUklBTDMwV0VCLG5hbWU6Ni8xNy8yMDI2IDUzZjcxZDcxNmQyNzQwOTJhOWY3ODVhN2I2OTE5MDk2LHR5cGU6VHJpYWwsbWV0YTowLGhhc2g6c1F6RWkzVGY3UzJOUmhXYno1b1Uwa3k5T1ZDbmRQS2FycmEvbk1WZW1ob2J4SCs3K25KLzBRY1Y5SGpoVEk1K2V5amxwN0ZvQllPM1Z1T00zdzl3VFpIb0tvZitQaERBVHVZMThYTngzbUhtaVE4OVVtQTlUSVVLakMwRmRYZ1lWdlgxaXNDWlBjdFRkZWUwNThKSXZ3bmoweGNRb2NzSkIwa2ZmbHlZQXh3PSxleHBpcnk6MjAyNi0wNy0xN30="
+)
 
 
 @dataclass(frozen=True)
@@ -129,6 +132,41 @@ def ensure_dotnet_sdk_workaround(be_path: Path, *, dry_run: bool = False) -> Non
     print(f"> patch {props} (AllowMissingPrunePackageData)")
     if not dry_run:
         props.write_text(updated, encoding="utf-8")
+
+
+def csharp_string_literal(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def ensure_servicestack_license(be_path: Path, *, dry_run: bool = False) -> None:
+    """Register the local ServiceStack trial license in BE worktree Program.cs.
+
+    The main BE repo intentionally remains untouched; worktrees get the local
+    runtime patch during creation and before run-be.
+    """
+    program = be_path / "MyHospital" / "Program.cs"
+    if not program.exists():
+        print(f"Warning: {program} not found; cannot apply ServiceStack license.")
+        return
+    content = program.read_text(encoding="utf-8")
+    license_key = os.environ.get("MYHOSPITAL_SERVICESTACK_LICENSE", DEFAULT_SERVICESTACK_LICENSE)
+    line = f"ServiceStack.Licensing.RegisterLicense({csharp_string_literal(license_key)});"
+    registration_re = re.compile(r"^[ \t]*ServiceStack\.Licensing\.RegisterLicense\([^;\n]*\);[ \t]*$", re.MULTILINE)
+    if registration_re.search(content):
+        updated = registration_re.sub(line, content, count=1)
+        if updated == content:
+            return
+        print(f"> patch {program} (ServiceStack license)")
+        if not dry_run:
+            program.write_text(updated, encoding="utf-8")
+        return
+    marker = "var builder = WebApplication.CreateBuilder(args);"
+    if marker not in content:
+        raise ToolError(f"Cannot apply ServiceStack license; missing builder marker in {program}")
+    updated = content.replace(marker, f"{line}\n\n{marker}", 1)
+    print(f"> patch {program} (ServiceStack license)")
+    if not dry_run:
+        program.write_text(updated, encoding="utf-8")
 
 
 def python_has_module(python_exe: str, module_name: str) -> bool:
@@ -634,6 +672,7 @@ def create_worktree(args: argparse.Namespace) -> None:
         if not args.dry_run:
             created.append((be_repo, be_branch, be_worktree))
         ensure_dotnet_sdk_workaround(be_worktree, dry_run=args.dry_run)
+        ensure_servicestack_license(be_worktree, dry_run=args.dry_run)
 
         remove_telerik_from_solution(be_worktree, dry_run=args.dry_run)
 
@@ -1026,6 +1065,7 @@ def run_be(args: argparse.Namespace) -> None:
         raise ToolError(f"BE path not found: {be_path}")
     require_command("dotnet")
     ensure_dotnet_sdk_workaround(be_path)
+    ensure_servicestack_license(be_path)
     env_values = parse_env_file(env_file)
     project = args.project or "MyHospital/MyHospital.csproj"
     cmd = ["dotnet", "run", "--project", project, "--no-launch-profile"]

@@ -14,10 +14,12 @@ shared across tools and fresh sessions** lives HERE, versioned in the repo.
 - **Lifecycle.** An entry lives until either (1) the owner says delete it, or (2) it is **promoted**.
 - **Promotion (owner-gated, via `/promote`).** The owner reviews and runs `/promote`, which either:
   - **distills** the entry into `main-brain/knowledge.md` (a lean durable truth/lesson), or
-  - **graduates** it into a new reusable **skill** in `.claude/skills/<x>` (a repeatable procedure).
+  - **graduates** it into a new reusable **skill** in `engine/skills/<slug>/SKILL.md` (a repeatable procedure; `.claude/skills` is a symlink → `engine/skills`, the canonical home).
   On promotion the source entry is removed and a tombstone line is left in `INDEX.md`.
 
 ## Files
 - `INDEX.md` — one line per entry (`slug — hook`); promoted/graduated entries become tombstones.
-- `<slug>.md` — one learning: frontmatter (`title`, `date`, `status: provisional`, `source`, `tags`) +
-  **What** / **Why** / **How to apply** / `[[links]]`.
+- `YYYY-MM-DD-<slug>.md` — one learning: frontmatter (`title`, `date`, `status: provisional`, `source`,
+  `scope`, `confidence`, `owner_confirmed`, `proposed_target`, `tags`, `expires`) + **What** / **Evidence** /
+  **Why** / **How To Apply** / **Boundaries** / **Promotion Recommendation**. Create via `scripts/learning_capture.py`
+  (enforces the enums; recurrence appends "Seen again" to the existing provisional entry, any date).

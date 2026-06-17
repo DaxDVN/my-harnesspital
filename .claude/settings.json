@@ -29,6 +29,20 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/learning_trigger.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

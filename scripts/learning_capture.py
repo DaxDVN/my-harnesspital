@@ -163,21 +163,55 @@ def refuse_main_brain(proposed_target: str) -> None:
 # Main capture
 # ---------------------------------------------------------------------------
 
+VALID_TARGET_EXACT = {"main-brain", "deep-review/checklist", "skill", "spec-decision", "reject"}
+
+
+def validate(args) -> None:
+    """Enforce the schema enums/patterns (F1) — help text alone let bad metadata rot second-brain."""
+    errs = []
+    if args.source not in VALID_SOURCES:
+        errs.append(f"--source {args.source!r}; choose: {', '.join(sorted(VALID_SOURCES))}")
+    if args.confidence not in VALID_CONFS:
+        errs.append(f"--confidence {args.confidence!r}; choose: {', '.join(sorted(VALID_CONFS))}")
+    if args.scope not in VALID_SCOPES and not re.match(r"^(module|workflow):.+$", args.scope or ""):
+        errs.append(f"--scope {args.scope!r}; use workspace|backend|frontend|module:<name>|workflow:<name>")
+    t = args.proposed_target or ""
+    if not (t in VALID_TARGET_EXACT or t.startswith("engine/rules/")
+            or t.startswith("engine/skills/") or t.startswith("deep-review/")):
+        errs.append(f"--proposed-target {t!r}; use main-brain|engine/rules/*|engine/skills/*|"
+                    "deep-review/checklist|skill|spec-decision|reject")
+    if errs:
+        for e in errs:
+            print(f"ERROR: invalid {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def find_existing_provisional(slug):
+    """Find an existing provisional entry for this slug on ANY date (F2: cross-day recurrence)."""
+    for p in sorted(SECOND_BRAIN.glob(f"*-{slug}.md")):
+        try:
+            if "status: provisional" in p.read_text(encoding="utf-8")[:500]:
+                return p
+        except Exception:
+            continue
+    return None
+
+
 def capture(args, stdin_text: str = "") -> Path:
+    validate(args)
+    refuse_main_brain(args.proposed_target)
     today     = date.today().isoformat()
     slug      = slugify(args.title)
     filename  = f"{today}-{slug}.md"
     dest      = SECOND_BRAIN / filename
 
-    refuse_main_brain(args.proposed_target)
-
-    if dest.exists():
-        # Append a "seen again" section instead of duplicating
+    existing = find_existing_provisional(slug)
+    if existing is not None:
+        # Append a "seen again" section instead of duplicating (matches ANY date — recurrence not fragmented)
         seen = build_seen_again_section(today, args)
-        existing = dest.read_text(encoding="utf-8")
-        dest.write_text(existing + seen, encoding="utf-8")
-        print(f"[learning_capture] Updated existing entry: {dest.relative_to(WORKSPACE_ROOT)}")
-        return dest
+        existing.write_text(existing.read_text(encoding="utf-8") + seen, encoding="utf-8")
+        print(f"[learning_capture] Recurrence — appended 'seen again' to {existing.relative_to(WORKSPACE_ROOT)}")
+        return existing
 
     content = build_frontmatter(args, today) + "\n" + build_body(args, stdin_text)
     SECOND_BRAIN.mkdir(parents=True, exist_ok=True)
@@ -261,6 +295,28 @@ def self_test() -> None:
             assert raised, "did not raise SystemExit for main-brain/ path"
             print("  [PASS] refuses main-brain/ path target")
 
+            # --- test 4: validate() rejects bad enums/patterns (F1) ---
+            for field, bad in [("source", "bogus"), ("confidence", "bogus"),
+                               ("scope", "nonsense"), ("proposed_target", "random/path")]:
+                V = type("V", (FakeArgs,), {field: bad})
+                raised = False
+                try:
+                    validate(V())
+                except SystemExit:
+                    raised = True
+                assert raised, f"validate did not reject bad {field}={bad}"
+            print("  [PASS] validate rejects bad source/scope/confidence/target")
+
+            # --- test 5: cross-day recurrence appends to existing provisional (F2) ---
+            CD = type("CD", (FakeArgs,), {"title": "Cross day entry"})
+            old_entry = sb / "2020-01-01-cross-day-entry.md"
+            old_entry.write_text("---\nstatus: provisional\n---\n# What\nold\n", encoding="utf-8")
+            ret = capture(CD())
+            assert ret == old_entry, f"cross-day did not reuse existing file: {ret}"
+            assert "Seen again" in old_entry.read_text(encoding="utf-8"), "cross-day did not append"
+            assert not (sb / f"{date.today().isoformat()}-cross-day-entry.md").exists(), "cross-day made a new file"
+            print("  [PASS] cross-day recurrence appends to existing provisional")
+
         finally:
             SECOND_BRAIN   = orig_sb
             MAIN_BRAIN     = orig_mb
@@ -283,11 +339,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Capture a provisional learning into second-brain/."
     )
     p.add_argument("--title",           required=False, help="Short title (required unless --self-test)")
-    p.add_argument("--source",          default="conversation",
+    p.add_argument("--source",          default="conversation", choices=sorted(VALID_SOURCES),
                    help=f"One of: {', '.join(sorted(VALID_SOURCES))}")
     p.add_argument("--scope",           default="workspace",
                    help="workspace | backend | frontend | module:<name> | workflow:<name>")
-    p.add_argument("--confidence",      default="medium",
+    p.add_argument("--confidence",      default="medium", choices=sorted(VALID_CONFS),
                    help="low | medium | high")
     p.add_argument("--proposed-target", default="reject",
                    help="main-brain | engine/rules/backend | engine/rules/frontend | "
