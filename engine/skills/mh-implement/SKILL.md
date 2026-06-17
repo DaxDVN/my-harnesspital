@@ -14,13 +14,23 @@ Companion to **`mh-review`**. Where mh-review *finds* issues after the fact, mh-
 
 > Rule of thumb: *feature → implement (uses scaffold) · one pattern → scaffold · bug → fix.*
 
-Bundle docs in this folder: **[preflight.md](./preflight.md)** (reuse discovery), **[definition-of-done.md](./definition-of-done.md)** (the gate). Live convention source of truth: `engine/rules/frontend.md` (FE) + `backend.md` (BE). FE reality spine (memory `fe-live-conventions-vs-stale-docs` + audit `velvet/notes/myhospital-fe-convention-audit-2026-06-15.md`): RQ-via-adapter + `useMasterData` + id-only + shadcn. **Do NOT trust `ARCHITECTURE-OVERVIEW.md` / `BEST-PRACTICES-NEW-PAGE.md` — both stale (audit V10).**
+## Mode — FE vs BE (the middle branches; B0/B5 are shared)
+- **FE target (`myhospital-fe`) → follow [fe-flow.md](./fe-flow.md) (F0–F8).** It specializes B1–B4 into 9 FE
+  gates (contract-sync · reuse · scaffold · data-wiring · forms · cross-cutting · deterministic floor), each
+  with its silent-failure pitfall + a per-phase done-check. FE work **consumes `specs/<module>/03-ui.md`** —
+  the UI.md from the **`/ui-spec`** workflow, whose **REUSE MAP** drives F2 onward (do not re-derive reuse).
+- **BE target (`myhospital-be`) → the existing B1–B4 below.**
+- **FE+BE feature** → BE contract first (B-flow), `npm run dtos:update && npm run client:generate`, then the FE side via `fe-flow.md`.
+
+Bundle docs in this folder: **[preflight.md](./preflight.md)** (reuse discovery), **[definition-of-done.md](./definition-of-done.md)** (the gate), **[fe-flow.md](./fe-flow.md)** (the FE-specialized F0–F8 path). Live convention source of truth: `engine/rules/frontend.md` (FE) + `backend.md` (BE). FE reality spine (memory `fe-live-conventions-vs-stale-docs` + audit `velvet/notes/myhospital-fe-convention-audit-2026-06-15.md`): RQ-via-adapter + `useMasterData` + id-only + shadcn. **Do NOT trust `ARCHITECTURE-OVERVIEW.md` / `BEST-PRACTICES-NEW-PAGE.md` — both stale (audit V10).**
 
 ## B0 — Scope & worktree
 Follow the Session Start Protocol: `python scripts/worktree.py list`, confirm slug/slot, **work in `worktrees/<slug>/fe|be`** — never edit `myhospital-fe/` or `myhospital-be/` directly (guard hook enforces). If a spec module exists, read `specs/<module>/{02-requirements,03-ui,06-decision-log,08-api}.md` — Confirmed requirements + decisions are the business source of truth. FE+BE work → BE contract first, regen FE DTO/client, then FE usage.
 
+> **B1–B4 below are the BE / generic path. For an FE target use [fe-flow.md](./fe-flow.md) (F1–F8) instead** — same B0/B5 spine, FE-specialized middle with per-axis gates.
+
 ## B1 — Pre-flight discovery (anti-reinvent) — see [preflight.md](./preflight.md)
-Mandatory before writing. Reuse beats authoring. In short: read `myhospital-fe/docs/components/component-inventory.generated.md` + `docs/reuse/reuse-catalog.generated.md`, CodeGraph/`rg` for the target area, and pick the **warehouse exemplar — its GOOD parts only**:
+Mandatory before writing. Reuse beats authoring. In short: **CodeGraph** (`codegraph explore/node` from the fe repo) + (for an FE feature) the **`/ui-spec` reuse-map** in `specs/<module>/03-ui.md` + bounded `rg` for the target area, and pick the **warehouse exemplar — its GOOD parts only**:
 - ✅ COPY: routing (`lazy`+`Suspense`+`LayoutSelector`+Provider), mutation hooks `adapter.useXxx({successMessage, invalidateQueries, onSuccess})`, table (`useReactTable`+`EnhancedDataGrid`+`useMemo` cols), shadcn UI, RHF+`zodResolver`+dirty-guard.
 - ❌ DO NOT COPY (audit §4): monolithic 600+-line page files, `useState`-only context as a data layer, schema inlined in the page, `models.ts` that only re-exports DTOs.
 
@@ -40,7 +50,7 @@ Run the deterministic floor + types/lint:
 - `python scripts/mh_scan --root worktrees/<slug>/fe --scope <changed...> --format summary` — the unified FE+BE scanner; FE rules flag dead `@/lib/dtos/dtos` import (FE-V1, HIGH), raw `fetch()` (FE-V2), master-data name-compare like `=== 'kinh'` (FE-V3), `serviceStackClient.*` in a component.
 - `npx tsc --noEmit` (from the worktree fe) — catches FE-V1 + contract drift.
 - scoped `npx eslint <changed> --no-fix` — **never `npm run lint`**.
-- regen DTO/client if contract changed; `npm run components:index` if UI added.
+- regen DTO/client if contract changed.
 
 Fix every HIGH/BLOCK before B5; advisory WARN each fixed or justified (audit §6 exception, with a comment).
 

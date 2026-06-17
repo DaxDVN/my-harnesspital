@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "engine/workflows/_shared/envelope.schema.json",
+  "title": "Harness workflow envelope (the ONE shared receipt)",
+  "description": "Short receipt every workflow round emits next to its payload. The orchestrator reads the envelope (cheap) not the payload (expensive); content_sha256 binds envelope->payload so drift is detectable; next_recommended_workflow drives chaining. Validate with engine/workflows/_shared/validate-envelope.py.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "workflow",
+    "artifact_type",
+    "artifact_path",
+    "status",
+    "summary_for_router",
+    "requires_human_review",
+    "content_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "1", "type": "string" },
+    "workflow": {
+      "type": "string",
+      "description": "emitting workflow name (must be an engine/workflows/<name>/)"
+    },
+    "round_id": { "type": "string", "description": "rounds/<id> this envelope belongs to" },
+    "module": { "type": ["string", "null"], "description": "specs/<module> if SDD-scoped, else null" },
+    "artifact_type": {
+      "type": "string",
+      "description": "what the payload is: risk-assessment | bug-intake | reproduction | rca | fix-plan | fix-implementation | fix-verification | design | plan | task-implementation | validation"
+    },
+    "artifact_path": { "type": "string", "description": "path to the payload this envelope receipts" },
+    "status": {
+      "type": "string",
+      "description": "workflow lifecycle/terminal state (see each workflow's State section)"
+    },
+    "verdict": {
+      "type": ["string", "null"],
+      "description": "workflow-specific verdict, e.g. SAFE_TO_IMPLEMENT | REQUIRES_CODEX_REVIEW | REQUIRES_BA_DECISION | BLOCKED_INSUFFICIENT_CONTEXT | REPRODUCED | DIRECT_PATCH | PLAN_MISMATCH"
+    },
+    "risk_level": {
+      "type": ["string", "null"],
+      "enum": ["LOW", "MEDIUM", "HIGH", "BLOCKING", "NONE", null]
+    },
+    "summary_for_router": {
+      "type": "string",
+      "description": "one to three sentences the orchestrator can act on WITHOUT reading the payload"
+    },
+    "next_recommended_workflow": {
+      "type": ["string", "null"],
+      "description": "the workflow this result should chain into, e.g. impact-analysis | technical-design | task-slicing | incremental-impl | bug-fix | progressive-test | deep-review, or null when terminal"
+    },
+    "requires_human_review": { "type": "boolean" },
+    "content_sha256": {
+      "type": "string",
+      "description": "sha256 hex of the payload file bytes; rerun validate-envelope --payload to detect drift"
+    },
+    "created_at": { "type": ["string", "null"], "description": "ISO-8601 timestamp set by the writer" }
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "ui-spec",
+  "description": "From a business DOCX + PNG mockups + the owner's specs/<module>/02-requirements, produce a DETAILED specs/<module>/03-ui.md mapping every UI element to REUSE / EXTEND / CREATE-NEW — maximizing reuse of existing FE components/UI/logic/patterns (CodeGraph + component/reuse catalogs + warehouse exemplar + shadcn). Multimodal mockup-read; read-only on source code; the foundation/input of the FE dev workflow (mh-implement FE-mode). Never authors schema or business rules.",
+  "kind": "orchestrated-sdd-fe",
+  "maturity": "scaffolded",
+  "entry_skill": "ui-spec",
+  "agents": [],
+  "external_agents": ["codegraph"],
+  "skills_used": [],
+  "rules": ["frontend"],
+  "uses_shared": ["gate-check.py", "module-state.py", "envelope.schema.json", "validate-envelope.py"]
+}

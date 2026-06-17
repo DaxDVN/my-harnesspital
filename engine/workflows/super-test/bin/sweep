@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Super-Test HARVEST sweep — the EXECUTOR (opencode OR mimo-code) DRIVES (Topology B). No mock.
+# Reuses progressive-test's agent-browser. Enforces harvest-mode = NO source edits.
+set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+STROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LIB="$STROOT/lib/supertest.py"
+PROTOCOL="$STROOT/protocol/harvest-sweep.md"
+DRIVER_BRIEF="$STROOT/integrations/mimocode-super-test.md"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/_executor-lib.sh"
+PT_BIN="$STROOT/../progressive-test/.agentflow/bin"                  # reuse agent-browser
+[ -d "$PT_BIN" ] && export PATH="$(cd "$PT_BIN" && pwd):$PATH"
+
+MODULE="${1:-}"; RUN="${2:-}"
+[ -n "$MODULE" ] && [ -n "$RUN" ] || { echo "usage: $(basename "$0") <module> <run-id>" >&2; exit 2; }
+RUN_DIR="$STROOT/runs/$MODULE/$RUN"
+[ -d "$RUN_DIR" ] || { echo "RUN_DIR not found: $RUN_DIR — first: $STROOT/bin/supertest init-run $MODULE" >&2; exit 2; }
+LOG_DIR="$RUN_DIR/logs"; mkdir -p "$LOG_DIR"
+
+RT="$(supertest_runtime)"
+[ "$RT" != none ] || { echo "NO_EXECUTOR_RUNTIME — need opencode OR mimo-code (see _executor-lib.sh)" >&2; exit 127; }
+command -v agent-browser >/dev/null 2>&1 || { echo "AGENT_BROWSER_NOT_FOUND — reuse progressive-test shim ($PT_BIN)" >&2; exit 127; }
+TARGET_URL="${AGENTFLOW_TARGET_URL:-${SUPERTEST_TARGET_URL:-}}"
+[ -n "$TARGET_URL" ] || { echo "AGENTFLOW_TARGET_URL not set — the running app URL to sweep" >&2; exit 2; }
+TARGET_REPO="${SUPERTEST_TARGET_REPO:-}"   # set to the worktree to ENFORCE harvest no-source-edit
+
+python3 "$LIB" set-state "$RUN_DIR" HARVESTING >/dev/null
+PRE=""; [ -n "$TARGET_REPO" ] && PRE="$(git -C "$TARGET_REPO" status --porcelain 2>/dev/null || true)"
+
+PF="$LOG_DIR/sweep.prompt.txt"
+{ cat "$DRIVER_BRIEF"; printf '\n\n---\nHARVEST PROTOCOL\n'; cat "$PROTOCOL"; printf '\n\n---\nPHASE OVERRIDE: HARVEST ONLY\nRUN CONTEXT (you are the DRIVER — self-drive HARVEST)\nModule: %s\nRun dir (write ALL artifacts here): %s\nTarget app URL: %s\nRuntime: %s\nWrite 04-bug-catalog.md / 02-coverage-map.md / 05-bypass-log.md / 06-blocked-flows.md as you go; update 00-super-test-state.md. Do NOT edit source. At a stop condition: write 07-opus-request.md, set phase CALLING_OPUS, STOP.\n' "$MODULE" "$RUN_DIR" "$TARGET_URL" "$RT"; } >"$PF"
+
+run_executor "$PF" "$LOG_DIR/sweep.stdout.log" "$LOG_DIR/sweep.stderr.log" \
+  || { echo "SWEEP_EXECUTOR_FAILED (runtime=$RT; see $LOG_DIR/sweep.stderr.log)" >&2; exit 1; }
+
+if [ -n "$TARGET_REPO" ]; then
+  POST="$(git -C "$TARGET_REPO" status --porcelain 2>/dev/null || true)"
+  if [ "$PRE" != "$POST" ]; then
+    echo "HARVEST_VIOLATION: source changed in $TARGET_REPO during harvest (no source edits in harvest mode):" >&2
+    git -C "$TARGET_REPO" status --short >&2 || true
+    python3 "$LIB" set-state "$RUN_DIR" BLOCKED >/dev/null || true
+    exit 1
+  fi
+else
+  echo "NOTE: SUPERTEST_TARGET_REPO unset — skipped no-source-edit enforcement." >&2
+fi
+
+python3 "$LIB" validate-run "$RUN_DIR" || { echo "harvest artifacts INVALID" >&2; exit 1; }
+echo "Super-Test harvest done (runtime=$RT) — artifacts: $RUN_DIR (state: $(python3 "$LIB" get-state "$RUN_DIR"))"

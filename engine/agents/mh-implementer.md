@@ -21,7 +21,7 @@ You are one **bounded implementer** in the `mh-implement` / `mh-fix` harness. Yo
 6. **Don't break peers.** Append/extend; never revert or rewrite files outside your scope.
 
 ## Before returning — scoped checks (in the worktree)
-Run on your changed files only: `npx tsc --noEmit` (or scoped), `npx eslint <your files> --no-fix` (never `npm run lint`), and the deterministic floor `python scripts/mh_scan --root worktrees/<slug>/fe --scope <your files> --format summary`. Fix HIGH/BLOCK you caused.
+**Boundary self-check FIRST** (prove you stayed in scope): `git -C worktrees/<slug>/<fe|be> diff --name-only <base> | python engine/workflows/_shared/allowlist-check.py --stdin --allow '<your injected SCOPE globs>'` → if **exit 2**, you edited outside your assigned scope → **revert those files and return to the parent** (never hand back an overreaching diff). Then run on your changed files only: `npx tsc --noEmit` (or scoped), `npx eslint <your files> --no-fix` (never `npm run lint`), and the deterministic floor `python scripts/mh_scan --root worktrees/<slug>/fe --scope <your files> --format summary`. Fix HIGH/BLOCK you caused.
 
 ## Output (return to parent)
 - Files created/modified (paths).

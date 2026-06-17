@@ -6,8 +6,7 @@
 - Bash OpenCode wrappers for TEST_ONLY, IMPLEMENT_ONLY, RETEST_ONLY.
 - Python stdlib validator/state helper.
 - `validate-artifact`, `update-state`, `init-round`, `summarize-round`, `doctor`.
-- `tests/mock-opencode` for mock OpenCode/agent-browser behavior.
-- `tests/run-smoke-tests` full contract smoke flow.
+- (mock executor + smoke test removed 2026-06-17 — real OpenCode/mimo only.)
 - Fixtures for all required artifact types.
 - Vendored Vercel Labs `agent-browser@0.27.3` package under `.agentflow/vendor/agent-browser-package`.
 - Project-local `.agentflow/bin/agent-browser` shim.
@@ -23,7 +22,6 @@ Required commands:
 
 ```bash
 .agentflow/bin/doctor
-tests/run-smoke-tests
 .agentflow/bin/validate-artifact state .agentflow/state.json
 .agentflow/bin/validate-artifact bug-packet tests/fixtures/sample-bug-packet.json
 .agentflow/bin/validate-artifact rca-plan tests/fixtures/sample-rca-plan.json
@@ -45,11 +43,9 @@ AGENTFLOW_TARGET_URL=https://example.com timeout 300s .agentflow/bin/retest-with
 
 ## Mocked vs Real
 
-Mocked in smoke tests: OpenCode executor behavior, MiMo provider behavior, source implementation, and agent-browser behavior.
-
 Real in setup/probes: wrapper execution, logs, state transitions, artifact generation, validation, summary generation, OpenCode CLI, `xiaomi-token-plan-sgp/mimo-v2.5`, Vercel Labs `agent-browser` CLI, Chrome navigation, accessibility-tree snapshot refs, screenshots, OpenCode skill loading.
 
-Implementation remains mock-tested by default because real implementation should only run against a real approved plan and allowlisted source files.
+The mock executor was removed (2026-06-17): the executor runs real OpenCode/mimo only, against a real approved plan + allowlisted source files. The first real end-to-end run is the owner's gate.
 
 ## Integration Notes
 
@@ -82,7 +78,7 @@ If provider syntax differs later, change only `.agentflow/config.yaml` or the wr
 - `agent-browser` version: `0.27.3`.
 - `agent-browser install` installed Chrome at `/home/dax/.agent-browser/browsers/chrome-149.0.7827.115`.
 - OpenCode loads `.opencode/skills/agent-browser/SKILL.md` and shows `Skill "agent-browser"` in real run logs.
-- Smoke test uses `AGENTFLOW_MOCK_OPENCODE=1`, so it validates the contract loop without burning OpenCode tokens.
+- No mock (removed 2026-06-17): the executor runs real OpenCode/mimo via the token-plan provider.
 
 
 ## Capability Probe Update
@@ -183,7 +179,7 @@ MyHospital the agentflow target MUST be a **worktree** (target repo path + URL v
 targets are unaffected.
 
 ### Mock vs real (honest)
-Smoke (`AGENTFLOW_MOCK_OPENCODE=1`) proves the full wiring: test→classify→RCA→build-plan→implement→retest with
-all envelopes validated incl. sha256 + the TRIVIAL fast-lane. Real executor (OpenCode/mimo + agent-browser)
+The wiring was proven (via the now-removed mock + real executor probes): test→classify→RCA→build-plan→implement→retest
+with all envelopes validated incl. sha256 + the TRIVIAL fast-lane. Real executor (OpenCode/mimo + agent-browser)
 is proven against example.com. NOT yet proven: a full Claude-orchestrated real bug-fix on a real FE (mimo's
-fix quality) — that first real run is the owner's gate.
+fix quality) — that first real run is the owner's gate. (Mock removed 2026-06-17; structure validated via `.agentflow/bin/doctor`.)

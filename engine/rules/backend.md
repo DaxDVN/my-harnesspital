@@ -18,7 +18,7 @@ Verified from current project files, not assumed:
 - Utilities project: `MyHospital.Utilities` (`BusinessException`, `ErrorCodes`, constants, validation helpers, shared typed DTOs).
 - Tests: `MyHospital.Tests` with NUnit.
 
-Current package harness: `myhospital-be/CONVENTIONS.md` is the backend convention source. There is no package-level `myhospital-be/AGENTS.md` in this checkout.
+Current package harness: **`engine/rules/backend.md` (this file) is the canonical backend convention source.** `myhospital-be/CONVENTIONS.md` is a legacy/superseded package-local doc — advisory only; it contains known drift (see `engine/rules/README.md` and `convention_truth`). There is no package-level `myhospital-be/AGENTS.md` in this checkout.
 
 ## Source-of-Truth Hierarchy
 
@@ -26,10 +26,11 @@ For backend review, apply this order:
 
 1. Current user/task instruction and explicit affected-file boundaries, but only within hard harness boundaries.
 2. Active feature spec/task files if the task names them.
-3. `myhospital-be/CONVENTIONS.md` as the canonical backend convention source.
-4. Current source code patterns near the touched files.
+3. **`engine/rules/backend.md` (this file)** as the canonical backend convention source.
+4. `myhospital-be/CONVENTIONS.md` — legacy/superseded; advisory only when this file does not cover a topic (see `engine/rules/README.md`).
+5. Current source code patterns near the touched files.
 
-If a requested change conflicts with `CONVENTIONS.md` or a forbidden backend harness rule, stop instead of inventing a workaround. Existing source deviations are lead-approved legacy unless the task explicitly targets them.
+If a requested change conflicts with **this file** or a forbidden backend harness rule, stop instead of inventing a workaround. Existing source deviations are lead-approved legacy unless the task explicitly targets them.
 If the current task explicitly conflicts with a `BLOCK`/forbidden rule, use the stop protocol
 instead of treating the instruction as an override.
 
@@ -242,12 +243,13 @@ References: `MyHospital.Utilities/Constants/Functions.cs`, `MyHospital.Utilities
 
 ## BE-FE Contract Sync and Type Export
 
-Backend is the source for FE DTO/constants export:
+Backend is the source for FE DTO/constants export. Three distinct endpoints, verified against live code:
 
-- `/types/typescript-types` exports C# DTO/utility interfaces.
-- `/types/typescript-const` exports constants, entity stores, and query schema from `[FilterField]` / `[SortFields]`.
-- `Configure.AppHost.cs` registers both raw handlers.
-- `TypeScriptGeneratorHostedService` fetches both endpoints in development.
+- `/types/typescript` — ServiceStack **NativeTypes** DTO export (all request/response DTOs with `IReturn<>` and `[DataContract]` types). Served by the built-in `NativeTypesFeature` plugin registered in `Configure.AppHost.cs:275-298`. This is the primary DTO source.
+- `/types/typescript-types` — custom handler (`TypeScriptTypesHandler`, `MyHospital/Services/TypeScriptTypesHandler.cs:14`) that exports **utility/shared types** from `MyHospital.Utilities` (e.g. `InsuranceCalculation`, `Utilities.Types`). Not the DTOs.
+- `/types/typescript-const` — custom handler (`TypeScriptConstantsHandler`, `MyHospital/Services/TypeScriptConstantsHandler.cs:15`) that exports **constants, ErrorCodes, entity stores, and query schema** from `[FilterField]` / `[SortFields]`.
+- `Configure.AppHost.cs:300-315` registers the two raw handlers (`typescript-types`, `typescript-const`); NativeTypes handles `/types/typescript` automatically.
+- `TypeScriptGeneratorHostedService` (`MyHospital/Services/TypeScriptGeneratorHostedService.cs:62-69`) fetches all three endpoints in development and combines them into `generated-dtos.ts`.
 
 Review rules:
 

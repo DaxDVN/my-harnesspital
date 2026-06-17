@@ -1,0 +1,17 @@
+{
+  "name": "super-test",
+  "description": "MiMo-led module-level exploratory E2E bug-harvesting. OpenCode/MiMo is the DRIVER: it sweeps a module with agent-browser logging bug-catalog/coverage-map/bypass-log/blocked-flows, then file-hands-off to Opus 4.8 (max effort) for BATCH cluster-RCA + repair batches, Codex reviews risky batches, MiMo implements the approved plan, then targeted + module-sweep retest. Sibling of progressive-test (harvest-first/batch-repair, NOT fix-first). Claude/Opus is a called specialist, never the orchestrator.",
+  "kind": "orchestrated-mimo-led",
+  "maturity": "scaffolded",
+  "entry_skill": "super-test",
+  "agents": ["mh-batch-rca"],
+  "external_agents": ["opencode-executor", "mimo-code-executor", "codex-reviewer"],
+  "skills_used": [],
+  "rules": ["frontend", "backend"],
+  "uses_shared": ["envelope.schema.json", "validate-envelope.py", "allowlist-check.py"],
+  "reuses": [
+    "engine/workflows/progressive-test/.agentflow/bin/agent-browser (browser layer)",
+    "engine/workflows/progressive-test (opencode/mimo executor pattern, no-mock)"
+  ],
+  "status": "M1: scaffold + schemas + harvest sweep. M2: opus batch-rca + codex gate. M3: repair + 2-stage retest. UNPROVEN e2e — first real run is the owner gate."
+}

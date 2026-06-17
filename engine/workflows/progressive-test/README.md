@@ -73,16 +73,15 @@ cd /home/dax/Documents/arabica/tools/progressive-test
 .agentflow/bin/doctor
 ```
 
-Missing `opencode` or `agent-browser` is a warning if mock mode is available.
+Missing `opencode` or `agent-browser` now FAILS — there is no mock; both are required for a real run.
 
-## Run Smoke Test
+## Validate structure
 
 ```bash
-cd /home/dax/Documents/arabica/tools/progressive-test
-tests/run-smoke-tests
+.agentflow/bin/doctor
 ```
 
-Smoke uses `AGENTFLOW_MOCK_OPENCODE=1` and validates the full contract loop.
+The mock executor + smoke test were removed (2026-06-17 — real OpenCode/mimo only). `doctor` validates the subsystem structure; the first real end-to-end run is the owner's gate.
 
 ## Run Real Wrapper
 
@@ -109,7 +108,7 @@ opencode run --model xiaomi-token-plan-sgp/mimo-v2.5 "<prompt>"
 
 ## Failure Handling
 
-- `OPENCODE_NOT_FOUND`: use mock mode or configure OpenCode.
+- `OPENCODE_NOT_FOUND`: install/configure OpenCode (no mock fallback — real executor required).
 - `EXECUTOR_FAILED_NO_ARTIFACT`: executor did not produce required artifact.
 - `EXECUTOR_INVALID_ARTIFACT`: artifact failed validation.
 - `EXECUTOR_QUOTA_EXHAUSTED`: stop; no model fallback.

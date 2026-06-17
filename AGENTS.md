@@ -53,7 +53,7 @@ The harness is organized like a person who cannot remember everything: a concise
 |---|---|---|---|---|
 | **`main-brain/`** | the BRAIN — source of truth | distilled lessons + durable cross-cutting truths/decisions + "what exists & when to use it"; **refers down** to `engine/` (which holds the skills/agents/rules) | **always** (lean — bloat burns tokens) | **owner only, via `/promote`** (guard BLOCKS all agent writes) |
 | **`engine/`** | the recipe library / governing core — **CANONICAL HOME for every asset** | rules (convention canon + policies), review protocol, routing, **AND the skills / agents / hooks / workflows themselves** — the ONE source every coding tool shares | on-demand | maintenance |
-| `.claude/` · `.codex/` · `.opencode/` | per-tool **pointers + config** (NOT copies) | reach engine's assets via each tool's own mechanism — Claude: `.claude/{skills,agents,hooks,workflows}` are **symlinks → `engine/…`**; Codex: `[[skills.config]]` / symlink; opencode: `instructions` glob. Add a new tool = add pointers, once | on invocation | the pointer only (assets live in `engine/`) |
+| `.claude/` · `.codex/` · `.opencode/` | per-tool **pointers + config** (NOT copies) | **Claude: fully wired** — `.claude/{skills,agents,hooks,workflows}` are real **symlinks → `engine/…`**. **Codex: guard only** (Bash PreToolUse hook via walk-up; `.codex/config.toml` = model config — engine skills are read as workflow DOCS, not callable slash-skills). **opencode / mimocode: opencode-fork that auto-loads `AGENTS.md`** + a global guard plugin (no per-skill pointers yet). "Add a tool = add pointers once" is the DESIGN; only Claude is fully wired today. | on invocation | the pointer only (assets live in `engine/`) |
 | **`second-brain/`** | scratch notebooks — learning buffer | provisional learnings ("remember this / pay attention / idea"); may be right OR wrong | never (on-demand) | **any agent, freely (no gate)** |
 | `docs/` · `specs/` · `scripts/` | reference · SDD · commands | (unchanged) | freely |
 
@@ -71,8 +71,16 @@ truth/decision → `main-brain/` (via promote). "decision scoped to one module" 
 "I suspect bed-day double-counts" → provisional → `second-brain/`.
 
 **Lifecycle of a learning:** drop it in `second-brain/` (detailed) → owner reviews → `/promote` either
-**distills it into `main-brain/`** (a lean truth/lesson) or **graduates it into a new `.claude/skills/<x>`**
-(a reusable recipe). It lives until promoted/graduated OR the owner deletes it.
+**distills it into `main-brain/`** (a lean truth/lesson) or **graduates it into a new `engine/skills/<x>`**
+(a reusable recipe; `.claude/skills` is a symlink → `engine/skills`). It lives until promoted/graduated OR the owner deletes it.
+
+**Learning intake (operational — DO it, don't just rely on memory):** when the owner says "nhớ cái này /
+để ý cái này / từ giờ / lần sau / always / never / remember this / make this a rule", OR a review/bug-fix
+surfaces a recurring bug-class / convention gap / cross-cutting owner decision → run
+`python scripts/learning_capture.py …` to create a structured **provisional** `second-brain/` entry
+(schema: status/scope/confidence/proposed_target). A decision scoped to ONE module → `specs/<m>/06-decision-log.md`,
+not the brain. At session end, capture any new durable learning or explicitly state "no durable learning captured."
+NEVER write `main-brain/` (owner-gated via `/promote`). `python scripts/learning_check.py` verifies learning health.
 
 ## Worktree + Zellij — USER-DRIVEN (manual; agents do NOT auto-run)
 
@@ -120,7 +128,7 @@ Compact routing (intent → tool; auto-use unless marked user-driven):
 ## Scope Routing
 
 - Work under `myhospital-fe/`: read and obey `myhospital-fe/CLAUDE.md`.
-- Work under `myhospital-be/`: read and obey `myhospital-be/CONVENTIONS.md`; if a package-level `AGENTS.md` is later added, obey it too.
+- Work under `myhospital-be/`: **`engine/rules/backend.md` is the canon — read it FIRST**; `myhospital-be/CONVENTIONS.md` is **legacy/superseded, advisory only** (known drift in prefixes / SettingKeys / action-names / TS-endpoints — see `engine/rules/README.md` + `just convention-truth`). If a package-level `AGENTS.md` is later added, obey it too.
 - Work spanning FE and BE: load both harnesses, then implement BE contract first, regenerate FE DTO/client second, and validate both sides.
 - If a rule conflicts with the user's explicit instruction in the current thread, stop and report the conflict before editing, unless the Owner-Authorized Bypass Protocol has been explicitly invoked for this session.
 
@@ -176,7 +184,7 @@ Do not work around a blocked rule by inventing a different pattern.
 Before implementation:
 
 - Find existing code with **CodeGraph first** (broad "how/where/what-calls/what-breaks" exploration), then a **bounded** `rg -l` for exact strings — never broad-scan all of FE/BE and dump output. Reuse project patterns instead of inventing. Full policy + command table: **`engine/rules/source-discovery.md`**.
-- For FE UI/component work, run or read `myhospital-fe/docs/components/component-inventory.generated.md` and update it with `npm run components:index` if stale or missing.
+- For FE UI/component work: **CodeGraph first** (from the FE repo) for live components/hooks; if a spec exists, consume the **`/ui-spec` reuse-map** in `specs/<module>/03-ui.md`; then bounded `rg`. *(The `*.generated.md` reuse catalogs + `npm run components:index` were removed — they never existed in `myhospital-fe`.)*
 - For BE data access, inspect existing service/query patterns around the target entity before writing queries.
 
 ## Review Harness (mh-review) — cross-tool
@@ -213,7 +221,7 @@ Source code is explored with **CodeGraph** — a local, pre-indexed code knowled
 - **Order:** CodeGraph first for any "how does X work / where is X / what calls X / what breaks if I change X" question → bounded `rg -l` / `ast-grep` for an exact string in a known small scope → read files only after narrowing to a few candidates. Treat CodeGraph-returned source as already read unless you need exact lines to edit/quote.
 - **Tools:** MCP tools `codegraph_explore` / `codegraph_node` / `codegraph_search` / `codegraph_callers` when the agent has them; otherwise the CLI `codegraph explore|query|node|callers|callees|impact|affected` from inside an indexed repo.
 - **Indexes are per code repo**, never at root (the root `.gitignore` excludes `myhospital-fe/`, `myhospital-be/`, `worktrees/`): `myhospital-be/`, `myhospital-fe/`, and an **active** `worktrees/<slug>/{be,fe}`. CodeGraph honors each repo's `.gitignore`, skips `node_modules`/build output/files > 1 MB, and auto-syncs on edit (~2 s debounce). `just codegraph-status` checks them; `just doctor` includes CodeGraph health.
-- **Never** broad-scan all of FE/BE with `rg`/`fd` and dump output. **Never** use graphify for source code — graphify is docs/specs design intent only (and currently stale).
+- **Never** broad-scan all of FE/BE with `rg`/`fd` and dump output. **Never** use graphify for source code — graphify is docs/specs design intent only (and currently **absent/stale** — skip it for code).
 
 ## Knowledge Graph (graphify)
 
@@ -228,11 +236,10 @@ is built at `graphify-out/graph.json`. It maps **design intent and spec relation
   contain code. Source-code discovery policy: `engine/rules/source-discovery.md`.
 - When you do use it: `graphify query "<question>"`, `graphify explain "<node>"`,
   `graphify path "A" "B"`, `graphify affected "<node>"` (no API key needed). Treat `INFERRED` edges as unverified.
-- **The current graph is STALE and must not be trusted blindly.** It was built on Windows
-  (its recorded build root `graphify-out/.graphify_root` is a Windows drive path, not this workspace);
-  its `src=` citations are Windows paths that do
-  not exist on Linux. Until it is rebuilt on Linux, verify any graph claim against the real source doc.
-  Run `python scripts/harness_doctor.py` to see the freshness/trust status.
+- **The graph may be ABSENT (not merely stale).** Current state: `graphify-out/` does not exist —
+  `python scripts/harness_doctor.py` reports `no graph.json`. **If absent, skip graphify entirely and read the
+  source docs.** (Any earlier graph was a Windows build whose `src=` paths don't exist on Linux — untrusted
+  anyway.) Rebuild on Linux with `/graphify` only when a fresh graph is actually needed.
 - **Freshness probe:** the `SessionStart` hook (`python .claude/hooks/graphify_stale_check.py .`) prints a
   `[graphify] … STALE …` line when the recorded build root does not match this workspace (the Windows case
   above) or when it cannot confirm freshness. It only *flags* — it never rebuilds. When it fires, tell the
@@ -373,6 +380,8 @@ The workspace root (`/home/dax/Documents/arabica/roast`) is reserved for harness
 
 This applies to **all agents** (Claude, Codex, Antigravity): if a tool generates a file as a side-effect (screenshot, report, diff), save it to the correct subfolder before returning.
 
+> **Tracked vs ignored (reconcile with `.gitignore`):** `docs/harness/**` (harness history — reviews, plans, notes) + `docs/graphify-agent-guide.md` are **version-controlled** → put durable harness reports/research/plans there. The other `docs/*` dirs above (`docs/session-notes`, `docs/tasks`, `docs/testing`) are **gitignored working space** (ephemeral, not committed) — fine for session runtime artifacts, but anything you want kept in git history goes under `docs/harness/notes|plans`.
+
 ## graphify
 
 This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
@@ -384,9 +393,9 @@ Rules:
   docs/specs design-decision/relationship question, and only as an alternative to reading the spec directly.
   For source code use **CodeGraph** (broad) + bounded `rg`/`fd`/`bat` (exact) — see
   `engine/rules/source-discovery.md`; for `.docx`/`.pdf` use `rga`. Never run graphify before reading source code.
-- **Trust check:** the current graph is Windows-built and stale (see *Knowledge Graph (graphify)* above).
-  Confirm `graphify-out/.graphify_root` matches this workspace — or run `python scripts/harness_doctor.py` —
-  before relying on graph output; if it does not match, read the source docs instead.
+- **Trust check:** the graph may be **absent** (currently `graphify-out/` does not exist) or Windows-stale.
+  Run `python scripts/harness_doctor.py` (it reports `no graph.json` when absent); if absent or stale, read the
+  source docs instead. Do not assume the graph exists.
 - When used: `graphify query "<question>"` / `graphify path "<A>" "<B>"` / `graphify explain "<concept>"`
   return a scoped subgraph. `GRAPH_REPORT.md` is for broad architecture orientation only.
 - After materially changing `docs/`/`specs/`, the graph needs a Linux rebuild (`/graphify`) to be fresh; the

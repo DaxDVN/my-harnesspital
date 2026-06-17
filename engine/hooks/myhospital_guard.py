@@ -132,6 +132,22 @@ def bash_rule(command: str) -> str | None:
             for a in toks[1:]:
                 if a == "--recursive" or (a.startswith("-") and not a.startswith("--") and "r" in a.lower()):
                     return "destructive-delete (recursive rm)"
+        elif name == "find":
+            if "-delete" in toks:
+                return "destructive-delete (find -delete)"
+        elif name == "rimraf" or (name == "npx" and "rimraf" in toks[1:]):
+            return "destructive-delete (rimraf)"
+        elif name == "xargs":
+            if "rm" in toks[1:] and any(
+                a == "--recursive" or (a.startswith("-") and not a.startswith("--") and "r" in a.lower())
+                for a in toks
+            ):
+                return "destructive-delete (xargs rm -r)"
+        elif name in ("pip", "pip3", "pipx"):
+            if "install" in toks and "-r" not in toks and "--requirement" not in toks:
+                after = toks[toks.index("install") + 1:]
+                if any(not a.startswith("-") for a in after):
+                    return "dependency-change (pip install)"
         elif name in _DEP_CMDS:
             if len(toks) >= 3 and toks[1] in _DEP_SUBS and any(not a.startswith("-") for a in toks[2:]):
                 return "dependency-change (new package)"
@@ -277,6 +293,12 @@ def _self_test() -> int:
         bash("npm install lodash"),
         bash("yarn add react-modal"),
         bash("dotnet add package Newtonsoft.Json"),
+        bash("find . -name '*.tmp' -delete"),
+        bash("ls build | xargs rm -rf"),
+        bash("npx rimraf dist"),
+        bash("rimraf node_modules"),
+        bash("pip install requests"),
+        bash("pipx install black"),
         edit("worktrees/bed/fe/src/lib/dtos/generated-dtos.ts", "x"),
         edit("myhospital-be/MyHospital.ServiceInterface/Migrations/2026_X.cs", "x"),
         edit("worktrees/bed/be/MyHospital.ServiceInterface/Migrations/Y.cs", "x"),
@@ -302,6 +324,9 @@ def _self_test() -> int:
         bash("kill 12345"),
         bash("rm file.txt"),
         bash("rm -f stale.log"),
+        bash("pip install -r requirements.txt"),
+        bash("find . -name '*.ts'"),
+        bash("ls | xargs grep foo"),
         bash("dotnet build"),
         bash("python scripts/worktree.py list"),
         edit("worktrees/bed/be/Services/XService.cs", "return null;"),  # heuristic main-only

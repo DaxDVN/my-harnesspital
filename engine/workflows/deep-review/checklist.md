@@ -24,7 +24,7 @@ Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-
 
 ## D2 — be-conventions · Tier: **Sonnet**
 - **Applies-to:** BE (`*.cs`, `worktrees/*/be/**`).
-- **Sources:** `engine/rules/backend.md`, `myhospital-be/CONVENTIONS.md`.
+- **Sources:** `engine/rules/backend.md` (**CANON** — use this first); `myhospital-be/CONVENTIONS.md` (legacy/superseded — advisory only; known drift in prefixes, SettingKeys, action names, TypeScript endpoints — see `engine/rules/README.md`).
 - **Check:** BaseService\<T\> + helper (GetAllByTenant…)? **Không transaction/lock** (write-order + idempotent + derived)? **Không N+1** (load-all + Dictionary lookup)? 1 query/bảng/API? Multi-tenant scope (TenantId+HospitalId)? Soft-delete + audit auto (không set tay)? Listing API declarative (`[FilterField]`, ODataRequest, PagingDataSource\<T\>)? Request DTO `\<Verb\>\<Resource\>Request` + IReturn? `[RequireAuth(...)]` + `[Tag]`? ValidationHelper + BusinessException(ErrorCodes)?
 - **Known bug-classes:** N+1 trong loop; `BeginTransactionAsync`/`IProcessLockService` lén; thiếu tenant scope → rò dữ liệu viện khác; set CreatedAt/UpdatedBy tay; endpoint thiếu RequireAuth; `throw Exception` thay BusinessException; `ErrorCodes` string-literal thay vì hằng số `[scanner:error_code_literal]` (ClaudeAnalyzeService.cs:30, PrescriptionHoldService.cs:186); listing API dùng `GetAll`/vòng lặp thay declarative `[scanner:legacy_listing]` (CTApi, MRIApi, XRayApi); API controller quá béo — business logic inline thay service `[scanner:fat_api]` (CashierApi.cs:140); service không có interface (không thể mock/swap) `[manual]` (BedService, Configure.AppHost.cs:94).
 
@@ -72,7 +72,7 @@ Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-
 
 ## D10 — component-reuse-state · Tier: **Haiku→Sonnet**
 - **Applies-to:** FE.
-- **Sources:** `myhospital-fe/docs/components/component-inventory.generated.md` (chạy `npm run components:index` nếu thiếu/cũ), `frontend.md`.
+- **Sources:** **CodeGraph** (`codegraph explore` trong `myhospital-fe`) + `frontend.md`. *(catalog `*.generated.md` + `components:index` đã bỏ — không tồn tại trong fe.)*
 - **Check:** component đã có trong inventory chưa (tránh trùng lặp)? provider hierarchy đúng? dùng design-system default (shadcn) thay vì tự chế? state đặt đúng tầng?
 - **Known bug-classes:** dựng lại component đã có; provider đặt sai tầng; tự style thay vì shadcn default; copy nguyên page warehouse nguyên khối (600+ dòng) thay vì split wrapper+content / context `useState`-only làm data layer `[manual]` (FE audit §4).
 

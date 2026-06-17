@@ -16,11 +16,17 @@
 | `scaffold <X>` · `tạo endpoint/service/listing/page/form/module` | skill **`/mh-scaffold`** |
 | `implement <X>` · `làm feature <X>` · `build page <X>` | skill **`/mh-implement`** (inside a worktree) |
 | `fix <bug/finding>` · `sửa <X>` | skill **`/mh-fix`** |
+| `preflight` · `blast radius` · `what breaks if <X>` | skill **`/impact-analysis`** (READ-ONLY, CodeGraph-backed) |
+| `investigate bug` · `RCA this` · `bug from <source>` | skill **`/bug-fix`** (trivial bug → `/mh-fix` fast-path) |
+| `ui spec <X>` · `reuse audit` · `from docx/mockup` | skill **`/ui-spec`** → views mockups + deep FE reuse-audit → `specs/<m>/03-ui.md` |
+| `build FE <X>` · `triển khai FE <X>` | **`/mh-implement` FE-mode** (`fe-flow`) — consumes `03-ui.md` from `/ui-spec`; `incremental-impl` runs per task internally |
+| `api contract <X>` · `design api` | skill **`/technical-design`** → drafts API `08` (schema = OWNER-authored, UI = `/ui-spec`) |
+| `slice tasks` · `implementation plan` | skill **`/task-slicing`** → `specs/<m>/10-plan` (LARGE / cross-cutting modules) |
 | `where/how/what-calls <X>` · `tìm <X>` · `<X> gọi ở đâu` | **CodeGraph** `codegraph_explore` / `codegraph explore` → then bounded `rg` |
 | `cg status` · `index ok?` | `just codegraph-status` |
 | `dtos` · `regen dto` | `npm run dtos:update` then `npm run client:generate` (FE worktree) |
 | `backup` · `snapshot harness` | `just harness-backup` |
-| `nhớ cái này` · `remember this` · `để ý cái này` | append a learning to **`second-brain/`** (one file, `status: provisional`) — in-repo, all tools |
+| `nhớ cái này` · `remember this` · `để ý cái này` · `từ giờ` · `always/never` | **`python scripts/learning_capture.py …`** → structured provisional `second-brain/` entry (schema; NEVER `main-brain/`). `learning_list`/`learning_check` to review. |
 
 ## 2. Intent → tool (fuller)
 - **New canonical pattern** (BE endpoint/service/listing/error path; FE page/list/form/module) → `/mh-scaffold`.
@@ -32,6 +38,15 @@
   → also `just mh-scan` (ast-grep bridge, auto-gated to FE scope).
 - **Find / understand code** → CodeGraph first, then a bounded `rg`. Never broad-scan FE/BE and dump.
 - **Harness health / drift / backup** → `just doctor` / `just convention-truth` / `just harness-backup`.
+- **FE feature pipeline (owner decision 2026-06-16):** owner authors `02-requirements` + `07-schema` (agents
+  NEVER author schema) → **`/ui-spec`** (DOCX + mockups → `03-ui.md` reuse-map) → **`/mh-implement` FE-mode**
+  (`fe-flow`, consumes `03-ui.md`; folds `incremental-impl` per task). `/technical-design` drafts only the API
+  contract (`08`); `/task-slicing` only for LARGE modules. Each SDD phase has a deterministic gate
+  (`_shared/gate-check.py`, exit 2 = STOP); state on `specs/<m>/00-module-state.md`; `/impact-analysis` is the
+  preflight before any risky change.
+- **Fast-path (skip the chain)** → a trivial + local change with **no** contract/schema/business-rule/
+  multi-module impact: go DIRECT to `/mh-implement` (feature) or `/mh-fix` (bug) — no design/slice/preflight.
+  "Trivial" mirrors `progressive-test`'s deterministic `classify`.
 
 ## 3. USER-DRIVEN — never auto-run (print the command / point to the guide)
 - **Review / audit** (`/mh-review`): **explicit only**. Run it solely when the user asks for a review

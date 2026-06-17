@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Super-Test M3 — implement the approved repair plan. Executor = opencode OR mimo-code. Allowlist-ENFORCED.
+set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+STROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ROOT="$(cd "$STROOT/../../.." && pwd)"
+LIB="$STROOT/lib/supertest.py"
+SHARED="$ROOT/engine/workflows/_shared"
+DRIVER_BRIEF="$STROOT/integrations/mimocode-super-test.md"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/_executor-lib.sh"
+MODULE="${1:-}"; RUN="${2:-}"
+[ -n "$MODULE" ] && [ -n "$RUN" ] || { echo "usage: $(basename "$0") <module> <run-id>" >&2; exit 2; }
+RUN_DIR="$STROOT/runs/$MODULE/$RUN"; LOG="$RUN_DIR/logs"; mkdir -p "$LOG"
+PLAN="$RUN_DIR/10-approved-repair-plan.md"
+[ -f "$PLAN" ] || { echo "APPROVED_PLAN_MISSING: $PLAN — run call-opus-batch-rca first" >&2; exit 2; }
+TARGET_REPO="${SUPERTEST_TARGET_REPO:-}"
+[ -n "$TARGET_REPO" ] || { echo "SUPERTEST_TARGET_REPO required — the worktree to implement in (never main fe/be)" >&2; exit 2; }
+[ -d "$TARGET_REPO" ] || { echo "SUPERTEST_TARGET_REPO does not exist: $TARGET_REPO" >&2; exit 2; }
+TARGET_REAL="$(cd "$TARGET_REPO" && pwd -P)"
+MAIN_FE=""; MAIN_BE=""
+[ -d "$ROOT/myhospital-fe" ] && MAIN_FE="$(cd "$ROOT/myhospital-fe" && pwd -P)"
+[ -d "$ROOT/myhospital-be" ] && MAIN_BE="$(cd "$ROOT/myhospital-be" && pwd -P)"
+if [ "$TARGET_REAL" = "$MAIN_FE" ] || [ "$TARGET_REAL" = "$MAIN_BE" ]; then
+  echo "FORBIDDEN_TARGET_REPO: Super-Test repair must not edit main myhospital-fe/myhospital-be; use worktrees/<slug>/fe-or-be" >&2
+  exit 2
+fi
+if [[ "$TARGET_REAL" != "$ROOT/worktrees/"* ]]; then
+  echo "WARN: SUPERTEST_TARGET_REPO is not under this workspace's worktrees/: $TARGET_REAL" >&2
+fi
+RT="$(supertest_runtime)"; [ "$RT" != none ] || { echo "NO_EXECUTOR_RUNTIME" >&2; exit 127; }
+
+ALLOW="$(python3 "$LIB" allowlist "$PLAN")"
+[ -n "$ALLOW" ] || { echo "NO_ALLOWLIST parsed from the approved plan — cannot enforce boundary; STOP" >&2; exit 1; }
+python3 "$LIB" set-state "$RUN_DIR" IMPLEMENTING >/dev/null
+
+PF="$LOG/repair.prompt.txt"
+{ cat "$DRIVER_BRIEF"; printf '\n\n---\nPHASE OVERRIDE: IMPLEMENT ONLY\nImplement the approved Super-Test repair plan.\nPlan: %s\nWorktree: %s\nEdit ONLY the "Files Allowed To Modify" listed in the plan; run the plan validation; write %s/11-implementation-report.md (Files Changed, Steps, Commands, Deviations, Plan Mismatch). Do NOT fix bugs outside the approved batch. If a file is missing or the allowlist is insufficient -> write PLAN_MISMATCH in the report and stop.\n' "$PLAN" "$TARGET_REPO" "$RUN_DIR"; } >"$PF"
+
+run_executor "$PF" "$LOG/repair.stdout.log" "$LOG/repair.stderr.log" \
+  || { echo "REPAIR_EXECUTOR_FAILED (runtime=$RT; see $LOG/repair.stderr.log)" >&2; exit 1; }
+
+# ENFORCE the boundary on the ACTUAL diff (not trust the executor)
+DIFF="$(git -C "$TARGET_REPO" diff --name-only 2>/dev/null || true)"
+if [ -n "$DIFF" ]; then
+  printf '%s\n' "$DIFF" | python3 "$SHARED/allowlist-check.py" --stdin --allow "$ALLOW" --forbid '**/generated-*' \
+    || { echo "REPAIR_OVERREACH — diff outside the approved allowlist; STOP" >&2; python3 "$LIB" set-state "$RUN_DIR" BLOCKED >/dev/null; exit 1; }
+fi
+[ -f "$RUN_DIR/11-implementation-report.md" ] || { echo "STATUS=REPAIR_PENDING (11-implementation-report.md not written)"; exit 3; }
+python3 "$LIB" validate implementation-report "$RUN_DIR/11-implementation-report.md" || { echo "impl report INVALID" >&2; exit 1; }
+python3 "$LIB" set-state "$RUN_DIR" TARGETED_RETEST >/dev/null
+echo "STATUS=IMPLEMENTED ARTIFACT=$RUN_DIR/11-implementation-report.md  (next: bin/retest $MODULE $RUN --targeted)"

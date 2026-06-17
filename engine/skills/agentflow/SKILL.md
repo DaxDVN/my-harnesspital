@@ -40,7 +40,7 @@ context lean over many rounds. You decide the next step from the envelope's `ver
    - `APPROVE`/`APPROVE_WITH_CHANGES` → `$BIN/build-approved-plan <round>` (picks up `03` → approval=APPROVED_BY_CODEX) → step 5.
    - `REJECT` → if `rca_revision_count < 2`: re-spawn RCA (revise, with the codex review path) → step 3; else **HUMAN_DECISION**.
 5. **BUILD PLAN** → after build-approved-plan: `$BIN/write-envelope approved-plan …/04-approved-plan.md` + validate-envelope + `$BIN/update-state <round> CODEX_APPROVED` (or `DIRECT_PATCH_APPROVED`).
-6. **IMPLEMENT** → `$BIN/implement-with-opencode <round>` → `05-implementation-report.json`+envelope. validate-envelope. Read verdict: `IMPLEMENTED` → step 7; `PLAN_MISMATCH` → back to RCA (revise) or HUMAN; `FAILED` → report.
+6. **IMPLEMENT** → `$BIN/implement-with-opencode <round>` → `05-implementation-report.json`+envelope. validate-envelope. Read verdict: `FAILED` → report; `PLAN_MISMATCH` → back to RCA (revise) or HUMAN; `IMPLEMENTED` → **BOUNDARY GATE (deterministic, before retest):** `git -C <target-worktree> diff --name-only <base> | python engine/workflows/_shared/allowlist-check.py --stdin --allow '<approved-plan "Files Allowed To Modify" globs>' --forbid '**/generated-*'` → **exit 2 = mimo edited OUTSIDE its allowlist → set `PLAN_MISMATCH`, do NOT retest** (route back to RCA). exit 0 → step 7. This turns the plan's *instructed* stop-condition into a *checked* gate — mimo is not Claude, so verify its ground-truth diff, never trust self-report.
 7. **RETEST** → `$BIN/retest-with-opencode <round>` → `06-retest-report.json`+envelope. validate-envelope. Read verdict: `PASS` → `$BIN/summarize-round <round>` → **DONE**; `FAIL` → if rounds remain, `$BIN/init-round` a new round (the failure is re-caught) or escalate to RCA; else **HUMAN_DECISION**.
 
 ## Discipline
@@ -52,5 +52,6 @@ context lean over many rounds. You decide the next step from the envelope's `ver
   the scenario re-runs in a later round (the owner accepted this tradeoff).
 
 ## Honest note
-Mock (`AGENTFLOW_MOCK_OPENCODE=1`) proves the wiring; the FIRST real end-to-end run (real mimo fix quality +
-agent-browser on the owner's FE) is the owner's gate. See `engine/workflows/progressive-test/WORKFLOW.md`.
+**No mock** (removed 2026-06-17 — mimo runs real in OpenCode via the token-plan provider). The wiring is
+structurally validated (`.agentflow/lib/agentflow.py validate-structure`); the FIRST real end-to-end run (real
+mimo fix quality + agent-browser on the owner's FE worktree) is the owner's gate. See `WORKFLOW.md`.

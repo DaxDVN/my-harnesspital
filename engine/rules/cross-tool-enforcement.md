@@ -12,7 +12,7 @@
 with a `BLOCKED_RULE: …` message on stderr. Validate it any time:
 
 ```fish
-python .claude/hooks/myhospital_guard.py --self-test    # 55 cases
+python .claude/hooks/myhospital_guard.py --self-test    # 64 cases
 ```
 
 Whatever the tool, the wiring just feeds it a JSON event on stdin and treats **exit 2 = block**.
@@ -26,27 +26,34 @@ covers intent. A determined caller could create the marker — that is out of th
 
 ## Per-tool wiring
 
-| Tool | Mechanism | Status |
-|---|---|---|
-| **Claude Code** | `.claude/settings.json` → `PreToolUse` (`Bash\|Write\|Edit\|MultiEdit`) runs the guard. | ✅ wired |
-| **Codex CLI** | `.codex/hooks.json` → `PreToolUse` `matcher: Bash` (same schema as Claude: `tool_name`+`tool_input.command` on stdin, exit 2 / `permissionDecision:deny` to block). | ✅ wired |
-| **opencode** | TS plugin `tool.execute.before` shells out to the guard and throws on exit 2. | ✅ provided, needs install |
-| **Antigravity** | No pre-exec command hook. It reads `AGENTS.md` directly as the single instruction canon (incl. Forbidden Actions). | by instruction (`AGENTS.md`) |
-| Cursor / Grok / others | No standard pre-exec hook → read `AGENTS.md` directly (the single instruction canon). | by instruction |
+| Tool | Mechanism | Coverage | Status |
+|---|---|---|---|
+| **Claude Code** | `.claude/settings.json` → `PreToolUse` (`Bash\|Write\|Edit\|MultiEdit`) runs the guard. | Bash + file writes. | ✅ wired |
+| **Codex CLI** | `.codex/hooks.json` → `PreToolUse` `matcher: Bash` — hook **walks up from cwd** to find `engine/hooks/myhospital_guard.py`, works from root or `worktrees/<slug>/fe|be`. Exit 0 if not found (fail-open). | Bash calls only. Does **not** cover `apply_patch` file edits — those are instruction-only. | ✅ wired (walk-up) |
+| **opencode** | Global plugin `~/.config/opencode/plugin/myhospital-guard.js` + project graphify plugin. Guard also walks up from cwd (10 levels) or uses `MYHOSPITAL_GUARD` env var. | Bash calls only. Subagent tool calls NOT intercepted (known opencode bug). | ✅ guard installed globally; graphify plugin local |
+| **mimocode** | opencode fork — auto-loads `AGENTS.md` from cwd as the instruction canon (Forbidden Actions in scope). Same global guard plugin applies. | AGENTS.md instruction + guard bash calls. | by instruction + inherited guard |
+| **Antigravity** | No pre-exec command hook. It reads `AGENTS.md` directly as the single instruction canon (incl. Forbidden Actions). | instruction only | by instruction (`AGENTS.md`) |
+| Cursor / Grok / others | No standard pre-exec hook → read `AGENTS.md` directly (the single instruction canon). | instruction only | by instruction |
 
 ### Codex
-Already wired via `.codex/hooks.json` (project-level). It runs the guard only when the guard exists
-at the cwd (`.claude/hooks/myhospital_guard.py`), so it is a no-op (fail-open) when Codex runs from a
-worktree subdir. Equivalent global form in `~/.codex/config.toml`:
+Wired via `.codex/hooks.json` (project-level). The hook command **walks up from the cwd** (up to 12
+levels) looking for `engine/hooks/myhospital_guard.py`, so it works correctly whether Codex runs
+from the workspace root **or** from a `worktrees/<slug>/fe|be` subdirectory. If no guard is found,
+it exits 0 (fail-open). Equivalent global form in `~/.codex/config.toml`:
 
 ```toml
 [[hooks.PreToolUse]]
 matcher = "^Bash$"
 [[hooks.PreToolUse.hooks]]
 type = "command"
-command = 'python3 /ABS/PATH/.claude/hooks/myhospital_guard.py'
+command = 'python3 /ABS/PATH/engine/hooks/myhospital_guard.py'
 timeout = 10
 ```
+
+**Coverage honest note:** the Codex hook fires on `Bash` tool calls only. It does **not** intercept
+`apply_patch` file edits. Consequently the generated-file / migration BLOCK rules are enforced by
+instruction (AGENTS.md) for `apply_patch`, not by this hook. After an implementation session a quick
+`git diff` + `just mh-scan` is still advised to catch any drift.
 
 ### opencode (install the plugin)
 ```fish
@@ -60,11 +67,17 @@ The plugin walks up from the cwd to find `.claude/hooks/myhospital_guard.py` (or
 
 - **Tripwire, not a sandbox.** All layers fail-open and are bypassable by a determined caller; they
   catch the common mistakes, not a hostile actor. The user's own terminal is never affected.
-- **Subagents leak.** opencode's `tool.execute.before` does not intercept subagent tool calls (a known
-  opencode bug); Codex's PreToolUse only catches "simple" shell calls. The AGENTS.md instruction layer
-  is the only thing that covers those paths — which is why the rules must live there too.
-- **File edits.** The guard's generated-file/migration blocks rely on Claude's `Write`/`Edit` shapes.
-  Codex `apply_patch` and opencode edits are covered by instruction, not by this hook.
+- **Codex: Bash only, not `apply_patch`.** The Codex `PreToolUse` hook fires on `Bash` commands.
+  `apply_patch` file edits are not intercepted; the generated-file / migration BLOCK rules apply there
+  by instruction only. After a Codex implementation session: `git diff` + `just mh-scan` is advised.
+- **opencode: Bash only, subagents unguarded.** `tool.execute.before` fires only for the primary
+  agent's bash calls. Subagent tool calls are not intercepted (known opencode limitation). AGENTS.md
+  instruction layer covers those paths — which is why the rules must live there too.
+- **File edits (Claude).** Claude Code's `Write`/`Edit`/`MultiEdit` PreToolUse hooks cover file
+  mutation. Other tools' file edits are instruction-only.
+- **mimocode.** mimocode is an opencode fork that auto-loads `AGENTS.md` — the cross-tool instruction
+  canon including Forbidden Actions. The global guard plugin applies to its bash calls (same as
+  opencode). Subagent calls are unguarded (same limit as opencode).
 
 ## Sources
 - Codex hooks (config.toml `[hooks]` / `hooks.json`, PreToolUse, stdin fields, exit-2 / deny): https://developers.openai.com/codex/hooks

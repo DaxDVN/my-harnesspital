@@ -136,11 +136,71 @@ def check_rules_dotnet() -> None:
         add(OK, "rules:dotnet-version", "canon version refs acknowledge net10 (no stale .NET 8 claim)")
 
 
+def check_canon_anchors() -> None:
+    """The CANON (engine/rules) is built on real code anchors. A cited anchor that no longer exists means
+    the canon drifted from the codebase -> FAIL (this is what convention_truth is FOR; the `doc:*` checks
+    are the SUPERSEDED project doc = advisory INFO only). These are the FAIL-capable canon-vs-code checks."""
+    anchors = {
+        "be:BaseService": ROOT / "myhospital-be" / "MyHospital.ServiceInterface" / "BaseService.cs",
+        "fe:generated-dtos": ROOT / "myhospital-fe" / "src" / "lib" / "dtos" / "generated-dtos.ts",
+        "fe:generated-client": ROOT / "myhospital-fe" / "src" / "lib" / "server" / "generated-api-client.ts",
+    }
+    for name, p in anchors.items():
+        if p.exists():
+            add(OK, f"canon-anchor:{name}", "cited code anchor exists")
+        else:
+            add(FAIL, f"canon-anchor:{name}", f"canon cites a MISSING anchor ({p.name}) — canon drifted from code; fix engine/rules")
+
+
+def check_rules_ts_endpoints() -> None:
+    """H2 — engine/rules/backend.md must state the CORRECT TypeScript endpoint mapping.
+    FAIL if backend.md claims /types/typescript-types exports DTOs (the old wrong claim).
+    The correct mapping:
+      /types/typescript       = ServiceStack NativeTypes DTO export
+      /types/typescript-types = utility/shared types from MyHospital.Utilities (NOT DTOs)
+      /types/typescript-const = constants, entity stores, query schema
+    """
+    rules = _read(BE_RULES)
+    if rules is None:
+        add(WARN, "rules:ts-endpoints", "engine/rules/backend.md unreadable — cannot verify endpoint mapping")
+        return
+
+    # Detect the OLD wrong claim: typescript-types described as exporting C# DTO/utility interfaces
+    # (before the fix it was: "/types/typescript-types exports C# DTO/utility interfaces")
+    wrong_claim = re.search(
+        r"/types/typescript-types`?\s+exports\s+C#\s+DTO",
+        rules,
+        re.IGNORECASE,
+    )
+    if wrong_claim:
+        add(FAIL, "rules:ts-endpoints",
+            "engine/rules/backend.md REGRESSED: claims `/types/typescript-types` exports C# DTOs — "
+            "WRONG. Correct mapping: /types/typescript = NativeTypes DTOs; "
+            "/types/typescript-types = MyHospital.Utilities shared types (TypeScriptTypesHandler.cs:14); "
+            "/types/typescript-const = constants/stores/schema (TypeScriptConstantsHandler.cs:15).")
+        return
+
+    # Verify the correct claim is present: /types/typescript is the NativeTypes DTO source
+    native_types_correct = re.search(
+        r"/types/typescript\b.{0,120}NativeTypes",
+        rules,
+        re.IGNORECASE | re.DOTALL,
+    )
+    if not native_types_correct:
+        add(WARN, "rules:ts-endpoints",
+            "engine/rules/backend.md does not explicitly state /types/typescript = NativeTypes DTO export. "
+            "Consider adding for clarity.")
+    else:
+        add(OK, "rules:ts-endpoints",
+            "backend.md correctly maps /types/typescript=NativeTypes DTOs, "
+            "/types/typescript-types=utility types, /types/typescript-const=constants")
+
+
 def main() -> int:
     strict = "--strict" in sys.argv[1:]
     print(f"convention-truth — doc-vs-code drift check — {ROOT}\n")
-    for fn in (check_doc_prefix, check_doc_settingkeys, check_doc_actions,
-               check_doc_endpoints, check_doc_transaction, check_rules_dotnet):
+    for fn in (check_canon_anchors, check_doc_prefix, check_doc_settingkeys, check_doc_actions,
+               check_doc_endpoints, check_doc_transaction, check_rules_dotnet, check_rules_ts_endpoints):
         try:
             fn()
         except Exception as exc:  # noqa: BLE001

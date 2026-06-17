@@ -2,6 +2,7 @@
   "name": "deep-review",
   "description": "Exhaustive <=3-round partitioned code review (D1-D10): one reviewer per dimension, adversarial verify, bounded completeness.",
   "kind": "workflow-tool-js",
+  "maturity": "smoke-tested",
   "entry_skill": "mh-review",
   "workflow_script": "workflow.js",
   "agents": ["mh-reviewer"],

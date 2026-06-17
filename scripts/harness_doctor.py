@@ -375,6 +375,147 @@ def check_symlinks() -> None:
             add(OK, f"link:.claude/{name}", f"→ engine/{name}")
 
 
+def check_guard_wired() -> None:
+    """Efficacy (not just existence): the guard must be WIRED as a PreToolUse hook — a guard that exists
+    but is not wired protects nothing (the self-test passing says nothing about it being active)."""
+    settings = root() / ".claude" / "settings.json"
+    if not settings.exists():
+        add(WARN, "guard-wired", ".claude/settings.json absent — guard not wired as a hook")
+        return
+    body = settings.read_text(encoding="utf-8", errors="ignore")
+    if "myhospital_guard" in body and "PreToolUse" in body:
+        add(OK, "guard-wired", "guard wired as a PreToolUse hook in settings.json")
+    else:
+        add(WARN, "guard-wired", "myhospital_guard NOT wired as PreToolUse in settings.json — the guard is INACTIVE")
+
+
+def check_codegraph_freshness() -> None:
+    """Efficacy: CodeGraph staleness is otherwise invisible — agents are told 'CodeGraph first', so a stale
+    index hands back wrong callers/blast-radius that look authoritative. WARN when an index is older than
+    the repo's last commit (e.g. after a pull without reindex)."""
+    r = root()
+    for repo in ("myhospital-be", "myhospital-fe"):
+        if not (r / repo / ".codegraph").exists():
+            continue  # check_codegraph already reports the missing index
+        _, out = _run(["bash", "-lc", f"find {repo}/.codegraph -type f -printf '%T@\\n' 2>/dev/null | sort -rn | head -1"])
+        try:
+            idx_mtime = float(out.strip())
+        except ValueError:
+            add(WARN, f"codegraph-fresh:{repo}", ".codegraph present but unreadable mtime")
+            continue
+        code, cout = _run(["git", "-C", str(r / repo), "log", "-1", "--format=%ct", "HEAD"])
+        commit = cout.strip()
+        if code != 0 or not commit.isdigit():
+            add(INFO, f"codegraph-fresh:{repo}", "cannot read last-commit time (freshness skipped)")
+        elif int(commit) > idx_mtime + 60:
+            mins = int((int(commit) - idx_mtime) / 60)
+            add(WARN, f"codegraph-fresh:{repo}", f"index OLDER than last commit (~{mins}min stale) — rebuild: just codegraph-sync-main")
+        else:
+            add(OK, f"codegraph-fresh:{repo}", "index newer than last commit (fresh)")
+
+
+def check_super_test() -> None:
+    """super-test (MiMo-led harvest) deterministic core: lib self-test + launcher/sweep bins present+executable.
+    (check_registry already validates its manifest/entry_skill/rules.)"""
+    st = root() / "engine" / "workflows" / "super-test"
+    if not st.exists():
+        add(INFO, "super-test", "engine/workflows/super-test/ absent")
+        return
+    lib = st / "lib" / "supertest.py"
+    if lib.exists():
+        code, out = _run([sys.executable, str(lib), "--self-test"])
+        add(OK if code == 0 else FAIL, "super-test:lib",
+            out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+    else:
+        add(WARN, "super-test:lib", "lib/supertest.py missing")
+    for b in ("sweep", "supertest", "repair", "retest", "call-opus-batch-rca", "call-codex-review", "mimocode-preflight"):
+        p = st / "bin" / b
+        if not p.exists():
+            add(WARN, f"super-test:bin:{b}", "missing")
+        elif not os.access(p, os.X_OK):
+            add(WARN, f"super-test:bin:{b}", "present but NOT executable (chmod +x)")
+        else:
+            add(OK, f"super-test:bin:{b}", "present + executable")
+    preflight = st / "bin" / "mimocode-preflight"
+    if preflight.exists() and os.access(preflight, os.X_OK):
+        code, out = _run([str(preflight)], timeout=20)
+        summary = next((l for l in reversed(out.splitlines()) if l.startswith("Summary:")), f"exit {code}")
+        add(OK if code == 0 else WARN, "super-test:mimocode-preflight", summary)
+
+
+def check_workflow_shared() -> None:
+    """engine/workflows/_shared/ primitives — the gate/envelope/state code workflows depend on. Self-test each."""
+    shared = root() / "engine" / "workflows" / "_shared"
+    if not shared.exists():
+        add(INFO, "workflow-shared", "engine/workflows/_shared/ absent (no shared workflow primitives)")
+        return
+    schema = shared / "envelope.schema.json"
+    if schema.exists():
+        try:
+            json.loads(schema.read_text(encoding="utf-8"))
+            add(OK, "workflow-shared:schema", "envelope.schema.json valid JSON")
+        except Exception as exc:  # noqa: BLE001
+            add(FAIL, "workflow-shared:schema", f"envelope.schema.json INVALID: {exc}")
+    else:
+        add(WARN, "workflow-shared:schema", "envelope.schema.json missing")
+    for name in ("validate-envelope", "gate-check", "module-state", "allowlist-check"):
+        p = shared / f"{name}.py"
+        if not p.exists():
+            add(WARN, f"workflow-shared:{name}", "missing")
+            continue
+        code, out = _run([sys.executable, str(p), "--self-test"])
+        add(OK if code == 0 else FAIL, f"workflow-shared:{name}",
+            out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+
+
+def check_learning() -> None:
+    """Self-learning intake (H13): the capture/check/list scripts must self-test green; second-brain present."""
+    for name in ("learning_capture", "learning_check", "learning_list"):
+        p = root() / "scripts" / f"{name}.py"
+        if not p.exists():
+            add(WARN, f"learning:{name}", "missing (self-learning MVP)")
+            continue
+        code, out = _run([sys.executable, str(p), "--self-test"])
+        add(OK if code == 0 else FAIL, f"learning:{name}",
+            out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+    sb = root() / "second-brain"
+    add(OK if sb.exists() else WARN, "learning:second-brain",
+        "second-brain/ present (provisional intake buffer)" if sb.exists() else "second-brain/ missing")
+
+
+def check_maturity() -> None:
+    """Workflow maturity (H12): every workflow manifest should declare a maturity; summarize them."""
+    wf = root() / "engine" / "workflows"
+    levels: dict[str, str] = {}
+    missing: list[str] = []
+    for m in sorted(wf.glob("*/manifest.json")):
+        try:
+            d = json.loads(m.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        (levels.__setitem__(m.parent.name, d["maturity"]) if d.get("maturity") else missing.append(m.parent.name))
+    if missing:
+        add(WARN, "maturity", f"workflow(s) with no maturity field: {', '.join(missing)}")
+    else:
+        add(OK, "maturity", f"{len(levels)} workflows declare maturity ("
+            + ", ".join(f"{k}={v}" for k, v in sorted(levels.items())) + ")")
+
+
+def check_codex_guard_wiring() -> None:
+    """H4: the Codex guard must resolve via WALK-UP (works from a worktree cwd), not a bare relative .claude path."""
+    h = root() / ".codex" / "hooks.json"
+    if not h.exists():
+        add(INFO, "codex-guard-wiring", ".codex/hooks.json absent")
+        return
+    body = h.read_text(encoding="utf-8", errors="ignore")
+    if "engine/hooks/myhospital_guard.py" in body and ("dirname" in body or "while" in body):
+        add(OK, "codex-guard-wiring", "walk-up to engine/hooks/myhospital_guard.py (fires from a worktree cwd)")
+    elif ".claude/hooks/myhospital_guard.py" in body:
+        add(WARN, "codex-guard-wiring", "relative .claude path — guard fails OPEN from a worktree cwd")
+    else:
+        add(WARN, "codex-guard-wiring", "guard not clearly wired in .codex/hooks.json")
+
+
 def check_registry() -> None:
     """engine/REGISTRY.md + per-workflow manifest.json: every referenced agent/skill/rule must resolve to a pool file."""
     r = root(); eng = r / "engine"
@@ -409,11 +550,12 @@ def main() -> int:
     print(f"MyHospital harness doctor — {root()}\n")
     for fn in (
         check_tools, check_root_versioning, check_json, check_pycompile,
-        check_guard_selftest, check_worktree_cli, check_graphify_trust,
+        check_guard_selftest, check_guard_wired, check_worktree_cli, check_graphify_trust,
         check_graph_secrets, check_helpers_and_layouts, check_just,
-        check_routing, check_legacy_isolation, check_codegraph,
+        check_routing, check_legacy_isolation, check_codegraph, check_codegraph_freshness,
         check_convention_scan, check_convention_truth, check_opencode_guard,
-        check_brains, check_symlinks, check_registry,
+        check_brains, check_symlinks, check_workflow_shared, check_super_test,
+        check_learning, check_maturity, check_codex_guard_wiring, check_registry,
     ):
         try:
             fn()

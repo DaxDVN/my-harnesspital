@@ -53,9 +53,7 @@ Use this order during reviews:
 3. Specs under `roast/specs/<module>/`, especially `api.md`, `design.md`, `requirements.md`.
 4. `myhospital-fe/CLAUDE.md`.
 5. Existing source code, with warehouse as the first pattern reference.
-6. Generated catalogs as discovery aids only:
-   - `docs/components/component-inventory.generated.md`
-   - `docs/reuse/reuse-catalog.generated.md`
+6. Reuse discovery: **CodeGraph** (`codegraph explore/node`) + (for an FE feature with a spec) the **`/ui-spec` reuse-map** in `specs/<module>/03-ui.md`. *(The legacy `*.generated.md` catalogs + `npm run components:index` were removed — they never existed in `myhospital-fe`.)*
 
 **Stale project docs — do NOT trust:** `myhospital-fe/ARCHITECTURE-OVERVIEW.md` and `myhospital-fe/BEST-PRACTICES-NEW-PAGE.md` predate the live app (audit V10: bearer-vs-cookie auth, Infinity-vs-`staleTime:0`, Context+reducer-vs-RQ-adapter, dead `demo`/`samples`). **This canon + live code override them** — the warning is recorded here at the harness layer instead of editing those project files. See memory `fe-live-conventions-vs-stale-docs`.
 
@@ -379,10 +377,9 @@ Do not touch routing roots or provider hierarchy without explicit architect appr
 
 Before adding UI/components/hooks/adapters:
 
-1. Read or refresh `docs/components/component-inventory.generated.md` for UI/component work.
-2. Read `docs/reuse/reuse-catalog.generated.md` for adapters, hooks, API calls, schemas, list pages,
-   form sheets, filters, or routing.
-3. Search source with `rg`.
+1. Use **CodeGraph** (`codegraph explore/node` from the fe repo) for live components/hooks/adapters + callers.
+2. For an FE feature with a spec, consume the **`/ui-spec` reuse-map** in `specs/<module>/03-ui.md`.
+3. Search source with bounded `rg`.
 4. Prefer `src/components/ui/*`, `src/modules/common/*`, `src/lib/*`, then warehouse patterns.
 5. Reuse/wrap/promote side-effectful module components instead of duplicating behavior.
 
@@ -439,7 +436,7 @@ Docs-only extraction:
 
 UI/code changes:
 
-- Run `npm run components:index` before/after material UI work.
+- Reuse-check via **CodeGraph** + the `/ui-spec` reuse-map before adding UI (the `components:index` script was removed — it never existed).
 - Run `npx tsc --noEmit` from `myhospital-fe/` (catches the dead `@/lib/dtos/dtos` import, FE-V1).
 - Run the deterministic floor: `python scripts/mh_scan --root worktrees/<slug>/fe --scope <changed> --format summary` (FE-V1/V2/V3 via ast-grep pack in `scripts/sgconfig/`).
 - Run scoped ESLint only, e.g. `npx eslint src/path/to/file.tsx --fix`.
@@ -524,10 +521,10 @@ Frontend harness:
 
 - `myhospital-fe/CLAUDE.md`
 
-Discovery docs:
+Discovery:
 
-- `myhospital-fe/docs/components/component-inventory.generated.md`
-- `myhospital-fe/docs/reuse/reuse-catalog.generated.md`
+- **CodeGraph** per-repo index (`codegraph explore/node`) — the FE reuse/dependency engine
+- the `/ui-spec` reuse-map in `specs/<module>/03-ui.md` (for an FE feature with a spec)
 
 Core source:
 

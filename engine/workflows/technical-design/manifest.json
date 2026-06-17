@@ -1,0 +1,12 @@
+{
+  "name": "technical-design",
+  "description": "Turns a Confirmed functional spec into ONE coherent BE+FE+API technical design WRITTEN INTO the existing SDD files specs/<module>/{07-schema,08-api,03-ui,06-decision-log,04-traceability}.md (NOT a parallel set). Design-gated on unresolved 05-open-questions. BE+FE+API kept together for contract coherence.",
+  "kind": "orchestrated-sdd",
+  "maturity": "scaffolded",
+  "entry_skill": "technical-design",
+  "agents": ["mh-rule-auditor"],
+  "external_agents": ["codex-reviewer"],
+  "skills_used": ["impact-analysis"],
+  "rules": ["backend", "frontend"],
+  "uses_shared": ["gate-check.py", "module-state.py", "envelope.schema.json", "validate-envelope.py"]
+}

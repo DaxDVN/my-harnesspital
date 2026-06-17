@@ -6,9 +6,23 @@
 
 ---
 
+## CANH BAO / WARNING
+
+> **The graph may be ABSENT (not merely stale).** `graphify-out/` and `graph.json` may not exist on
+> this machine. If absent, **skip graphify entirely** and read the source docs (`docs/`/`specs/`)
+> directly; do not run `graphify query/explain/path/affected` against a missing graph. Rebuild on Linux
+> with `/graphify` only when a fresh graph is actually needed. Run `python scripts/harness_doctor.py`
+> to check current graph status before relying on any graphify command or path below.
+>
+> Even when the file exists, the current graph may be **STALE** (built on Windows; recorded root does
+> not match this Linux workspace). When the `SessionStart` hook prints `[graphify] … STALE …`, treat
+> the graph as untrusted and prefer reading the real source files.
+
+---
+
 ## 0. TL;DR (đọc cái này trước)
 
-- Graph đã build nằm ở **`graphify-out/graph.json`**.
+- Graph đã build (nếu tồn tại) nằm ở **`graphify-out/graph.json`**.
 - Đây là **knowledge graph của `docs/` + `specs/`** (133 file, ~250K từ) — tức là **bản đồ của tài
   liệu BA / spec / quyết định thiết kế / task slices / convention**, **KHÔNG phải graph của code FE/BE**.
 - **Tìm/hiểu source code FE/BE → dùng CodeGraph, KHÔNG dùng graphify** (xem

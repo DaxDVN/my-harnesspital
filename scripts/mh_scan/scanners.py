@@ -421,6 +421,14 @@ def main(argv=None) -> int:
         print(f"mh_scan: root not found: {args.root}", file=sys.stderr)
         return 0  # fail-open
     scope = args.scope or FIRST_PARTY
+    # Footgun guard (#5): an explicit --scope that resolves to NOTHING under --root scans nothing and
+    # would otherwise print "0 findings, exit 0" — a false all-clear (e.g. `--scope myhospital-fe` under
+    # the default BE root). Make a zero-match LOUD + distinct (exit 2), never a silent pass.
+    if args.scope and not any(os.path.exists(os.path.join(args.root, s)) for s in args.scope):
+        print(f"mh_scan: WARNING — 0 paths matched (root={args.root!r}, scope={args.scope!r}): "
+              f"NOTHING was scanned — this is NOT an all-clear. "
+              f"--scope is relative to --root; for FE use `--root myhospital-fe`.", file=sys.stderr)
+        return 2
     only = set(args.only) if args.only else None
     findings = scan_all(args.root, scope, only)
 

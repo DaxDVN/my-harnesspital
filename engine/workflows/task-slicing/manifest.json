@@ -1,0 +1,12 @@
+{
+  "name": "task-slicing",
+  "description": "Turns an approved technical design (specs/<module>/07,08,03) into specs/<module>/10-plan.md — vertical slices, per-task file-allowlist, per-task validation, dependency order — and updates 04-traceability.md. Gated on design ambiguity / missing API contract. Prevents large uncontrolled 'implement module' prompts.",
+  "kind": "orchestrated-sdd",
+  "maturity": "scaffolded",
+  "entry_skill": "task-slicing",
+  "agents": [],
+  "external_agents": [],
+  "skills_used": ["impact-analysis"],
+  "rules": ["backend", "frontend"],
+  "uses_shared": ["gate-check.py", "module-state.py", "envelope.schema.json", "validate-envelope.py"]
+}

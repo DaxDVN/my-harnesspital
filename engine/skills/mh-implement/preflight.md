@@ -2,10 +2,10 @@
 
 Goal: never author what already exists, and copy the *right* pattern. Reuse is the cheapest correctness. Order:
 
-## 1. Catalogs first (FE)
-- `myhospital-fe/docs/components/component-inventory.generated.md` — UI/component reuse (run `npm run components:index` from the worktree fe if stale/missing).
-- `myhospital-fe/docs/reuse/reuse-catalog.generated.md` — adapters, hooks, schemas, list pages, form sheets, filters, routing.
-- These are **generated** — read only, never hand-edit.
+## 1. CodeGraph + the /ui-spec reuse-map first (FE)
+- **CodeGraph** — `cd myhospital-fe && codegraph explore "<area>"` / `codegraph node <symbol>` for live components/hooks/adapters + their callers. The real reuse/dependency engine; treat returned source as already read.
+- For an FE feature with a spec: the **`/ui-spec` reuse-map** in `specs/<module>/03-ui.md` already classifies reuse/extend/create per UI element — consume it (don't re-derive).
+- *(The legacy `*.generated.md` reuse catalogs + `npm run components:index` were **removed** — they never existed in `myhospital-fe`.)*
 
 ## 2. Code graph / bounded search
 - If `.codegraph/` exists in the repo: `codegraph explore "<area>"` / `codegraph node <symbol>` to see live callers/usage. Treat CodeGraph-returned source as already read.

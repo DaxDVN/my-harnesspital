@@ -191,13 +191,13 @@ def command_config_value(argv):
     print(val); return 0
 
 def command_doctor(argv):
-    req=["README.md","WORKFLOW.md","IMPLEMENTATION_NOTES.md","package.json",".opencode/opencode.jsonc",".opencode/skills/agent-browser/SKILL.md",".agentflow/state.json",".agentflow/config.yaml",".agentflow/bin/agent-browser",".agentflow/bin/test-with-opencode",".agentflow/bin/implement-with-opencode",".agentflow/bin/retest-with-opencode",".agentflow/bin/validate-artifact",".agentflow/bin/update-state",".agentflow/bin/init-round",".agentflow/bin/summarize-round",".agentflow/bin/doctor",".agentflow/bin/capabilities",".agentflow/bin/probe-web-with-opencode",".agentflow/bin/probe-browser-with-opencode",".agentflow/bin/probe-agent-browser-with-opencode",".agentflow/vendor/agent-browser-package/bin/agent-browser.js",".agentflow/vendor/agent-browser-package/skill-data/core/SKILL.md","tests/mock-opencode","tests/run-smoke-tests"]
+    req=["README.md","WORKFLOW.md","IMPLEMENTATION_NOTES.md","package.json",".opencode/opencode.jsonc",".opencode/skills/agent-browser/SKILL.md",".agentflow/state.json",".agentflow/config.yaml",".agentflow/bin/agent-browser",".agentflow/bin/test-with-opencode",".agentflow/bin/implement-with-opencode",".agentflow/bin/retest-with-opencode",".agentflow/bin/validate-artifact",".agentflow/bin/update-state",".agentflow/bin/init-round",".agentflow/bin/summarize-round",".agentflow/bin/doctor",".agentflow/bin/capabilities",".agentflow/bin/probe-web-with-opencode",".agentflow/bin/probe-browser-with-opencode",".agentflow/bin/probe-agent-browser-with-opencode",".agentflow/vendor/agent-browser-package/bin/agent-browser.js",".agentflow/vendor/agent-browser-package/skill-data/core/SKILL.md"]
     ok=True; print("progressive-test doctor")
     for rel in req:
         p=ROOT/rel
         if not p.exists(): print(f"FAIL missing {rel}"); ok=False
         else: print(f"OK   {rel}")
-    for rel in [".agentflow/bin/agent-browser",".agentflow/bin/test-with-opencode",".agentflow/bin/implement-with-opencode",".agentflow/bin/retest-with-opencode",".agentflow/bin/validate-artifact",".agentflow/bin/update-state",".agentflow/bin/init-round",".agentflow/bin/summarize-round",".agentflow/bin/doctor",".agentflow/bin/capabilities",".agentflow/bin/probe-web-with-opencode",".agentflow/bin/probe-browser-with-opencode",".agentflow/bin/probe-agent-browser-with-opencode","tests/mock-opencode","tests/run-smoke-tests"]:
+    for rel in [".agentflow/bin/agent-browser",".agentflow/bin/test-with-opencode",".agentflow/bin/implement-with-opencode",".agentflow/bin/retest-with-opencode",".agentflow/bin/validate-artifact",".agentflow/bin/update-state",".agentflow/bin/init-round",".agentflow/bin/summarize-round",".agentflow/bin/doctor",".agentflow/bin/capabilities",".agentflow/bin/probe-web-with-opencode",".agentflow/bin/probe-browser-with-opencode",".agentflow/bin/probe-agent-browser-with-opencode"]:
         p=ROOT/rel
         if p.exists() and not os.access(p,os.X_OK): print(f"FAIL not executable {rel}"); ok=False
     try: validate_artifact("state",STATE_PATH); print("OK   state.json valid")
@@ -213,13 +213,12 @@ def command_doctor(argv):
     else: print(f"OK   config executor.cli_model={EXPECTED_EXECUTOR_CLI_MODEL}")
     local_path=str(ROOT/".agentflow/bin")+os.pathsep+os.environ.get("PATH","")
     oc=shutil.which("opencode"); ab=shutil.which("agent-browser", path=local_path)
-    print(f"OK   opencode found: {oc}" if oc else "WARN opencode not found; use AGENTFLOW_MOCK_OPENCODE=1 for smoke/MVP contract tests")
+    print(f"OK   opencode found: {oc}" if oc else "FAIL opencode not found — required for a real run (no mock)"); ok = ok and bool(oc)
     print(f"OK   agent-browser found: {ab}" if ab else "FAIL agent-browser shim not found"); ok = ok and bool(ab)
     ab_chrome=Path.home()/".agent-browser/browsers/chrome-149.0.7827.115"
     print(f"OK   agent-browser Chrome installed: {ab_chrome}" if ab_chrome.exists() else "WARN agent-browser Chrome missing; run .agentflow/bin/agent-browser install")
     shim=config_value("capabilities.browser.shim_path")
     print(f"OK   browser shim configured: {shim}" if shim else "WARN no capabilities.browser.shim_path configured")
-    if (ROOT/"tests/mock-opencode").exists(): print("OK   mock smoke test readiness")
     print("DOCTOR PASS" if ok else "DOCTOR FAIL"); return 0 if ok else 1
 
 # --- Envelope layer (orchestrator reads ONLY these short receipts, never the long payloads) ---

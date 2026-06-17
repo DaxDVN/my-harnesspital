@@ -1,0 +1,12 @@
+{
+  "name": "incremental-impl",
+  "description": "Executes ONE approved task/slice from specs/<module>/10-plan.md by WRAPPING /mh-implement (worktree + allowlist + validation + self-review-diff). Captures an implementation envelope; on plan-mismatch STOPs and routes back to task-slicing/technical-design. The only code-editing workflow in the SDLC set.",
+  "kind": "orchestrated-wrapper",
+  "maturity": "scaffolded",
+  "entry_skill": "incremental-impl",
+  "agents": ["mh-implementer"],
+  "external_agents": [],
+  "skills_used": ["mh-implement"],
+  "rules": ["backend", "frontend"],
+  "uses_shared": ["gate-check.py", "module-state.py", "envelope.schema.json", "validate-envelope.py"]
+}

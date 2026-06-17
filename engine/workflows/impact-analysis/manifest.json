@@ -1,0 +1,12 @@
+{
+  "name": "impact-analysis",
+  "description": "Preflight blast-radius analysis BEFORE a non-trivial change/fix/slice. Wraps CodeGraph impact/affected + layers BE/FE/API/business/test dimensions -> risk-assessment + preflight verdict. Read-only. Cross-cutting (callable by bug-fix, technical-design, task-slicing, deep-review).",
+  "kind": "orchestrated-codegraph",
+  "maturity": "scaffolded",
+  "entry_skill": "impact-analysis",
+  "agents": [],
+  "external_agents": ["codegraph"],
+  "skills_used": [],
+  "rules": ["backend", "frontend"],
+  "uses_shared": ["envelope.schema.json", "validate-envelope.py"]
+}

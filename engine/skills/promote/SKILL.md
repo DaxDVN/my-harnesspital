@@ -19,8 +19,11 @@ only the owner can create the marker).
 3. **Decide & draft (show the owner before applying):**
    - **Promote → main-brain:** distill the learning into the SHORTEST clear durable statement. main-brain
      is loaded every session — no bloat. Link down to `engine/rules` / a skill instead of copying detail.
-   - **Graduate → skill:** if it is a repeatable *procedure*, draft a new `.claude/skills/<slug>/SKILL.md`
-     instead (skip the main-brain write). Skills are the "recipes"; main-brain holds the "lessons".
+   - **Graduate → skill:** if it is a repeatable *procedure*, draft a new `engine/skills/<slug>/SKILL.md`
+     instead (skip the main-brain write; the `.claude/skills/` directory is just a symlink tree pointing
+     into `engine/skills/` — always create in `engine/skills/<slug>/`).
+     Skills are the "recipes"; main-brain holds the "lessons".
+     When the source is a `second-brain/` entry, check its frontmatter (`status`/`scope`/`confidence`/`proposed_target`) to confirm readiness before promoting.
 4. **Authorize (brain promotion only):** ask the owner to type in their prompt
    `! touch main-brain/.promote-unlock` (this unlocks the guard for the write). Wait for it.
 5. **Apply** the `main-brain/knowledge.md` edit (now allowed). Keep it lean.
@@ -32,4 +35,4 @@ only the owner can create the marker).
 ## Safety
 Never write `main-brain/` except in step 5 within an owner-authorized run. Never create the unlock marker
 yourself — only the owner does (step 4). Honor the guard (no git mutation, no editing generated files).
-A graduated skill must follow existing skill conventions (model a sibling `.claude/skills/*/SKILL.md`).
+A graduated skill must follow existing skill conventions (model a sibling `engine/skills/*/SKILL.md`).

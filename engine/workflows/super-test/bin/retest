@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Super-Test M3 — retest. --targeted = the fixed batch's bugs; --sweep = the whole coverage map (regressions).
+set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+STROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+LIB="$STROOT/lib/supertest.py"
+DRIVER_BRIEF="$STROOT/integrations/mimocode-super-test.md"
+# shellcheck source=/dev/null
+. "$SCRIPT_DIR/_executor-lib.sh"
+PT_BIN="$STROOT/../progressive-test/.agentflow/bin"
+[ -d "$PT_BIN" ] && export PATH="$(cd "$PT_BIN" && pwd):$PATH"
+MODULE="${1:-}"; RUN="${2:-}"; MODE=""
+for a in "${@:3}"; do case "$a" in --targeted) MODE=targeted;; --sweep) MODE=sweep;; esac; done
+[ -n "$MODULE" ] && [ -n "$RUN" ] && [ -n "$MODE" ] || { echo "usage: $(basename "$0") <module> <run-id> --targeted|--sweep" >&2; exit 2; }
+RUN_DIR="$STROOT/runs/$MODULE/$RUN"; LOG="$RUN_DIR/logs"; mkdir -p "$LOG"
+[ -d "$RUN_DIR" ] || { echo "RUN_DIR not found: $RUN_DIR" >&2; exit 2; }
+RT="$(supertest_runtime)"; [ "$RT" != none ] || { echo "NO_EXECUTOR_RUNTIME" >&2; exit 127; }
+command -v agent-browser >/dev/null 2>&1 || { echo "AGENT_BROWSER_NOT_FOUND" >&2; exit 127; }
+TARGET_URL="${AGENTFLOW_TARGET_URL:-${SUPERTEST_TARGET_URL:-}}"
+[ -n "$TARGET_URL" ] || { echo "AGENTFLOW_TARGET_URL not set" >&2; exit 2; }
+
+if [ "$MODE" = targeted ]; then OUT="$RUN_DIR/12-targeted-retest-report.md"; KIND=targeted-retest; ST=TARGETED_RETEST
+else OUT="$RUN_DIR/13-module-sweep-retest-report.md"; KIND=module-sweep-retest; ST=MODULE_SWEEP_RETEST; fi
+python3 "$LIB" set-state "$RUN_DIR" "$ST" >/dev/null
+
+PF="$LOG/retest-$MODE.prompt.txt"
+if [ "$MODE" = targeted ]; then
+  { cat "$DRIVER_BRIEF"; printf '\n\n---\nPHASE OVERRIDE: TARGETED RETEST ONLY\nTargeted retest. Read %s/10-approved-repair-plan.md + %s/11-implementation-report.md. Re-run EACH bug in the approved batch via agent-browser at %s. Write %s with per-bug status FIXED|STILL_FAILING|PARTIAL|NOT_RETESTED + evidence. Header must contain "Retest". Do NOT fix anything.\n' "$RUN_DIR" "$RUN_DIR" "$TARGET_URL" "$OUT"; } >"$PF"
+else
+  { cat "$DRIVER_BRIEF"; printf '\n\n---\nPHASE OVERRIDE: MODULE-SWEEP RETEST ONLY\nModule sweep retest. Re-run the flows in %s/02-coverage-map.md via agent-browser at %s. Find regressions + NEW bugs (append new ones to 04-bug-catalog.md marked NEW_AFTER_REPAIR). Write %s with a Retested-Flows table (previous vs new status) + Regression Findings + Remaining/New bugs. Header must contain "Retest". Do NOT fix anything.\n' "$RUN_DIR" "$TARGET_URL" "$OUT"; } >"$PF"
+fi
+
+run_executor "$PF" "$LOG/retest-$MODE.stdout.log" "$LOG/retest-$MODE.stderr.log" \
+  || { echo "RETEST_EXECUTOR_FAILED (runtime=$RT; see log)" >&2; exit 1; }
+[ -f "$OUT" ] || { echo "STATUS=RETEST_PENDING ($OUT not written)"; exit 3; }
+python3 "$LIB" validate "$KIND" "$OUT" || { echo "retest report INVALID" >&2; exit 1; }
+[ "$MODE" = sweep ] && python3 "$LIB" set-state "$RUN_DIR" FINAL_REPORT >/dev/null
+echo "STATUS=RETEST_DONE MODE=$MODE ARTIFACT=$OUT"

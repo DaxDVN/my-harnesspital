@@ -1,5 +1,5 @@
 {
-  "current_round": "round-smoke-1781624378-99651",
+  "current_round": "round-smoke-1781630330-136065",
   "state": "DONE",
   "scenario": "mock-login-flow",
   "executor": {
@@ -18,12 +18,12 @@
     "max_opencode_iterations_per_round": 2
   },
   "artifacts": {
-    "bug_packet": ".agentflow/rounds/round-smoke-1781624378-99651/01-bug-packet.json",
-    "rca_plan": ".agentflow/rounds/round-smoke-1781624378-99651/02-rca-plan.json",
+    "bug_packet": ".agentflow/rounds/round-smoke-1781630330-136065/01-bug-packet.json",
+    "rca_plan": ".agentflow/rounds/round-smoke-1781630330-136065/02-rca-plan.json",
     "codex_review": null,
-    "approved_plan": ".agentflow/rounds/round-smoke-1781624378-99651/04-approved-plan.md",
-    "implementation_report": ".agentflow/rounds/round-smoke-1781624378-99651/05-implementation-report.json",
-    "retest_report": ".agentflow/rounds/round-smoke-1781624378-99651/06-retest-report.json"
+    "approved_plan": ".agentflow/rounds/round-smoke-1781630330-136065/04-approved-plan.md",
+    "implementation_report": ".agentflow/rounds/round-smoke-1781630330-136065/05-implementation-report.json",
+    "retest_report": ".agentflow/rounds/round-smoke-1781630330-136065/06-retest-report.json"
   },
   "last_error": null
 }

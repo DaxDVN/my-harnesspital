@@ -7,7 +7,7 @@ description: Safe bug-fix companion to the mh-review harness. Drives fixing a fi
 
 Companion to `mh-review`. The review harness produces a findings file and a Coverage ledger; this skill **works off that file** to close findings safely — one at a time, severity-ordered, with a mandatory self-review of every fix-diff before marking FIXED. It is the dedicated Round-2 driver that `mh-review` protocol §4 describes but does not fully specify.
 
-Source-of-truth bundle: [`engine/workflows/deep-review/protocol.md`](engine/workflows/deep-review/protocol.md) · [`engine/workflows/deep-review/findings-schema.md`](engine/workflows/deep-review/findings-schema.md) · [`engine/workflows/deep-review/checklist.md`](engine/workflows/deep-review/checklist.md) · `AGENTS.md` Forbidden Actions.
+Source-of-truth bundle: `engine/workflows/deep-review/protocol.md` · `engine/workflows/deep-review/findings-schema.md` · `engine/workflows/deep-review/checklist.md` · `AGENTS.md` Forbidden Actions.
 
 ---
 

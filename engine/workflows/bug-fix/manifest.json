@@ -1,0 +1,12 @@
+{
+  "name": "bug-fix",
+  "description": "General bug investigation -> RCA -> fix -> verify, from ANY source (QA/lead/user/log/build/review/E2E). intake -> reproduce -> RCA(mh-rca) -> fix-plan -> optional Codex gate -> fix(/mh-fix) -> verify, over envelopes + a state machine. progressive-test calls this for its E2E bugs.",
+  "kind": "orchestrated-subsystem",
+  "maturity": "scaffolded",
+  "entry_skill": "bug-fix",
+  "agents": ["mh-rca"],
+  "external_agents": ["codex-reviewer"],
+  "skills_used": ["mh-fix"],
+  "rules": ["backend", "frontend"],
+  "uses_shared": ["envelope.schema.json", "validate-envelope.py"]
+}
