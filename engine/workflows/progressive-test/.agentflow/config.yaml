@@ -1,8 +1,8 @@
 executor:
   runtime: opencode
-  model: mimo-v2.5
-  cli_model: xiaomi-token-plan-sgp/mimo-v2.5
-  provider: xiaomi-token-plan-sgp
+  model: mimo-v2.5                         # logical artifact model; env AGENTFLOW_EXECUTOR_MODEL overrides
+  cli_model: xiaomi-token-plan-sgp/mimo-v2.5 # actual opencode --model; env AGENTFLOW_EXECUTOR_CLI_MODEL overrides
+  provider: xiaomi-token-plan-sgp          # metadata/default provider; env AGENTFLOW_EXECUTOR_PROVIDER overrides
   call_method: bash-wrapper
   modes:
     test: TEST_ONLY

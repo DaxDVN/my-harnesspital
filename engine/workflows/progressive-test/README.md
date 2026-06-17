@@ -31,9 +31,10 @@ Allowed Claude entrypoints:
 
 Claude must not call raw `opencode run ...`. Wrappers bind model, prompt, logs, artifact validation, and state transitions.
 
-## Why OpenCode Uses MiMo v2.5
+## Executor Model
 
-OpenCode is the token-burning executor/tester/implementer. Default config:
+OpenCode is the token-burning executor/tester/implementer. The toolchain is hard-bound to OpenCode +
+the bash wrappers + agent-browser, while the model/provider are configurable. Default config:
 
 ```yaml
 executor:
@@ -44,9 +45,11 @@ executor:
   call_method: bash-wrapper
 ```
 
-No automatic fallback model is enabled. Quota exhaustion stops the workflow.
+No automatic fallback model is enabled. Quota exhaustion stops the workflow. To change model, update
+`.agentflow/config.yaml` or set `AGENTFLOW_EXECUTOR_MODEL` / `AGENTFLOW_EXECUTOR_CLI_MODEL` for that run.
 
-For this setup, `mimo-v2.5` is represented at the OpenCode CLI layer by the Xiaomi Token Plan Singapore provider model `xiaomi-token-plan-sgp/mimo-v2.5`.
+For the default setup, `mimo-v2.5` is represented at the OpenCode CLI layer by the Xiaomi Token Plan
+Singapore provider model `xiaomi-token-plan-sgp/mimo-v2.5`.
 
 ## Install Browser Support
 
@@ -91,10 +94,11 @@ cd /home/dax/Documents/arabica/tools/progressive-test
 .agentflow/bin/test-with-opencode round-001
 ```
 
-Wrappers keep logical `executor.model: mimo-v2.5` for contract validation, then read `executor.cli_model` for the actual OpenCode CLI call:
+Wrappers keep the logical `executor.model` for artifact consistency, then read `executor.cli_model` for
+the actual OpenCode CLI call:
 
 ```bash
-opencode run --model xiaomi-token-plan-sgp/mimo-v2.5 "<prompt>"
+opencode run --model "$CLI_MODEL" "<prompt>"
 ```
 
 The wrappers also auto-retry the specific upstream `Request Error status 400 · non-retryable` failure once after a

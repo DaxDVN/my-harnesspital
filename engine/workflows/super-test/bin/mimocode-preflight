@@ -27,7 +27,7 @@ Checks Super-Test executor readiness without starting a browser sweep:
 
 Environment:
   SUPERTEST_RUNTIME=auto|opencode|mimo-code
-  SUPERTEST_CLI_MODEL=xiaomi-token-plan-sgp/mimo-v2.5
+  SUPERTEST_CLI_MODEL=<optional override; defaults to super_test.executor.cli_model in config.yaml>
   SUPERTEST_MIMO_CODE_BIN=mimo
   SUPERTEST_MIMO_CODE_CMD='mimo run ... {prompt_file}'
   SUPERTEST_OPENCODE_RETRY_ATTEMPTS=2
@@ -97,7 +97,7 @@ rt="$(supertest_runtime)"
 case "$rt" in
   opencode)
     command -v opencode >/dev/null 2>&1 && ok "runtime:opencode" || fail "runtime selected opencode but opencode is not on PATH"
-    ok "model:${SUPERTEST_CLI_MODEL:-xiaomi-token-plan-sgp/mimo-v2.5}"
+    ok "model:$(supertest_cli_model)"
     ;;
   mimo-code)
     if [ -n "${SUPERTEST_MIMO_CODE_CMD:-}" ]; then

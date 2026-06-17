@@ -11,11 +11,9 @@ if [[ -z "$ROUND_ID" ]]; then echo "usage: $(basename "$0") <round-id>" >&2; exi
 ROUND_DIR="$ROOT/.agentflow/rounds/$ROUND_ID"
 LOG_DIR="$ROUND_DIR/logs"
 mkdir -p "$LOG_DIR"
-MODEL="$(python3 "$LIB" config-value executor.model 2>/dev/null || true)"; MODEL="${MODEL:-mimo-v2.5}"
-if [[ "$MODEL" != "mimo-v2.5" ]]; then echo "CONFIG_ERROR: executor.model must be mimo-v2.5 for MVP, got $MODEL" >&2; exit 1; fi
-PROVIDER="$(python3 "$LIB" config-value executor.provider 2>/dev/null || true)"; PROVIDER="${PROVIDER:-mimo-token-plan}"
-CLI_MODEL="$(python3 "$LIB" config-value executor.cli_model 2>/dev/null || true)"; CLI_MODEL="${CLI_MODEL:-$MODEL}"
-if [[ "${AGENTFLOW_EXECUTOR_MODEL:-}" != "" && "${AGENTFLOW_EXECUTOR_MODEL}" != "$MODEL" ]]; then echo "MODEL_OVERRIDE_IGNORED_IN_MVP: requested ${AGENTFLOW_EXECUTOR_MODEL}; using $MODEL" >&2; fi
+MODEL="${AGENTFLOW_EXECUTOR_MODEL:-$(python3 "$LIB" config-value executor.model 2>/dev/null || true)}"; MODEL="${MODEL:-mimo-v2.5}"
+PROVIDER="${AGENTFLOW_EXECUTOR_PROVIDER:-$(python3 "$LIB" config-value executor.provider 2>/dev/null || true)}"; PROVIDER="${PROVIDER:-xiaomi-token-plan-sgp}"
+CLI_MODEL="${AGENTFLOW_EXECUTOR_CLI_MODEL:-${AGENTFLOW_EXECUTOR_MODEL:-$(python3 "$LIB" config-value executor.cli_model 2>/dev/null || true)}}"; CLI_MODEL="${CLI_MODEL:-$MODEL}"
 if [[ ! -f "$SHARED_RETRY" ]]; then echo "SHARED_RETRY_HELPER_MISSING: $SHARED_RETRY" >&2; exit 1; fi
 # shellcheck source=/dev/null
 . "$SHARED_RETRY"

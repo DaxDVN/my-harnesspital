@@ -17,11 +17,15 @@ from __future__ import annotations
 
 import re
 import sys
+import os
 from datetime import date
 from pathlib import Path
 
 SUPERTEST_DIR = Path(__file__).resolve().parents[1]
+CONFIG_PATH = SUPERTEST_DIR / "config.yaml"
 RUNS = SUPERTEST_DIR / "runs"
+DEFAULT_EXECUTOR_MODEL = "mimo-v2.5"
+DEFAULT_EXECUTOR_CLI_MODEL = "xiaomi-token-plan-sgp/mimo-v2.5"
 STATES = [
     "INIT", "LOAD_TEST_MAP", "HARVESTING", "CALLING_OPUS", "OPUS_BATCH_RCA", "CODEX_REVIEW",
     "APPROVED_REPAIR_PLAN", "IMPLEMENTING", "TARGETED_RETEST", "MODULE_SWEEP_RETEST",
@@ -30,12 +34,41 @@ STATES = [
 _MARKER = re.compile(r"<!--\s*super-test-state:\s*([A-Z_]+).*?-->")
 
 
+def _config_value(key: str) -> str | None:
+    if not CONFIG_PATH.exists():
+        return None
+    stack: list[tuple[int, str]] = []
+    values: dict[str, str] = {}
+    for raw in CONFIG_PATH.read_text(encoding="utf-8").splitlines():
+        if not raw.strip() or raw.lstrip().startswith("#") or ":" not in raw:
+            continue
+        indent = len(raw) - len(raw.lstrip(" "))
+        line = raw.strip()
+        k, v = line.split(":", 1)
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        stack.append((indent, k.strip()))
+        if v.strip():
+            values[".".join(x[1] for x in stack)] = v.strip().split("#", 1)[0].strip().strip('"').strip("'")
+    return values.get(key)
+
+
+def _executor_model() -> str:
+    return os.environ.get("SUPERTEST_EXECUTOR_MODEL") or _config_value("super_test.executor.model") or DEFAULT_EXECUTOR_MODEL
+
+
+def _executor_cli_model() -> str:
+    return os.environ.get("SUPERTEST_CLI_MODEL") or os.environ.get("SUPERTEST_EXECUTOR_MODEL") or _config_value("super_test.executor.cli_model") or _config_value("super_test.executor.model") or DEFAULT_EXECUTOR_CLI_MODEL
+
+
 def _state_file(run_dir: Path) -> Path:
     return run_dir / "00-super-test-state.md"
 
 
 def _skeletons(module: str, run: str, stamp: str) -> dict[str, str]:
     marker = f"<!-- super-test-state: INIT | run: {run} | at: {stamp} -->"
+    executor_model = _executor_model()
+    executor_cli_model = _executor_cli_model()
     return {
         "00-super-test-state.md": f"""# Super-Test State
 
@@ -107,7 +140,8 @@ PASS · BUGGED · BYPASSED · BLOCKED · PARTIAL · NOT_TESTED  (PASS != BYPASSE
 ## Metadata
 - Module: {module}
 - Run ID: {run}
-- Executor model: mimo-v2.5
+- Executor model: {executor_model}
+- Executor CLI model: {executor_cli_model}
 - Browser tool: agent-browser
 - Started at: {stamp}
 - Stopped at:

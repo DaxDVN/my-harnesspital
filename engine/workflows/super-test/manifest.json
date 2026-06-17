@@ -1,6 +1,6 @@
 {
   "name": "super-test",
-  "description": "MiMo-led module-level exploratory E2E bug-harvesting. OpenCode/MiMo is the DRIVER: it sweeps a module with agent-browser logging bug-catalog/coverage-map/bypass-log/blocked-flows, then file-hands-off to Opus 4.8 (max effort) for BATCH cluster-RCA + repair batches, Codex reviews risky batches, MiMo implements the approved plan, then targeted + module-sweep retest. Sibling of progressive-test (harvest-first/batch-repair, NOT fix-first). Claude/Opus is a called specialist, never the orchestrator.",
+  "description": "MiMo-led module-level exploratory E2E bug-harvesting. OpenCode/MiMoCode is the DRIVER with a configurable executor model: it sweeps a module with agent-browser logging bug-catalog/coverage-map/bypass-log/blocked-flows, then file-hands-off to Opus 4.8 (max effort) for BATCH cluster-RCA + repair batches, Codex reviews risky batches, MiMo implements the approved plan, then targeted + module-sweep retest. Sibling of progressive-test (harvest-first/batch-repair, NOT fix-first). Claude/Opus is a called specialist, never the orchestrator.",
   "kind": "orchestrated-mimo-led",
   "maturity": "scaffolded",
   "entry_skill": "super-test",

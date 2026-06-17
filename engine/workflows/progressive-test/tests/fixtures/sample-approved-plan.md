@@ -9,6 +9,9 @@ OpenCode
 ## Executor Model
 mimo-v2.5
 
+## Executor CLI Model
+xiaomi-token-plan-sgp/mimo-v2.5
+
 ## Executor Call Method
 Bash wrapper script:
 .agentflow/bin/implement-with-opencode

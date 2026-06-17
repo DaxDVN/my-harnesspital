@@ -43,13 +43,13 @@ AGENTFLOW_TARGET_URL=https://example.com timeout 300s .agentflow/bin/retest-with
 
 ## Mocked vs Real
 
-Real in setup/probes: wrapper execution, logs, state transitions, artifact generation, validation, summary generation, OpenCode CLI, `xiaomi-token-plan-sgp/mimo-v2.5`, Vercel Labs `agent-browser` CLI, Chrome navigation, accessibility-tree snapshot refs, screenshots, OpenCode skill loading.
+Real in setup/probes: wrapper execution, logs, state transitions, artifact generation, validation, summary generation, OpenCode CLI using the configured `executor.cli_model`, Vercel Labs `agent-browser` CLI, Chrome navigation, accessibility-tree snapshot refs, screenshots, OpenCode skill loading.
 
 The mock executor was removed (2026-06-17): the executor runs real OpenCode/mimo only, against a real approved plan + allowlisted source files. The first real end-to-end run is the owner's gate.
 
 ## Integration Notes
 
-The wrappers keep the logical contract model as:
+The default logical contract model is:
 
 ```yaml
 executor:
@@ -60,10 +60,11 @@ executor:
 They call OpenCode with:
 
 ```bash
-opencode run --model xiaomi-token-plan-sgp/mimo-v2.5 "<prompt>"
+opencode run --model "$CLI_MODEL" "<prompt>"
 ```
 
-If provider syntax differs later, change only `.agentflow/config.yaml` or the wrapper scripts. Keep `.agentflow/config.yaml` as the model/provider source.
+If provider syntax differs later, change `.agentflow/config.yaml` or set `AGENTFLOW_EXECUTOR_MODEL` /
+`AGENTFLOW_EXECUTOR_CLI_MODEL` for the run. Keep `.agentflow/config.yaml` as the default model/provider source.
 
 ## TODO
 
@@ -86,7 +87,7 @@ If provider syntax differs later, change only `.agentflow/config.yaml` or the wr
 Added:
 
 - `.agentflow/bin/capabilities` to inspect OpenCode model availability, MCP servers, agent permissions, webfetch/websearch, local `agent-browser`, browser install, and skills.
-- `.agentflow/bin/probe-web-with-opencode <url>` to test real OpenCode web inspection using the `explore` agent and `xiaomi-token-plan-sgp/mimo-v2.5`.
+- `.agentflow/bin/probe-web-with-opencode <url>` to test real OpenCode web inspection using the configured OpenCode CLI model.
 
 Important distinction:
 
@@ -113,7 +114,7 @@ The first uses OpenCode webfetch/websearch. The second asks OpenCode to drive Fi
 
 Latest real probes:
 
-- `xiaomi-token-plan-sgp/mimo-v2.5` is available under the Xiaomi Token Plan Singapore provider.
+- The default `xiaomi-token-plan-sgp/mimo-v2.5` is available under the Xiaomi Token Plan Singapore provider.
 - `opencode` is available at `/home/dax/.opencode/bin/opencode`.
 - OpenCode MCP list exposes `codegraph` only; browser automation is CLI-based through `agent-browser`, not MCP.
 - OpenCode agent list exposes `webfetch`, `websearch`, and `bash` capabilities.

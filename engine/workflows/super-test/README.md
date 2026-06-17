@@ -1,6 +1,6 @@
 # Super-Test — MiMo-led exploratory E2E bug-harvesting (contract)
 
-**One line:** OpenCode/MiMo sweeps a module with agent-browser, logs the **maximum** bugs it can find
+**One line:** OpenCode/MiMoCode sweeps a module with agent-browser, logs the **maximum** bugs it can find
 (bug-catalog + coverage-map + bypass-log + blocked-flows), then file-hands-off to **Opus 4.8 (max effort)**
 for **batch cluster-RCA** + repair batches, **Codex** reviews risky batches, MiMo implements the approved
 plan, then **targeted retest + module-sweep retest**.
@@ -60,7 +60,7 @@ APPROVED_REPAIR_PLAN → (M3) IMPLEMENTING → TARGETED_RETEST → MODULE_SWEEP_
 Stop conditions (HARVEST): COVERAGE_COMPLETE · MAX_BUGS_REACHED · MAX_BLOCKERS_REACHED · MAX_TIME_REACHED · NO_MORE_REACHABLE_FLOWS · CRITICAL_SYSTEMIC_BUG.
 
 ## Reuse (no duplication)
-agent-browser layer + opencode/mimo invocation pattern ← `progressive-test`; the shared envelope +
+agent-browser layer + OpenCode/MiMoCode invocation pattern ← `progressive-test`; the shared envelope +
 `validate-envelope.py` + `allowlist-check.py` (implement boundary) ← `engine/workflows/_shared/`; `frontend.md`/`backend.md` canon.
 NEW here: the harvest sweep + the 6 harvest/repair artifact schemas + the `mh-batch-rca` Opus agent (M2).
 
@@ -79,7 +79,9 @@ export AGENTFLOW_TARGET_URL="<running app url>"
 export SUPERTEST_TARGET_REPO="<workspace>/worktrees/<slug>/fe-or-be"
 ```
 
-If the MiMoCode binary is not named `mimo`, configure one of:
+The OpenCode model is configurable. Defaults come from `config.yaml`; per-run overrides use
+`SUPERTEST_CLI_MODEL` for the actual OpenCode `--model` value and `SUPERTEST_EXECUTOR_MODEL` for logical
+metadata. If the MiMoCode binary is not named `mimo`, configure one of:
 
 ```bash
 export SUPERTEST_MIMO_CODE_BIN="<binary-name>"

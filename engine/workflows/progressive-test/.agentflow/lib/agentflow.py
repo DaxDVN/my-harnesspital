@@ -11,9 +11,11 @@ STATE_PATH = AGENTFLOW / "state.json"
 CONFIG_PATH = AGENTFLOW / "config.yaml"
 ROUNDS = AGENTFLOW / "rounds"
 STATES = {"IDLE","TESTING","BUG_PACKET_READY","RCA_RUNNING","RCA_PLAN_READY","CODEX_REVIEW_REQUIRED","CODEX_REVIEWING","CODEX_REJECTED","CODEX_APPROVED","DIRECT_PATCH_APPROVED","IMPLEMENTING","IMPLEMENTED","RETESTING","RETEST_PASSED","RETEST_FAILED","PLAN_MISMATCH","NEEDS_MORE_EVIDENCE","HUMAN_DECISION_REQUIRED","DONE","FAILED"}
-EXPECTED_EXECUTOR_MODEL = "mimo-v2.5"
-EXPECTED_EXECUTOR_PROVIDER = "xiaomi-token-plan-sgp"
-EXPECTED_EXECUTOR_CLI_MODEL = "xiaomi-token-plan-sgp/mimo-v2.5"
+EXECUTOR_RUNTIME = "opencode"
+EXECUTOR_CALL_METHOD = "bash-wrapper"
+DEFAULT_EXECUTOR_MODEL = "mimo-v2.5"
+DEFAULT_EXECUTOR_PROVIDER = "xiaomi-token-plan-sgp"
+DEFAULT_EXECUTOR_CLI_MODEL = "xiaomi-token-plan-sgp/mimo-v2.5"
 TRANSITIONS = {
  "IDLE":{"TESTING","IDLE","FAILED"}, "TESTING":{"BUG_PACKET_READY","RETEST_FAILED","FAILED"},
  "BUG_PACKET_READY":{"RCA_RUNNING","DIRECT_PATCH_APPROVED","NEEDS_MORE_EVIDENCE","FAILED"},
@@ -75,9 +77,10 @@ def validate_codex_review(d: dict[str,Any]) -> None:
 
 def validate_executor_model(executor: dict[str,Any], ctx: str) -> None:
     is_dict(executor,ctx); require(executor,["runtime","model","call_method"],ctx)
-    if executor.get("runtime")!="opencode": raise ValidationError(f"{ctx}.runtime must be opencode")
-    if executor.get("model")!=EXPECTED_EXECUTOR_MODEL: raise ValidationError(f"{ctx}.model must be {EXPECTED_EXECUTOR_MODEL}")
-    if executor.get("call_method")!="bash-wrapper": raise ValidationError(f"{ctx}.call_method must be bash-wrapper")
+    if executor.get("runtime")!=EXECUTOR_RUNTIME: raise ValidationError(f"{ctx}.runtime must be {EXECUTOR_RUNTIME}")
+    expected_model=configured_executor_model()
+    if executor.get("model")!=expected_model: raise ValidationError(f"{ctx}.model must match configured executor.model ({expected_model})")
+    if executor.get("call_method")!=EXECUTOR_CALL_METHOD: raise ValidationError(f"{ctx}.call_method must be {EXECUTOR_CALL_METHOD}")
 
 def validate_implementation_report(d: dict[str,Any]) -> None:
     require(d,["round_id","status","executor","plan_version","files_changed","steps_completed","commands_run","validation_result","remaining_issues"],"implementation-report")
@@ -93,7 +96,7 @@ def validate_retest_report(d: dict[str,Any]) -> None:
 
 def validate_state(d: dict[str,Any]) -> None:
     require(d,["current_round","state","scenario","executor","codex_review_count","max_codex_reviews","rca_revision_count","max_rca_revisions","budget","artifacts","last_error"],"state"); enum(d["state"],STATES,"state.state"); validate_executor_model(d["executor"],"state.executor")
-    if d["executor"].get("provider")!=EXPECTED_EXECUTOR_PROVIDER: raise ValidationError(f"state.executor.provider must be {EXPECTED_EXECUTOR_PROVIDER}")
+    if not d["executor"].get("provider"): raise ValidationError("state.executor.provider must be set")
     is_dict(d["artifacts"],"state.artifacts")
     for k in ARTIFACT_KEYS:
         if k not in d["artifacts"]: raise ValidationError(f"state.artifacts missing {k}")
@@ -107,7 +110,7 @@ def validate_artifact(kind: str, path: Path) -> None:
 
 def current_utc() -> str: return datetime.now(timezone.utc).isoformat()
 def init_state() -> dict[str,Any]:
-    return {"current_round":None,"state":"IDLE","scenario":None,"executor":{"runtime":"opencode","model":EXPECTED_EXECUTOR_MODEL,"provider":EXPECTED_EXECUTOR_PROVIDER,"call_method":"bash-wrapper"},"codex_review_count":0,"max_codex_reviews":2,"rca_revision_count":0,"max_rca_revisions":2,"budget":{"max_rounds":5,"max_total_minutes":180,"max_opencode_iterations_per_round":2},"artifacts":{"bug_packet":None,"rca_plan":None,"codex_review":None,"approved_plan":None,"implementation_report":None,"retest_report":None},"last_error":None}
+    return {"current_round":None,"state":"IDLE","scenario":None,"executor":{"runtime":EXECUTOR_RUNTIME,"model":configured_executor_model(),"provider":configured_executor_provider(),"call_method":EXECUTOR_CALL_METHOD},"codex_review_count":0,"max_codex_reviews":2,"rca_revision_count":0,"max_rca_revisions":2,"budget":{"max_rounds":5,"max_total_minutes":180,"max_opencode_iterations_per_round":2},"artifacts":{"bug_packet":None,"rca_plan":None,"codex_review":None,"approved_plan":None,"implementation_report":None,"retest_report":None},"last_error":None}
 def read_state() -> dict[str,Any]:
     if not STATE_PATH.exists():
         st=init_state(); save_json(STATE_PATH,st); return st
@@ -124,8 +127,17 @@ def config_value(key: str) -> str|None:
         indent=len(raw)-len(raw.lstrip(" ")); line=raw.strip(); k,v=line.split(":",1)
         while stack and stack[-1][0]>=indent: stack.pop()
         stack.append((indent,k.strip())); full=".".join(x[1] for x in stack)
-        if v.strip(): values[full]=v.strip().strip('"').strip("'")
+        if v.strip(): values[full]=v.strip().split("#",1)[0].strip().strip('"').strip("'")
     return values.get(key)
+
+def configured_executor_model() -> str:
+    return os.environ.get("AGENTFLOW_EXECUTOR_MODEL") or config_value("executor.model") or DEFAULT_EXECUTOR_MODEL
+
+def configured_executor_provider() -> str:
+    return os.environ.get("AGENTFLOW_EXECUTOR_PROVIDER") or config_value("executor.provider") or DEFAULT_EXECUTOR_PROVIDER
+
+def configured_executor_cli_model() -> str:
+    return os.environ.get("AGENTFLOW_EXECUTOR_CLI_MODEL") or os.environ.get("AGENTFLOW_EXECUTOR_MODEL") or config_value("executor.cli_model") or config_value("executor.model") or DEFAULT_EXECUTOR_CLI_MODEL
 
 def command_validate(argv):
     if len(argv)!=3: print("usage: validate-artifact <kind> <path>", file=sys.stderr); return 2
@@ -154,7 +166,7 @@ def command_update_state(argv):
 def command_init_round(argv):
     if len(argv)<2: print("usage: init-round <round-id> [scenario]", file=sys.stderr); return 2
     round_id=argv[1]; scenario=argv[2] if len(argv)>2 else None; rd=ROUNDS/round_id; (rd/"logs").mkdir(parents=True, exist_ok=True)
-    save_json(rd/"00-round-meta.json", {"round_id":round_id,"scenario":scenario,"created_at":current_utc(),"executor_usage":{"model":EXPECTED_EXECUTOR_MODEL,"provider":EXPECTED_EXECUTOR_PROVIDER,"estimated_credits_used":None,"input_tokens":None,"output_tokens":None,"cache_hit_tokens":None,"cache_miss_tokens":None}})
+    save_json(rd/"00-round-meta.json", {"round_id":round_id,"scenario":scenario,"created_at":current_utc(),"executor_usage":{"model":configured_executor_model(),"provider":configured_executor_provider(),"cli_model":configured_executor_cli_model(),"estimated_credits_used":None,"input_tokens":None,"output_tokens":None,"cache_hit_tokens":None,"cache_miss_tokens":None}})
     st=read_state()
     if st["state"] not in {"IDLE","DONE","FAILED"}: print(f"cannot init round while state is {st['state']}", file=sys.stderr); return 1
     st=init_state(); st["current_round"]=round_id; st["scenario"]=scenario; save_json(STATE_PATH,st); print(f"Initialized {round_id} at {rd}"); return 0
@@ -202,15 +214,12 @@ def command_doctor(argv):
         if p.exists() and not os.access(p,os.X_OK): print(f"FAIL not executable {rel}"); ok=False
     try: validate_artifact("state",STATE_PATH); print("OK   state.json valid")
     except ValidationError as exc: print(f"FAIL state invalid: {exc}"); ok=False
-    model=config_value("executor.model")
-    if model!=EXPECTED_EXECUTOR_MODEL: print(f"FAIL executor.model expected {EXPECTED_EXECUTOR_MODEL}, got {model!r}"); ok=False
-    else: print(f"OK   config executor.model={EXPECTED_EXECUTOR_MODEL}")
-    provider=config_value("executor.provider")
-    if provider!=EXPECTED_EXECUTOR_PROVIDER: print(f"FAIL executor.provider expected {EXPECTED_EXECUTOR_PROVIDER}, got {provider!r}"); ok=False
-    else: print(f"OK   config executor.provider={EXPECTED_EXECUTOR_PROVIDER}")
-    cli_model=config_value("executor.cli_model")
-    if cli_model!=EXPECTED_EXECUTOR_CLI_MODEL: print(f"FAIL executor.cli_model expected {EXPECTED_EXECUTOR_CLI_MODEL}, got {cli_model!r}"); ok=False
-    else: print(f"OK   config executor.cli_model={EXPECTED_EXECUTOR_CLI_MODEL}")
+    model=configured_executor_model()
+    provider=configured_executor_provider()
+    cli_model=configured_executor_cli_model()
+    print(f"OK   configured executor.model={model}")
+    print(f"OK   configured executor.provider={provider}")
+    print(f"OK   configured executor.cli_model={cli_model}")
     local_path=str(ROOT/".agentflow/bin")+os.pathsep+os.environ.get("PATH","")
     oc=shutil.which("opencode"); ab=shutil.which("agent-browser", path=local_path)
     print(f"OK   opencode found: {oc}" if oc else "FAIL opencode not found — required for a real run (no mock)"); ok = ok and bool(oc)
@@ -299,7 +308,9 @@ DIRECT_PATCH_BY_CLAUDE
 ## Executor Runtime
 OpenCode
 ## Executor Model
-mimo-v2.5
+{executor_model}
+## Executor CLI Model
+{executor_cli_model}
 ## Executor Call Method
 Bash wrapper script:
 .agentflow/bin/implement-with-opencode
@@ -341,7 +352,7 @@ def command_classify(argv):
     if not bp_p.exists(): print(f"missing bug-packet: {bp_p}", file=sys.stderr); return 1
     route,info=classify_bug(load_json(bp_p))
     if route=="TRIVIAL":
-        (ROUNDS/rid/"04-approved-plan.md").write_text(_TRIVIAL_PLAN.format(rid=rid,sym=info["symbol"]), encoding="utf-8")
+        (ROUNDS/rid/"04-approved-plan.md").write_text(_TRIVIAL_PLAN.format(rid=rid,sym=info["symbol"],executor_model=configured_executor_model(),executor_cli_model=configured_executor_cli_model()), encoding="utf-8")
         print(f"ROUTE: TRIVIAL ({info['class']}: {info['symbol']}) -> wrote 04-approved-plan.md"); return 0
     print("ROUTE: NEEDS_RCA"); return 0
 
@@ -359,7 +370,7 @@ def command_build_approved_plan(argv):
     def bl(items): return "\n".join(f"- {x}" for x in items) if items else "- (none)"
     def fl(items): return "\n".join(f"- `{x.get('path','?')}` — {x.get('reason','')}" for x in items) if items else "- (none)"
     forb=rca.get("forbidden_changes") or ["Do not change API contract.","Do not change schema.","Do not add a dependency.","Do not refactor unrelated code."]
-    md=f"# Approved Plan - {rid}\n\n## Approval Source\n{approval}\n\n## Executor Runtime\nOpenCode\n## Executor Model\nmimo-v2.5\n## Executor Call Method\nBash wrapper script:\n.agentflow/bin/implement-with-opencode\n\n## Scope\n{rca.get('root_cause','')}\n\n## Root Cause Summary\n{rca.get('root_cause','')}\n\n## Files Allowed To Modify\n{bl(rca.get('allowed_files_to_modify',[]))}\n\n## Files Forbidden To Modify\n{fl(rca.get('files_to_inspect_but_not_modify',[]))}\n\n## Forbidden Changes\n{bl(forb)}\n\n## Implementation Steps\n{bl(rca.get('implementation_plan',[]))}\n\n## Validation Commands\n{bl(rca.get('validation_plan',[]))}\n\n## E2E Retest Scenario\n- Re-run the failing scenario via agent-browser and confirm expected behavior.\n\n## Stop Conditions\n- If a required file does not exist, stop with PLAN_MISMATCH.\n- If implementation requires modifying files outside the allowlist, stop with PLAN_MISMATCH.\n- If validation failure is unrelated to the plan, stop and report.\n"
+    md=f"# Approved Plan - {rid}\n\n## Approval Source\n{approval}\n\n## Executor Runtime\nOpenCode\n## Executor Model\n{configured_executor_model()}\n## Executor CLI Model\n{configured_executor_cli_model()}\n## Executor Call Method\nBash wrapper script:\n.agentflow/bin/implement-with-opencode\n\n## Scope\n{rca.get('root_cause','')}\n\n## Root Cause Summary\n{rca.get('root_cause','')}\n\n## Files Allowed To Modify\n{bl(rca.get('allowed_files_to_modify',[]))}\n\n## Files Forbidden To Modify\n{fl(rca.get('files_to_inspect_but_not_modify',[]))}\n\n## Forbidden Changes\n{bl(forb)}\n\n## Implementation Steps\n{bl(rca.get('implementation_plan',[]))}\n\n## Validation Commands\n{bl(rca.get('validation_plan',[]))}\n\n## E2E Retest Scenario\n- Re-run the failing scenario via agent-browser and confirm expected behavior.\n\n## Stop Conditions\n- If a required file does not exist, stop with PLAN_MISMATCH.\n- If implementation requires modifying files outside the allowlist, stop with PLAN_MISMATCH.\n- If validation failure is unrelated to the plan, stop and report.\n"
     (rd/"04-approved-plan.md").write_text(md, encoding="utf-8"); print(f"Wrote {rd/'04-approved-plan.md'} (approval={approval})"); return 0
 
 def main(argv):

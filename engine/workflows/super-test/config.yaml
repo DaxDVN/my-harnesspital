@@ -1,10 +1,10 @@
-# Super-Test config — MiMo-led exploratory bug-harvesting. Reuses progressive-test's executor/provider.
+# Super-Test config — MiMo-led exploratory bug-harvesting. Reuses progressive-test's executor/toolchain.
 super_test:
   executor:
     runtime: auto                        # auto | opencode | mimo-code — BOTH can drive Super-Test
-    cli_model: xiaomi-token-plan-sgp/mimo-v2.5
-    provider: xiaomi-token-plan-sgp
-    model: mimo-v2.5
+    cli_model: xiaomi-token-plan-sgp/mimo-v2.5  # configurable; env SUPERTEST_CLI_MODEL overrides
+    provider: xiaomi-token-plan-sgp             # metadata/default provider, not a hard validator
+    model: mimo-v2.5                            # logical model metadata; env SUPERTEST_EXECUTOR_MODEL overrides
     browser_tool: agent-browser          # reused from progressive-test/.agentflow/bin/agent-browser
     role: DRIVER                          # Topology B: the executor (opencode OR mimo-code) drives
     driver_brief: engine/workflows/super-test/integrations/mimocode-super-test.md

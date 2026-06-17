@@ -5,7 +5,7 @@
 ```text
 Claude Code Orchestrator
   -> .agentflow/bin wrapper scripts
-  -> OpenCode executor using mimo-v2.5 via Xiaomi Token Plan Singapore
+  -> OpenCode executor using the configured cli_model
   -> agent-browser-compatible browser automation for E2E test/retest
   -> artifact files under .agentflow/rounds/<round-id>/
   -> Claude RCA subagent
@@ -49,7 +49,7 @@ Core transitions are enforced by `update-state`.
 
 ## Artifact Contract
 
-`validate-artifact` checks JSON parsing, required fields, enums, null executor RCA fields, and `mimo-v2.5` executor model in implementation/retest artifacts.
+`validate-artifact` checks JSON parsing, required fields, enums, null executor RCA fields, hard toolchain fields (`runtime=opencode`, `call_method=bash-wrapper`), and that implementation/retest artifacts report the configured executor model for the run.
 
 ## Plan Mismatch
 

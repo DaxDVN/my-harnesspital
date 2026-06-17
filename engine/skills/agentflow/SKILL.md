@@ -1,6 +1,6 @@
 ---
 name: agentflow
-description: Owner-invoked ONLY — autonomous FE-bug-fix loop. Claude is the LEAN state-machine ORCHESTRATOR (reads envelopes + validator results, NEVER long payloads) routing OpenCode/mimo-v2.5 (test/implement/retest via bash wrappers + agent-browser) ↔ Opus RCA subagent ↔ Codex review gate, over file artifacts. Trigger "/agentflow". Do NOT self-invoke (long, token-heavy, edits source).
+description: Owner-invoked ONLY — autonomous FE-bug-fix loop. Claude is the LEAN state-machine ORCHESTRATOR (reads envelopes + validator results, NEVER long payloads) routing OpenCode with the configured executor model (test/implement/retest via bash wrappers + agent-browser) ↔ Opus RCA subagent ↔ Codex review gate, over file artifacts. Trigger "/agentflow". Do NOT self-invoke (long, token-heavy, edits source).
 ---
 
 # agentflow — orchestrator (envelope-router)
