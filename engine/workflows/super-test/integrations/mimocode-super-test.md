@@ -41,12 +41,16 @@ module name · the running app URL · (optional) the worktree path to enforce bo
 1. **Init:** `bash engine/workflows/super-test/bin/supertest init-run <module>` → note the `RUN_DIR`. Fill
    `<RUN_DIR>/01-module-test-map.md` (flows/features to sweep; mark inferred ones).
 2. **HARVEST (you, via agent-browser CLI):** read `engine/workflows/super-test/protocol/harvest-sweep.md` and
-   obey it. Drive the browser with the agent-browser CLI:
+   obey it, including the mandatory observation anti-stall ladder. Drive the browser with the agent-browser CLI:
    `engine/workflows/progressive-test/.agentflow/bin/agent-browser <navigate|snapshot|click|fill|...>` against
-   the app URL. For EACH flow: PASS→update `02-coverage-map.md`; BUG→append `04-bug-catalog.md` (+ evidence) →
-   bypass→`05-bypass-log.md`; can't continue→`06-blocked-flows.md`. Update `00-super-test-state.md` counts.
-   **Do NOT edit source code during harvest.** At a stop condition (config `harvest`) write `07-opus-request.md`.
-   Verify yourself: `bash engine/workflows/super-test/bin/supertest validate-run <RUN_DIR>`.
+   the app URL. Do not rely on brittle shell pipelines like `snapshot | grep "row "` as proof. If a snapshot is
+   empty or misses a virtualized table/grid, call:
+   `engine/workflows/super-test/bin/agent-browser-evidence --session <session> --out-dir <RUN_DIR>/evidence/<flow-id>`.
+   For EACH flow: PASS→update `02-coverage-map.md`; BUG→append `04-bug-catalog.md` (+ evidence) →
+   bypass→`05-bypass-log.md`; can't continue→`06-blocked-flows.md`; partially testable→mark `PARTIAL`.
+   Update `00-super-test-state.md` counts. **Do NOT edit source code during harvest.** At a stop condition
+   (config `harvest`) write `07-opus-request.md`. Verify yourself:
+   `bash engine/workflows/super-test/bin/supertest validate-run <RUN_DIR>`.
 3. **CALL OPUS (this is where you call Claude):**
    `bash engine/workflows/super-test/bin/call-opus-batch-rca <module> <run-id>` → it runs `claude` (Opus,
    `mh-batch-rca`) which clusters the bugs + writes `08-opus-batch-rca.md` + `10-approved-repair-plan.md`

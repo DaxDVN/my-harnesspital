@@ -34,7 +34,7 @@ super_test:
     forbidden: [source_code_change, db_mutation, disable_validation, mock_api_without_policy, treat_bypass_as_pass]
 
   opus:                                   # M2 — the batch-RCA specialist (NOT an orchestrator)
-    model: claude-opus-4-8
+    model: opus                          # CLI alias (version-robust). Headless call adds: --permission-mode bypassPermissions --max-turns --add-dir + timeout (guard hook still enforces BLOCKs)
     effort: max
     call_style: file_handoff             # short prompt; long content in files; return status+path only
     output_stdout_policy: status_only

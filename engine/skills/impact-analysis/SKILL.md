@@ -11,7 +11,7 @@ CodeGraph for dependency analysis — never hand-roll it.** Full contract: `engi
 ## Input
 The proposed change: target symbol(s)/file(s) — from a fix-plan, a `specs/<m>/07-08` design, a task, or a worktree diff.
 
-## Steps (router; write artifacts under `engine/workflows/impact-analysis/rounds/<id>/`)
+## Steps (router; write artifacts under `engine/workflows/impact-analysis/rounds/<id>/` — get `<id>` via `python engine/workflows/_shared/run-init.py impact-analysis` → run-NNN + `00-run-meta` + `logs/`, per `_shared/run-memory.md`)
 1. List the target symbols/files.
 2. **Blast radius via CodeGraph** (run from the indexed repo — `myhospital-be` / `myhospital-fe` / the worktree): `codegraph impact <symbol>` + `codegraph affected <path>` per target. This is the dependency engine.
 3. Layer the non-code dimensions onto the CodeGraph result: **BE** (entity/schema/migration/service/api/validation/permission/tests) · **FE** (route/component/form/api-client/hooks/cache/testid) · **API contract** (req/resp/error/back-compat/consumers) · **business** (rule/state-machine/audit) · **testing** (affected tests + E2E to rerun + regression candidates).

@@ -144,7 +144,7 @@ Design principle (inherited from the convergence memo, `mh-implement/SKILL.md:8`
 
 ### F8 — Self-review-diff + E2E
 - **Input:** the diff.
-- **Do:** (B5) run `mh-review` on **only the diff** (explicit file set = changed files) — reviewer D3/D7/D10 already carry the FE bug-classes (`checklist.md:35,59,77`); fix what it flags now. For visible UI, run the dev server + smoke login (`HMU`/`admin`/`123456`). For a real user flow, run the FE E2E path (`engine/workflows/progressive-test/` → agent-browser) — the testids added in F6 make this fast.
+- **Do:** (B5) run `mh-review` on **only the diff** (explicit file set = changed files) — reviewer D3/D7/D10 already carry the FE bug-classes (`checklist.md:35,59,77`); fix what it flags now. For visible UI, run the dev server + smoke login (`bvtest3`/`lynkhanh9822@gmail.com`/`12.[s7HXZQ;NfAoF`). For a real user flow, run the FE E2E path (`engine/workflows/progressive-test/` → agent-browser) — the testids added in F6 make this fast.
 - **Pitfall prevented:** pushing regressions/convention drift to a later review round (the thing that makes review take 3+ rounds); shipping a flow that doesn't actually work in the browser.
 - **Done-check:** self-review findings closed; UI verified in browser; E2E green (when the feature is a flow). Then summarize: files changed, contract items honored (A–J), validation commands run + results, residual risks.
 

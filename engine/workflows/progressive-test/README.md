@@ -97,6 +97,11 @@ Wrappers keep logical `executor.model: mimo-v2.5` for contract validation, then 
 opencode run --model xiaomi-token-plan-sgp/mimo-v2.5 "<prompt>"
 ```
 
+The wrappers also auto-retry the specific upstream `Request Error status 400 · non-retryable` failure once after a
+short delay, and they retry a stuck `opencode run` after a timeout. Tune it with
+`SUPERTEST_OPENCODE_RETRY_ATTEMPTS`, `SUPERTEST_OPENCODE_RETRY_DELAY_SECS`,
+`SUPERTEST_OPENCODE_RUN_TIMEOUT_SECS`, and `SUPERTEST_OPENCODE_TIMEOUT_KILL_AFTER_SECS` if needed.
+
 ## Agent Boundaries
 
 - Claude Code Orchestrator: state, wrappers, RCA/Codex calls, approved plan. No source edits.

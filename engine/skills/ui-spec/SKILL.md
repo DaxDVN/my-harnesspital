@@ -13,7 +13,7 @@ python engine/workflows/_shared/gate-check.py <module> --require 02-requirements
 ```
 Exit `2` = **STOP**: `02-requirements` missing/stub → `REQUIRES_SPEC_DISCOVERY` (the owner authors requirements first); a blocking `05` line → `REQUIRES_BA_DECISION`. Also STOP if no mockup images were provided (`BLOCKED_NO_MOCKUPS`) — there is nothing to inventory. No UI-spec on a stub requirement or without evidence.
 
-## Steps (write INTO `specs/<module>/03-ui.md`; envelope under `engine/workflows/ui-spec/rounds/<id>/`)
+## Steps (write INTO `specs/<module>/03-ui.md`; envelope under `engine/workflows/ui-spec/rounds/<id>/` — get `<id>` via `python engine/workflows/_shared/run-init.py ui-spec` → run-NNN + `00-run-meta` + `logs/`, per `_shared/run-memory.md`)
 1. **Intake** — read the DOCX (use `rga` for `.docx/.pdf`) + the owner's `02-requirements`/`07-schema`. List the screens in scope.
 2. **View mockups (MULTIMODAL)** — open each PNG with the **Read tool** (it renders images) and extract a **UI-needs inventory**: every screen / region / component / state / field / table / form / modal / filter / status / action / permission-gated element.
 3. **Deep FE reuse-audit** — for each UI-need search the FE: **CodeGraph first** (`cd myhospital-fe && codegraph explore "<need>"` / `codegraph node <symbol>`), then the warehouse exemplar (**GOOD parts only** — see `engine/rules/frontend.md`) + shadcn `src/components/ui/*`. **Fan out** `Explore`/`general-purpose` subagents **by UI region** for a large module (depth + speed); the parent owns the merge.

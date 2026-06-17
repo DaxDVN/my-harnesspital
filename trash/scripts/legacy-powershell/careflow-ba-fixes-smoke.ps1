@@ -24,9 +24,9 @@ $results = [ordered]@{}
 try {
     $auth = Post-Json "$base/auth" @{
         provider = 'credentials'
-        UserName = 'admin'
-        Password = '123456'
-        Meta     = @{ code = 'HMU' }
+        UserName = 'lynkhanh9822@gmail.com'
+        Password = '12.[s7HXZQ;NfAoF'
+        Meta     = @{ code = 'bvtest3' }
     }
     $results['auth'] = if ($auth.UserId) { 'PASS' } else { "FAIL: no UserId" }
 }

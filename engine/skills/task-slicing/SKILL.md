@@ -22,7 +22,7 @@ e.g. Slice1 BE minimal model/API + FE api-client smoke · Slice2 list/detail · 
 ## Each task — REQUIRED fields (a task missing any is INVALID — do not emit it)
 `id` · `slice` · goal · inputs · **files-allowed-to-modify** (non-empty allowlist) · files-forbidden · steps · **validation commands** (non-empty, actually runnable) · expected artifact · dependencies · risk · rollback. No vague "implement API". The allowlist + validation are what let `/incremental-impl` run one task safely — without them the executor is unbounded.
 
-## Steps (write INTO `specs/<module>/10-plan.md`; envelope under `engine/workflows/task-slicing/rounds/<id>/`)
+## Steps (write INTO `specs/<module>/10-plan.md`; envelope under `engine/workflows/task-slicing/rounds/<id>/` — get `<id>` via `python engine/workflows/_shared/run-init.py task-slicing` → run-NNN + `00-run-meta` + `logs/`, per `_shared/run-memory.md`)
 1. Strategy + vertical slices. 2. Per-task breakdown with the fields above. 3. File-allowlist per task (executor edits nothing outside it). 4. Validation per task (build/typecheck/unit/API/agent-browser). 5. Dependency order. 6. Rollback notes. 7. Update `04-traceability` (requirement → task → test).
 
 ## Boundaries

@@ -436,7 +436,7 @@ fix's VERIFY step (and a regression test) will assert against. Save artifacts un
 
 | Layer | Capture |
 |---|---|
-| Symptom | Exact steps, expected vs observed, env (slot/worktree, hospital `HMU`, user), screenshot. |
+| Symptom | Exact steps, expected vs observed, env (slot/worktree, hospital `bvtest3`, user), screenshot. |
 | L1 render | Component name + the prop/state value that's wrong vs the data it received; render-count if loop. |
 | L2 RQ | The mutation site + its `invalidateQueries` keys (present/absent); whether refetch fires. |
 | L3 IDB | The cached row JSON from Application→IndexedDB; `window.__idbLogs.export()`; which failure mode (stale / missing / filtered-out / store-missing); the entity name + key. |

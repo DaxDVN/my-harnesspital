@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""learning_trigger — UserPromptSubmit hook: reliably NUDGE a second-brain capture.
+"""learning_trigger — UserPromptSubmit hook: reliably NUDGE second-brain capture AND recall.
 
-The #1 self-learning gap was that capture depended on the agent *remembering*. This hook makes it
-deterministic: when the owner's prompt signals a durable learning, it injects a reminder so the agent
-captures before ending the turn. It **NEVER writes anything** — capture is the agent running
+Two self-learning gaps, both "the agent forgets": (1) capture — when the owner signals a durable learning,
+nudge a provisional second-brain write; (2) recall — when the prompt signals relevant WORK and second-brain
+has notes, nudge consulting the applicability MAP (so on-demand notes don't rot unread). This hook makes both
+deterministic. It **NEVER writes anything** — capture is the agent running
 `scripts/learning_capture.py`, which lands in **second-brain/ ONLY**. Promotion to main-brain stays
 OWNER-gated via `/promote` (the guard blocks agent main-brain writes regardless). Fail-open: any error or a
 non-trigger prompt → exit 0 with no output.
@@ -38,8 +39,42 @@ REMINDER = (
 )
 
 
+WORK_TRIGGERS = [
+    r"\bfix\b", r"\bsửa\b", r"\bdebug\b", r"\brca\b", r"\bbug\b",
+    r"\breview\b", r"\baudit\b", r"\bduyệt\b", r"\brefactor\b",
+    r"\bimplement\b", r"\bbuild\b", r"\bscaffold\b", r"\bcode\b",
+    r"\blàm\b", r"triển khai", r"\btạo\b",
+]
+_RE_WORK = re.compile("|".join(WORK_TRIGGERS), re.IGNORECASE)
+
+RECALL_REMINDER = (
+    "[learning-recall] Relevant work + second-brain has notes. BEFORE acting, consult the applicability MAP "
+    "(do NOT read the full second-brain):\n"
+    "  python scripts/learning_recall.py --context \"<this task in a few words>\"\n"
+    "Open ONLY the matched notes — provisional strong-hints: apply if they fit, but verify."
+)
+
+
 def detect(prompt: str) -> bool:
     return bool(prompt and _RE.search(prompt))
+
+
+def detect_work(prompt: str) -> bool:
+    return bool(prompt and _RE_WORK.search(prompt))
+
+
+def _has_live_notes() -> bool:
+    from pathlib import Path
+    sb = Path(__file__).resolve().parents[2] / "second-brain"
+    try:
+        for p in sb.glob("*.md"):
+            if p.name in ("INDEX.md", "README.md"):
+                continue
+            if "status: provisional" in p.read_text(encoding="utf-8", errors="ignore")[:400]:
+                return True
+    except Exception:
+        return False
+    return False
 
 
 def _self_test() -> int:
@@ -48,6 +83,10 @@ def _self_test() -> int:
         assert detect(p), f"missed trigger: {p!r}"
     for p in ("fix the login bug please", "the test always passes now", "", "implement the page"):
         assert not detect(p), f"false trigger: {p!r}"
+    for p in ("fix the login bug", "implement the page", "review my diff", "sửa bug nội trú"):
+        assert detect_work(p), f"missed work: {p!r}"
+    for p in ("hello there", "what is this", ""):
+        assert not detect_work(p), f"false work: {p!r}"
     print("learning_trigger self-test: OK")
     return 0
 
@@ -65,6 +104,8 @@ def main(argv: list[str]) -> int:
         return 0
     if detect(str(prompt)):
         print(REMINDER)
+    elif detect_work(str(prompt)) and _has_live_notes():
+        print(RECALL_REMINDER)
     return 0
 
 

@@ -70,8 +70,27 @@ The command:
 - Creates branch `feature/<slug>` in both repos.
 - Writes FE `.env` for the selected FE/BE ports.
 - Writes BE `.env` for the selected BE port and SQL slot.
+- Patches local-only BE runtime config so direct `dotnet run` also uses the selected slot:
+  `MyHospital/appsettings.Development.json`, `MyHospital/Properties/launchSettings.json`,
+  and `MyHospital.Reporting/appsettings.json`.
 - Writes `.myhospital-worktree.json` so agents can resolve slug → slot/ports without guessing.
-- Optionally syncs slot DB from the main DB.
+- Optionally syncs slot DB from the main DB, using the new BE worktree migrations by default.
+
+`list` validates both `.env` and the hidden BE runtime files above. If it prints `MISMATCH`,
+do not guess ports manually; run `repair-config`.
+
+## Repair Existing Worktree Config
+
+Use this when an existing worktree has stale port/DB settings, or after script changes that affect local runtime config:
+
+```fish
+python scripts/worktree.py repair-config --slug fix-admission-birthdate
+python scripts/worktree.py repair-config --all
+```
+
+This rewrites FE `.env`, BE `.env`, BE appsettings/launchSettings/reporting config, and metadata
+from the worktree slot. BE local config patches are marked `skip-worktree` so script-managed local
+runtime changes do not make a new task branch dirty.
 
 ## Multi-Agent Zellij Sessions
 

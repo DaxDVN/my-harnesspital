@@ -40,8 +40,20 @@ VALID_CONFS    = {"low", "medium", "high"}
 
 FRONTMATTER_KEYS = [
     "title", "date", "status", "source", "scope",
-    "confidence", "owner_confirmed", "proposed_target", "tags", "expires",
+    "confidence", "owner_confirmed", "proposed_target", "tags",
+    "applies_tasks", "applies_globs", "applies_keywords", "expires",
 ]
+
+# INDEX.md is the applicability MAP (kept in sync with learning_recall.rebuild_map's format)
+INDEX_HEADER = (
+    "# second-brain index — the APPLICABILITY MAP\n\n"
+    "Read THIS file to know what second-brain holds + WHEN each note may apply. Do **NOT** read the full\n"
+    "second-brain. Pull only fitting notes: `python scripts/learning_recall.py --context \"<your task>\"`.\n"
+    "A match MAY apply (or not, or several) — apply if it fits, but **verify** (provisional). `/promote` when proven.\n\n"
+    "| slug | scope | applies when (tasks · keywords) | conf | → target |\n"
+    "|---|---|---|---|---|\n"
+)
+EMPTY_ROW = "| _(none yet)_ | | | | |\n"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -55,10 +67,12 @@ def slugify(text: str) -> str:
     return text[:60].rstrip("-")
 
 
+def _yaml_list(xs) -> str:
+    return "[" + ", ".join(xs) + "]" if xs else "[]"
+
+
 def build_frontmatter(args, today: str) -> str:
-    tags_raw = args.tags or []
-    tags_yaml = "[" + ", ".join(tags_raw) + "]" if tags_raw else "[]"
-    expires   = args.expires or '""'
+    expires = args.expires or '""'
     lines = [
         "---",
         f'title: "{args.title}"',
@@ -69,7 +83,10 @@ def build_frontmatter(args, today: str) -> str:
         f"confidence: {args.confidence}",
         "owner_confirmed: false",
         f"proposed_target: {args.proposed_target}",
-        f"tags: {tags_yaml}",
+        f"tags: {_yaml_list(args.tags or [])}",
+        f"applies_tasks: {_yaml_list(args.applies_tasks or [])}",
+        f"applies_globs: {_yaml_list(args.applies_globs or [])}",
+        f"applies_keywords: {_yaml_list(args.applies_keywords or [])}",
         f"expires: {expires}",
         "---",
     ]
@@ -122,25 +139,19 @@ def build_seen_again_section(today: str, args) -> str:
 
 
 def ensure_index(index_path: Path) -> None:
-    """Create INDEX.md with header if it does not exist."""
+    """Create INDEX.md (the applicability map) with header if it does not exist."""
     if not index_path.exists():
-        index_path.write_text(
-            "# second-brain index\n\n"
-            "One line per learning: `- [slug](slug.md) — hook`. "
-            "Promoted/graduated entries stay as **tombstones**\n"
-            "(`- ~~slug~~ → promoted to main-brain` or `→ graduated to skill <x>`) "
-            "so we never re-learn them.\n\n"
-            "_(empty — no learnings captured yet.)_\n",
-            encoding="utf-8",
-        )
+        index_path.write_text(INDEX_HEADER + EMPTY_ROW, encoding="utf-8")
 
 
 def append_index_line(index_path: Path, slug: str, filename: str, args) -> None:
     content = index_path.read_text(encoding="utf-8")
-    # Remove the "(empty)" placeholder if present
-    content = content.replace("_(empty — no learnings captured yet.)_\n", "").rstrip()
-    new_line = f"\n- [{slug}]({filename}) — {args.proposed_target} | {args.confidence} | {args.source}"
-    index_path.write_text(content + new_line + "\n", encoding="utf-8")
+    content = content.replace(EMPTY_ROW, "")
+    content = content.replace("_(empty — no learnings captured yet.)_\n", "")  # legacy placeholder
+    content = content.rstrip()
+    when = (",".join(args.applies_tasks or []) or "any") + " · " + (",".join(args.applies_keywords or []) or "—")
+    row = f"\n| [{slug}]({filename}) | {args.scope} | {when} | {args.confidence} | {args.proposed_target} |"
+    index_path.write_text(content + row + "\n", encoding="utf-8")
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +274,9 @@ def self_test() -> None:
                 evidence       = None
                 boundaries     = None
                 tags           = []
+                applies_tasks  = ["fix", "review"]
+                applies_globs  = ["myhospital-be/**"]
+                applies_keywords = ["listing"]
                 expires        = None
 
             dest = capture(FakeArgs())
@@ -353,6 +367,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--why",             required=False, help="What failure this prevents")
     p.add_argument("--boundaries",      default=None, help="Where this does NOT apply")
     p.add_argument("--tags",            nargs="*", default=[], help="Optional tag list")
+    p.add_argument("--applies-tasks",   nargs="*", default=[], dest="applies_tasks",
+                   help="applies_when TASKS: fix review implement design scaffold test any")
+    p.add_argument("--applies-globs",   nargs="*", default=[], dest="applies_globs",
+                   help="applies_when GLOBS: file patterns that signal relevance (e.g. myhospital-be/**)")
+    p.add_argument("--applies-keywords", nargs="*", default=[], dest="applies_keywords",
+                   help="applies_when KEYWORDS: terms that signal relevance (used by learning_recall)")
     p.add_argument("--expires",         default=None, help="Optional revalidation hint")
     p.add_argument("--self-test",       action="store_true", help="Run internal tests and exit")
     return p

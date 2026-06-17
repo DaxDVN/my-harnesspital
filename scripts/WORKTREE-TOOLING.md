@@ -31,21 +31,29 @@ python scripts/worktree.py list          # table: slug, slot, FE/BE/SQL ports
 python scripts/worktree.py info --slug fix-admission-birthdate
 python scripts/worktree.py init-db-slots
 python scripts/worktree.py create --slug fix-admission-birthdate --slot 1
+python scripts/worktree.py repair-config --slug fix-admission-birthdate
+python scripts/worktree.py repair-config --all
 python scripts/worktree.py sync-db --slot 1 --be-path worktrees/fix-admission-birthdate/be
 python scripts/worktree.py cleanup --slug fix-admission-birthdate
 python scripts/worktree.py sync-main --dry-run
 ```
 
 Use `--dry-run` before risky commands. `sync-db`, `cleanup`, and `sync-main` have confirmation prompts unless a `--yes` or dry-run path is used.
+`list` checks `.env` plus local-only BE runtime files (`appsettings.Development.json`, `launchSettings.json`, reporting appsettings). A `MISMATCH` status means the worktree may run on the wrong FE/BE/SQL port even if `.env` looks correct; run `repair-config` before starting FE/BE.
 
 ## Create vs Join
 
 - `create`, `tạo`, `setup worktree mới`, `chuẩn bị worktree mới`, `mở task <slug> slot <n>`: run `python scripts/worktree.py create --slug <slug> --slot <slot>`.
 - Light/no DB sync requests: add `--skip-db-sync --skip-db-init --skip-fe-install` (touches no Docker/SQL).
 - Preview requests: add `--skip-db-sync --skip-fe-install --dry-run`.
+- `repair`, `fix port`, `config sai`, `BE đọc nhầm DB/port`: run `python scripts/worktree.py repair-config --slug <slug>` or `--all`.
 - `join`, `mở lại`, `attach`, `vào worktree đang có`: join existing; do not create. Run `python scripts/worktree.py list`, use the printed slot/ports, check the folder, then open Zellij sessions.
 - `cleanup`, `xóa`, `dọn worktree`: confirm because this is destructive, then run cleanup.
 - `sync`: run `sync-main` or `sync-db` depending on whether the user asked about branches or database.
+
+`create` and `repair-config` keep direct `dotnet run` aligned with `worktree.py run-be` by syncing
+the slot-aware `.env` values into the BE launch profile. That includes CORS, Redis, JWT/Firebase,
+ServiceStack/license prerequisites, FE login URL, BE port, and SQL slot connection strings.
 
 ## Zellij Sessions
 

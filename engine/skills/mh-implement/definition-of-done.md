@@ -14,7 +14,7 @@ python scripts/mh_scan --root worktrees/<slug>/fe --scope (git -C worktrees/<slu
 3. **Structural lint** — `python scripts/mh_scan --root worktrees/<slug>/fe --scope <changed> --format summary` (wraps the ast-grep pack in `scripts/sgconfig/`). Flags dead `@/lib/dtos/dtos` import (**FE-V1**, HIGH), raw `fetch()` in UI (**FE-V2/V5**), master-data name-compare like `=== 'kinh'` (**FE-V3**), `serviceStackClient.*` in a component. WARN hits are advisory — verify against audit §6 legit exceptions (blob fetch, dynamic-form, sub-form FormProvider) before "fixing".
 4. **No committed backups** — `fd -t f '\.(bak|orig|v2\.bak)$' <changed dir>` must be empty (audit **V12**: 14 `.v2.bak` in retail).
 5. **Contract** — if a generated file would change: `npm run dtos:update && npm run client:generate`, then re-run step 1. Never hand-edit generated files.
-6. **Browser** — for visible UI, run the dev server and verify (smoke login: customer `HMU` / `admin` / `123456`).
+6. **Browser** — for visible UI, run the dev server and verify (smoke login: customer `bvtest3` / `lynkhanh9822@gmail.com` / `12.[s7HXZQ;NfAoF`).
 
 ## BE gate (if BE touched)
 - `dotnet build` clean. EF: change the model + `dotnet ef migrations add` (never hand-edit a generated migration). Conventions per `backend.md` (BaseService, no transaction/lock, no N+1, tenant scope, soft-delete/audit auto).

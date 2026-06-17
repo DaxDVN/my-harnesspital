@@ -30,6 +30,10 @@ Environment:
   SUPERTEST_CLI_MODEL=xiaomi-token-plan-sgp/mimo-v2.5
   SUPERTEST_MIMO_CODE_BIN=mimo
   SUPERTEST_MIMO_CODE_CMD='mimo run ... {prompt_file}'
+  SUPERTEST_OPENCODE_RETRY_ATTEMPTS=2
+  SUPERTEST_OPENCODE_RETRY_DELAY_SECS=5
+  SUPERTEST_OPENCODE_RUN_TIMEOUT_SECS=1800
+  SUPERTEST_OPENCODE_TIMEOUT_KILL_AFTER_SECS=30
   AGENTFLOW_TARGET_URL=http://...
   SUPERTEST_TARGET_REPO=/path/to/worktrees/<slug>/fe-or-be
 EOF
@@ -78,6 +82,7 @@ need_exec engine/workflows/super-test/bin/repair
 need_exec engine/workflows/super-test/bin/retest
 need_exec engine/workflows/super-test/bin/call-opus-batch-rca
 need_exec engine/workflows/super-test/bin/call-codex-review
+need_exec engine/workflows/super-test/bin/agent-browser-evidence
 
 brief="$ROOT/engine/workflows/super-test/integrations/mimocode-super-test.md"
 if [ -f "$brief" ]; then
@@ -85,6 +90,7 @@ if [ -f "$brief" ]; then
   grep -qi 'allowlist' "$brief" && ok "brief:allowlist boundary" || fail "brief does not mention allowlist boundary"
   grep -qi 'no source edits\|source edits' "$brief" && ok "brief:harvest source-edit boundary" || fail "brief does not mention source-edit boundary"
   grep -qi 'agent-browser' "$brief" && ok "brief:agent-browser" || fail "brief does not mention agent-browser"
+  grep -qi 'agent-browser-evidence' "$brief" && ok "brief:anti-stall evidence fallback" || fail "brief does not mention agent-browser-evidence fallback"
 fi
 
 rt="$(supertest_runtime)"

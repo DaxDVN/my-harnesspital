@@ -18,8 +18,21 @@ shared across tools and fresh sessions** lives HERE, versioned in the repo.
   On promotion the source entry is removed and a tombstone line is left in `INDEX.md`.
 
 ## Files
-- `INDEX.md` — one line per entry (`slug — hook`); promoted/graduated entries become tombstones.
+- `INDEX.md` — the **applicability MAP**: a table `slug · scope · applies-when (tasks·keywords) · conf · target`.
+  Read THIS to know what's here + WHEN each note may apply; promoted entries become tombstones. Regenerate from
+  entry frontmatter with `python scripts/learning_recall.py --rebuild-map` (canonical — no drift).
 - `YYYY-MM-DD-<slug>.md` — one learning: frontmatter (`title`, `date`, `status: provisional`, `source`,
-  `scope`, `confidence`, `owner_confirmed`, `proposed_target`, `tags`, `expires`) + **What** / **Evidence** /
-  **Why** / **How To Apply** / **Boundaries** / **Promotion Recommendation**. Create via `scripts/learning_capture.py`
-  (enforces the enums; recurrence appends "Seen again" to the existing provisional entry, any date).
+  `scope`, `confidence`, `owner_confirmed`, `proposed_target`, `tags`, **`applies_tasks`**, **`applies_globs`**,
+  **`applies_keywords`**, `expires`) + **What** / **Evidence** / **Why** / **How To Apply** / **Boundaries** /
+  **Promotion Recommendation**. Create via `scripts/learning_capture.py` (enforces enums; recurrence appends
+  "Seen again" to the existing provisional entry, any date).
+
+## Recall — how a note gets USED (not just written)
+second-brain is on-demand (NOT auto-loaded — saves tokens). To stop notes rotting unread, each note declares
+`applies_when`, and you QUERY the map instead of reading the whole buffer:
+- `python scripts/learning_recall.py --context "<your task>"` → only the notes whose scope/tasks/keywords fit.
+- `--all` prints the map; `--rebuild-map` regenerates it from frontmatter.
+- The `learning_trigger` UserPromptSubmit hook NUDGES recall when a work prompt arrives **and** notes exist.
+
+A match MAY apply (or not, or several) — apply if it fits, but **verify** (provisional). Never read the full
+second-brain when the map + a query suffice. Promote proven notes with `/promote`.

@@ -10,6 +10,10 @@ each reinvent gates, receipts, or state. One source → no drift.
 | `validate-envelope.py` | validate a receipt + detect payload drift (`--payload`) | all (CI + skill close-out) |
 | `gate-check.py` | deterministic SDD precondition gate (B) | technical-design · task-slicing · incremental-impl |
 | `module-state.py` | per-module SDLC state on `00-module-state.md` (C9) | technical-design · task-slicing · incremental-impl |
+| `allowlist-check.py` | writer-boundary check on the actual git diff | super-test · fix/impl workflows |
+| `run-init.py` | create an isolated `rounds/run-NNN/` + `00-run-meta` + `logs/` | all SDLC workflows |
+| `run-memory.md` | run-isolation + 3 data-class contract (IO · logs · report) | ALL — read before adding a workflow |
+| `step-fuzzing.md` | in-step behavioral fuzzing (flow fixed, step random) | super-test · progressive-test |
 
 Each script self-tests: `python engine/workflows/_shared/<script>.py --self-test` (run by `harness_doctor`).
 

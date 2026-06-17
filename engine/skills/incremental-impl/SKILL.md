@@ -21,7 +21,7 @@ python engine/workflows/_shared/gate-check.py <module> --require 10-plan
 ```
 Exit `2` = **STOP `REQUIRES_TASK_SLICING`** (no approved plan). Then confirm the named task id exists in `10-plan.md` **and** carries a non-empty allowlist + validation; if not → **STOP**, route back to `/task-slicing` (a missing allowlist is a slicing defect, not something to improvise). Gate open → `module-state.py <module> --set IMPLEMENTING --by incremental-impl`.
 
-## Steps (envelope artifacts under `engine/workflows/incremental-impl/rounds/<id>/`)
+## Steps (envelope artifacts under `engine/workflows/incremental-impl/rounds/<id>/` — get `<id>` via `python engine/workflows/_shared/run-init.py incremental-impl` → run-NNN + `00-run-meta` + `logs/`, per `_shared/run-memory.md`)
 1. Read the ONE task (id · allowlist · steps · validation) from `10-plan.md`. Refuse a vague/whole-module task — that's a task-slicing failure.
 2. (optional) `/impact-analysis` if the task is HIGH-risk.
 3. **Delegate to `/mh-implement`** in the worktree — it already does convention preflight, reuse discovery, allowlist-bounded edits, validation (`tsc`/`eslint`/`mh_scan`), and self-review-diff. Do NOT duplicate that.

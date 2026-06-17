@@ -54,7 +54,7 @@ Root: `/home/dax/Documents/arabica/roast`
 - **Stop Protocol** — a fixed `BLOCKED_RULE / Evidence / Why it matters / Recommended path` format.
 - **Mandatory Discovery, Multi-Agent Execution, Validation Contract, Workspace File Organization** (the table that dictates `docs/tasks/`, `docs/session-notes/`, `specs/<module>/`).
 
-**CLAUDE.md** imports AGENTS.md (`@AGENTS.md`) and adds Claude-specific layers: routing, operating rules, the graphify SessionStart-hook behavior, the `HMU/admin/123456` smoke login, a "Subagents v1.0" model-tier policy (Haiku/Sonnet/Opus selection), and a graphify rules block.
+**CLAUDE.md** imports AGENTS.md (`@AGENTS.md`) and adds Claude-specific layers: routing, operating rules, the graphify SessionStart-hook behavior, the `bvtest3/lynkhanh9822@gmail.com/12.[s7HXZQ;NfAoF` smoke login, a "Subagents v1.0" model-tier policy (Haiku/Sonnet/Opus selection), and a graphify rules block.
 
 **Duplication / conflict / delegation:**
 - Mostly **clean delegation** (CLAUDE.md → AGENTS.md → package files).

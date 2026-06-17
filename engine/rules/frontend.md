@@ -313,6 +313,22 @@ Preferred pattern:
 - Reset form on open/edit identity changes.
 - Use unsaved-change guard for sheets when relevant.
 
+Overlay/testability contract:
+
+- Sheet/Dialog/Drawer content must be discoverable by both accessibility and automation. Prefer accessible
+  names first (`SheetTitle`, labels, `aria-label` on icon-only buttons), then add stable automation anchors
+  only where the flow needs them.
+- For shared overlay primitives, the content wrapper should expose a stable container selector such as
+  `data-slot="sheet-content"` / `data-slot="dialog-content"`. For feature-owned overlays, add a
+  feature-specific `data-testid` on the content wrapper when E2E/agent-browser will drive the flow.
+- Do not diagnose "portal/overlay is invisible to agent-browser" from a single failed selector snapshot.
+  Verify with `agent-browser snapshot -i -c`, then a semantic scoped snapshot such as
+  `agent-browser snapshot -s '[role="dialog"], [role="alertdialog"]' -c`, then DOM attrs (`aria-hidden`,
+  `inert`, visibility) and screenshot only as fallback.
+- Avoid blanket `data-testid` on every field. If a field has a good accessible label, agent-browser can use
+  the snapshot/ref or label. Add test ids for ambiguous icon buttons, repeated row actions, virtualized rows,
+  and key flow anchors.
+
 Inventory-specific notes:
 
 - `inventory-form-sheet.tsx` currently keeps an inline schema and direct detail fetch for race avoidance.
@@ -472,6 +488,8 @@ Use these as reviewer guardrails:
 - Are API errors handled by generated-client defaults or `handleApiError` when custom UI is needed?
 - Is `disableErrorToast` paired with a concrete alternate error state?
 - Are forms using RHF + zod, `Sheet`, `AlertDialog`, and unsaved guards when needed?
+- Do Sheet/Dialog/Drawer flows have accessible labels and stable overlay anchors (`data-slot` or scoped
+  `data-testid`) so agent-browser evidence can target the active dialog?
 - Are new forms using schema factories when validation messages need i18n?
 - Is there any client-side N+1 query/API call per row?
 - Are authoritative financial/inventory/posted totals coming from BE rather than FE calculations?

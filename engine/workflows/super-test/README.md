@@ -86,6 +86,17 @@ export SUPERTEST_MIMO_CODE_BIN="<binary-name>"
 export SUPERTEST_MIMO_CODE_CMD='<command that consumes {prompt_file}>'
 ```
 
+OpenCode/MiMo executor wrappers now auto-retry the specific upstream `Request Error status 400 · non-retryable`
+failure once after a short delay, and they also retry a stuck `opencode run` after a timeout. If you need to tune
+that behavior, set:
+
+```bash
+export SUPERTEST_OPENCODE_RETRY_ATTEMPTS=2
+export SUPERTEST_OPENCODE_RETRY_DELAY_SECS=5
+export SUPERTEST_OPENCODE_RUN_TIMEOUT_SECS=1800
+export SUPERTEST_OPENCODE_TIMEOUT_KILL_AFTER_SECS=30
+```
+
 The generated executor prompts include `integrations/mimocode-super-test.md` so MiMo/OpenCode receives the
 same Super-Test guardrails even when the runtime does not automatically load project instructions.
 

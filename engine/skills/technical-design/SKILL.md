@@ -18,7 +18,7 @@ Exit `2` = **STOP** — do not draft:
 
 Gate open → set state: `python engine/workflows/_shared/module-state.py <module> --set DESIGN --by technical-design`.
 
-## Steps (write INTO `specs/<module>/`; envelope under `engine/workflows/technical-design/rounds/<id>/`)
+## Steps (write INTO `specs/<module>/`; envelope under `engine/workflows/technical-design/rounds/<id>/` — get `<id>` via `python engine/workflows/_shared/run-init.py technical-design` → run-NNN + `00-run-meta` + `logs/`, per `_shared/run-memory.md`)
 1. **Read the owner's `07-schema`** + `02-requirements` → restate domain model + invariants (map BA terminology; do NOT invent lifecycle). **Validate** the schema against `engine/rules/backend.md` + `01-source-audit`; flag mismatches as questions — but **never edit `07-schema`** (owner-owned).
 2. **DRAFT `08-api.md`** from requirements + the owner's schema — endpoints (method/path), request/response/error DTOs, validation, permission, pagination/filter/sort, back-compat. **Enough for FE to implement without guessing.** Mark it **DRAFT — needs owner approval**. This is the **FE↔BE contract lock** (contract-first): once the owner approves `08`, BE *and* FE implement against it; a later change needs a new `DL-00x`, not a silent edit.
 3. Permission/validation map: functional rule → BE validation → FE display → API error.

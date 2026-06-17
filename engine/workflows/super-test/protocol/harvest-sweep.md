@@ -36,6 +36,29 @@ space is exhausted). On a bug, record the EXACT order+values in the bug's repro 
 agent-browser navigate/act · read snapshot/console/network · screenshot · append bug-catalog / coverage-map /
 bypass-log / blocked-flows · update state · at stop-condition write `07-opus-request.md` and stop.
 
+## Observation anti-stall ladder (mandatory)
+An empty accessibility snapshot, or a shell pipeline such as `snapshot | grep ...` returning no lines, is only
+an observation miss. It is NOT proof that a table is empty, a row does not exist, or the page is blocked. Do not
+repeat the same failed probe more than 2 times.
+
+When `agent-browser snapshot` does not expose the needed details:
+1. Use a scoped or compact snapshot first: `snapshot -i -c`, then `snapshot -s '<known-css-selector>' -c` when
+   you know the container. For overlay UI (Sheet/Dialog/Drawer/AlertDialog), first try the semantic fallback
+   `snapshot -s '[role="dialog"], [role="alertdialog"]' -c`. A failed feature selector such as a missing
+   `data-slot` is not proof that the portal/overlay is absent from the accessibility tree.
+2. Collect bounded fallback evidence:
+   `engine/workflows/super-test/bin/agent-browser-evidence --session <session> --out-dir <run-dir>/evidence/<flow-id>`
+   and add `--selector '<known-css-selector>'` when applicable.
+3. Inspect the evidence files, especially the dialog snapshot fallback, `10-dom-summary.json`, `08-errors.txt`,
+   and `09-network.txt`. Check `aria-hidden`, `inert`, CSS visibility/display, output truncation, and selector
+   mismatch before claiming agent-browser cannot see a rendered overlay.
+4. If the UI is genuinely unusable, append `04-bug-catalog.md` and try a bypass. If no bypass works, append
+   `06-blocked-flows.md`. If only part of the flow is testable, mark coverage `PARTIAL`.
+5. Continue to the next reachable flow unless the stop condition is met.
+
+Keep evidence path-based and bounded. Do not paste large snapshots/screenshots/DOM dumps into prompts; reference
+the saved files. This avoids executor/provider 400s from oversized or malformed request payloads.
+
 ## You MUST NOT (harvest mode) — these break Super-Test
 edit source code · run an RCA · fix any bug · treat a bypass as a PASS · change a flow's expected behavior ·
 drop a bug without logging it · call Opus for a single bug before a stop condition. **The target repo's

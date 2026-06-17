@@ -26,7 +26,8 @@
 | `cg status` · `index ok?` | `just codegraph-status` |
 | `dtos` · `regen dto` | `npm run dtos:update` then `npm run client:generate` (FE worktree) |
 | `backup` · `snapshot harness` | `just harness-backup` |
-| `nhớ cái này` · `remember this` · `để ý cái này` · `từ giờ` · `always/never` | **`python scripts/learning_capture.py …`** → structured provisional `second-brain/` entry (schema; NEVER `main-brain/`). `learning_list`/`learning_check` to review. |
+| `nhớ cái này` · `remember this` · `để ý cái này` · `từ giờ` · `always/never` | **`python scripts/learning_capture.py …`** → structured provisional `second-brain/` entry (schema incl. `applies_when`; NEVER `main-brain/`). `learning_list`/`learning_check` to review. |
+| `recall` · `learnings?` · `áp dụng note nào` · (auto before fix/review/implement) | **`python scripts/learning_recall.py --context "<task>"`** → only the second-brain notes whose `applies_when` fits; reads the MAP, not the full buffer. `--all` = map; `--rebuild-map` = regenerate. |
 
 ## 2. Intent → tool (fuller)
 - **New canonical pattern** (BE endpoint/service/listing/error path; FE page/list/form/module) → `/mh-scaffold`.

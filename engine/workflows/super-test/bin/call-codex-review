@@ -17,7 +17,11 @@ if command -v codex >/dev/null 2>&1; then
   codex exec "$PROMPT" >"$LOG/codex.stdout.log" 2>"$LOG/codex.stderr.log" || { echo "CODEX_RUN_FAILED (see $LOG/codex.stderr.log)" >&2; exit 1; }
 elif command -v claude >/dev/null 2>&1; then
   echo "NOTE: codex CLI not found — fallback to a Claude review pass." >&2
-  claude -p "$PROMPT" --model claude-opus-4-8 >"$LOG/codex.stdout.log" 2>"$LOG/codex.stderr.log" || true
+  # headless agentic fallback — bypass interactive permission (else it hangs) + bound time; guard still enforces BLOCKs
+  timeout "${SUPERTEST_OPUS_TIMEOUT:-1800}" claude -p "$PROMPT" \
+    --model "${SUPERTEST_CLAUDE_MODEL:-opus}" --permission-mode bypassPermissions \
+    --max-turns "${SUPERTEST_OPUS_MAX_TURNS:-60}" --add-dir "$(cd "$STROOT/../../.." && pwd)" \
+    >"$LOG/codex.stdout.log" 2>"$LOG/codex.stderr.log" || true
 else
   echo "CODEX/CLAUDE not found — manual: review $RCA, write $OUT with a Verdict." >&2
 fi

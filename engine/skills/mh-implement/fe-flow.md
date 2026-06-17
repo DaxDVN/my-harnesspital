@@ -117,12 +117,15 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
   tenant-renamable labels — **no new hardcoded VN text**; `handleApiError(error, intl, fallback)` for API
   errors. Status: `StatusBadge` + register new statuses in `STATUS_REGISTRY`; values from `Statuses.*` — no
   hardcoded status string, no raw `<Badge>`. **testid: add `data-testid` to every interactive element the E2E
-  flow (F8) will drive.**
+  flow (F8) will drive.** For Sheet/Dialog/Drawer flows, make the overlay content targetable: accessible
+  title/labels are required, icon-only controls need `aria-label`, and the content wrapper needs a stable
+  anchor (`data-slot` in shared primitives, or a feature-specific `data-testid` in feature code).
 - **FE pitfall prevented:** hardcoded permission/`'CanUpdate'`/fallback; hardcoded VN text; hardcoded status /
-  raw `<Badge>`; an ungated state-machine button; **missing testids that make E2E slow/fragile** (~97% of
-  files have none today).
+  raw `<Badge>`; an ungated state-machine button; **missing testids/overlay anchors that make E2E slow/fragile
+  or make agent-browser evidence look falsely empty** (~97% of files have none today).
 - **Done-check:** grep → no new `=== '<status>'`, no hardcoded `'CanUpdate'`, permission names resolve in
-  `Constants.ts`; new interactive elements carry `data-testid`; (manual) i18n keys added for new text.
+  `Constants.ts`; new E2E-driven interactive elements carry `data-testid`; overlay flows can be scoped by
+  `[role="dialog"]`/`[role="alertdialog"]` plus a stable wrapper anchor; (manual) i18n keys added for new text.
 
 ## F7 — Deterministic validation floor  *(one button, in the worktree)*
 - **Input:** the changed file set (`git -C worktrees/<slug>/fe diff --name-only <base>`).
@@ -145,7 +148,7 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
 - **Input:** the diff.
 - **Do:** run `mh-review` on **only the diff** (explicit file set = changed files) — reviewer D3/D7/D10 already
   carry the FE bug-classes; fix what it flags **now**, do not push regressions to a later round. For visible
-  UI, run the dev server + smoke login (`HMU` / `admin` / `123456`). For a real user flow, run the FE E2E path
+  UI, run the dev server + smoke login (`bvtest3` / `lynkhanh9822@gmail.com` / `12.[s7HXZQ;NfAoF`). For a real user flow, run the FE E2E path
   (`engine/workflows/progressive-test/` → agent-browser) — the testids added in F6 make this fast.
 - **FE pitfall prevented:** pushing regressions/convention drift to a later review round (the thing that makes
   review take 3+ rounds); shipping a flow that does not actually work in the browser.

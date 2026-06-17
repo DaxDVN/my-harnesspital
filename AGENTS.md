@@ -82,6 +82,14 @@ surfaces a recurring bug-class / convention gap / cross-cutting owner decision �
 not the brain. At session end, capture any new durable learning or explicitly state "no durable learning captured."
 NEVER write `main-brain/` (owner-gated via `/promote`). `python scripts/learning_check.py` verifies learning health.
 
+**Learning recall (the other half — USE what was learned):** second-brain is on-demand, so a note is useless if
+never re-read. Before fix / review / implement / design / scaffold work, **consult the applicability MAP** — do
+NOT read the full buffer: `python scripts/learning_recall.py --context "<task>"` (or `--scope/--task/--keywords/--touch`)
+returns ONLY the notes whose `applies_when` fits; open just those and apply as **provisional strong-hints (verify
+first)**. `--all` prints the map (`second-brain/INDEX.md`); `--rebuild-map` regenerates it. The `learning_trigger`
+hook nudges recall on work prompts when notes exist. Each captured note must declare `applies_when` (tasks/globs/keywords)
+so the map can route it.
+
 ## Worktree + Zellij — USER-DRIVEN (manual; agents do NOT auto-run)
 
 Worktree and Zellij are **driven by the user**, not automated by the agent. The user wants explicit
@@ -358,7 +366,7 @@ This section is standing user authorization for Codex sessions that read this ha
 
 ## Local Agent Browser Smoke Login
 
-At session start only, remember this local test credential when Agent Browser needs to login: customer code `HMU`, username `admin`, password `123456`.
+At session start only, remember this local test credential when Agent Browser needs to login: customer code `bvtest3`, username `lynkhanh9822@gmail.com`, password `12.[s7HXZQ;NfAoF`.
 
 ## Validation Contract
 

@@ -122,6 +122,7 @@ def ensure_dotnet_sdk_workaround(be_path: Path, *, dry_run: bool = False) -> Non
         return
     content = props.read_text(encoding="utf-8")
     if "AllowMissingPrunePackageData" in content:
+        mark_skip_worktree_if_task(be_path, ("Directory.Build.props",), dry_run=dry_run)
         return
     marker = "<PropertyGroup>"
     insertion = (
@@ -134,6 +135,7 @@ def ensure_dotnet_sdk_workaround(be_path: Path, *, dry_run: bool = False) -> Non
     print(f"> patch {props} (AllowMissingPrunePackageData)")
     if not dry_run:
         props.write_text(updated, encoding="utf-8")
+    mark_skip_worktree_if_task(be_path, ("Directory.Build.props",), dry_run=dry_run)
 
 
 def csharp_string_literal(value: str) -> str:
@@ -157,10 +159,12 @@ def ensure_servicestack_license(be_path: Path, *, dry_run: bool = False) -> None
     if registration_re.search(content):
         updated = registration_re.sub(line, content, count=1)
         if updated == content:
+            mark_skip_worktree_if_task(be_path, ("MyHospital/Program.cs",), dry_run=dry_run)
             return
         print(f"> patch {program} (ServiceStack license)")
         if not dry_run:
             program.write_text(updated, encoding="utf-8")
+        mark_skip_worktree_if_task(be_path, ("MyHospital/Program.cs",), dry_run=dry_run)
         return
     marker = "var builder = WebApplication.CreateBuilder(args);"
     if marker not in content:
@@ -169,6 +173,7 @@ def ensure_servicestack_license(be_path: Path, *, dry_run: bool = False) -> None
     print(f"> patch {program} (ServiceStack license)")
     if not dry_run:
         program.write_text(updated, encoding="utf-8")
+    mark_skip_worktree_if_task(be_path, ("MyHospital/Program.cs",), dry_run=dry_run)
 
 
 def python_has_module(python_exe: str, module_name: str) -> bool:
@@ -298,28 +303,33 @@ def read_env_lines(path: Path) -> list[str]:
     return path.read_text(encoding="utf-8").splitlines()
 
 
-def parse_env_file(path: Path) -> dict[str, str]:
-    """Parse a simple KEY=VALUE .env file without invoking a shell."""
+def parse_env_lines(lines: list[str], source: str) -> dict[str, str]:
+    """Parse simple KEY=VALUE env lines without invoking a shell."""
     values: dict[str, str] = {}
-    if not path.exists():
-        raise ToolError(f"Env file not found: {path}")
-    for line_no, raw_line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+    for line_no, raw_line in enumerate(lines, start=1):
         line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
         if line.startswith("export "):
             line = line[len("export ") :].lstrip()
         if "=" not in line:
-            raise ToolError(f"Invalid .env line {path}:{line_no}: missing '='")
+            raise ToolError(f"Invalid .env line {source}:{line_no}: missing '='")
         key, value = line.split("=", 1)
         key = key.strip()
         value = value.strip()
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.]*", key):
-            raise ToolError(f"Invalid .env key {path}:{line_no}: {key!r}")
+            raise ToolError(f"Invalid .env key {source}:{line_no}: {key!r}")
         if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
             value = value[1:-1]
         values[key] = value
     return values
+
+
+def parse_env_file(path: Path) -> dict[str, str]:
+    """Parse a simple KEY=VALUE .env file without invoking a shell."""
+    if not path.exists():
+        raise ToolError(f"Env file not found: {path}")
+    return parse_env_lines(path.read_text(encoding="utf-8").splitlines(), str(path))
 
 
 def int_or_none(value: object | None) -> int | None:
@@ -428,6 +438,12 @@ def collect_worktree_info(task_root: Path) -> dict[str, object]:
         errors.append(f"fe-env:{fe_error}")
     if be_error:
         errors.append(f"be-env:{be_error}")
+    appsettings, appsettings_error = read_json_object(task_root / "be" / "MyHospital" / "appsettings.Development.json")
+    if appsettings_error and appsettings_error != "missing":
+        errors.append(f"appsettings:{appsettings_error}")
+    launch_settings, launch_error = read_json_object(task_root / "be" / "MyHospital" / "Properties" / "launchSettings.json")
+    if launch_error and launch_error != "missing":
+        errors.append(f"launch:{launch_error}")
 
     meta_ports = metadata.get("ports") if isinstance(metadata.get("ports"), dict) else {}
     meta_urls = metadata.get("urls") if isinstance(metadata.get("urls"), dict) else {}
@@ -445,6 +461,8 @@ def collect_worktree_info(task_root: Path) -> dict[str, object]:
         or int_or_none(meta_db.get("port"))
         or int_or_none(meta_ports.get("sql"))
     )
+    appsettings_sql_port = sql_connection_port(nested_str(appsettings, "ConnectionStrings", "DefaultConnection"))
+    launch_be_port = url_port(first_launch_application_url(launch_settings))
 
     candidates: list[tuple[str, int]] = []
     if fe_port is not None and 3001 <= fe_port <= 3004:
@@ -475,6 +493,16 @@ def collect_worktree_info(task_root: Path) -> dict[str, object]:
     else:
         status = "MISSING " + ",".join(missing or ["slot"])
         slot = unique_slots[0] if unique_slots else None
+
+    config_mismatches: list[str] = []
+    if sql_port is not None and appsettings_sql_port is not None and appsettings_sql_port != sql_port:
+        config_mismatches.append(f"appsettings-sql={appsettings_sql_port}")
+    if be_port is not None and launch_be_port is not None and launch_be_port != be_port:
+        config_mismatches.append(f"launch-be={launch_be_port}")
+    if config_mismatches:
+        status = "MISMATCH " + ",".join(config_mismatches)
+        slot = None
+
     if errors and status == "OK":
         status = "OK " + ",".join(errors)
     elif errors:
@@ -512,6 +540,288 @@ def write_lines(path: Path, lines: list[str], *, dry_run: bool = False) -> None:
         return
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def read_json_object(path: Path) -> tuple[dict[str, object] | None, str | None]:
+    if not path.exists():
+        return None, "missing"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return None, f"bad-json:{exc.lineno}"
+    if not isinstance(data, dict):
+        return None, "not-object"
+    return data, None
+
+
+def write_json_object(path: Path, data: dict[str, object], *, dry_run: bool = False) -> None:
+    print(f"> write {path}")
+    if dry_run:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def nested_dict(parent: dict[str, object], key: str) -> dict[str, object]:
+    current = parent.get(key)
+    if isinstance(current, dict):
+        return current
+    created: dict[str, object] = {}
+    parent[key] = created
+    return created
+
+
+def nested_str(data: dict[str, object] | None, *keys: str) -> str | None:
+    current: object = data
+    for key in keys:
+        if not isinstance(current, dict):
+            return None
+        current = current.get(key)
+    return current if isinstance(current, str) else None
+
+
+def first_launch_application_url(data: dict[str, object] | None) -> str | None:
+    profiles = data.get("profiles") if isinstance(data, dict) else None
+    if not isinstance(profiles, dict):
+        return None
+    for profile in profiles.values():
+        if isinstance(profile, dict) and profile.get("commandName") == "Project":
+            value = profile.get("applicationUrl")
+            return value if isinstance(value, str) else None
+    return None
+
+
+def mark_skip_worktree(repo: Path, rel_paths: Iterable[str], *, dry_run: bool = False) -> None:
+    for rel in rel_paths:
+        path = repo / rel
+        if not path.exists():
+            continue
+        proc = run(["git", "-C", str(repo), "ls-files", "--error-unmatch", rel], capture=True, check=False)
+        if proc.returncode == 0:
+            run(["git", "-C", str(repo), "update-index", "--skip-worktree", rel], dry_run=dry_run)
+
+
+def mark_skip_worktree_if_task(repo: Path, rel_paths: Iterable[str], *, dry_run: bool = False) -> None:
+    try:
+        repo.resolve().relative_to(workspace_root() / "worktrees")
+    except ValueError:
+        return
+    mark_skip_worktree(repo, rel_paths, dry_run=dry_run)
+
+
+def configure_be_local_runtime(
+    be_path: Path,
+    *,
+    cfg: SlotConfig,
+    connection_string: str,
+    env_values: dict[str, str] | None = None,
+    dry_run: bool = False,
+) -> None:
+    """Patch local-only BE runtime config so direct dotnet run uses the slot.
+
+    Worktree .env is not enough: `dotnet run` uses Development launch settings
+    and appsettings even when the user does not go through `worktree.py run-be`.
+    """
+    appsettings = be_path / "MyHospital" / "appsettings.Development.json"
+    data, error = read_json_object(appsettings)
+    if error and error != "missing":
+        raise ToolError(f"Cannot patch {appsettings}: {error}")
+    if data is not None:
+        conn = nested_dict(data, "ConnectionStrings")
+        conn["DefaultConnection"] = connection_string
+        conn["ReadOnlyConnection"] = connection_string
+        if env_values and "ConnectionStrings__RedisConnection" in env_values:
+            conn["RedisConnection"] = env_values["ConnectionStrings__RedisConnection"]
+        typescript = nested_dict(data, "TypeScript")
+        typescript["ServerUrl"] = f"http://localhost:{cfg.be_port}"
+        write_json_object(appsettings, data, dry_run=dry_run)
+
+    launch = be_path / "MyHospital" / "Properties" / "launchSettings.json"
+    data, error = read_json_object(launch)
+    if error and error != "missing":
+        raise ToolError(f"Cannot patch {launch}: {error}")
+    if data is not None:
+        iis_settings = nested_dict(data, "iisSettings")
+        iis_express = nested_dict(iis_settings, "iisExpress")
+        iis_express["applicationUrl"] = f"http://localhost:{cfg.be_port}/"
+        profiles = nested_dict(data, "profiles")
+        for profile in profiles.values():
+            if not isinstance(profile, dict):
+                continue
+            env = nested_dict(profile, "environmentVariables")
+            if env_values:
+                env.update(env_values)
+            env["ASPNETCORE_ENVIRONMENT"] = "Development"
+            env["ASPNETCORE_URLS"] = f"http://localhost:{cfg.be_port}"
+            env["MyHospital__LoginUrl"] = f"http://localhost:{cfg.fe_port}/login"
+            env["ConnectionStrings__DefaultConnection"] = connection_string
+            env["ConnectionStrings__ReadOnlyConnection"] = connection_string
+            if profile.get("commandName") == "Project":
+                profile["applicationUrl"] = f"http://localhost:{cfg.be_port}"
+        write_json_object(launch, data, dry_run=dry_run)
+
+    reporting = be_path / "MyHospital.Reporting" / "appsettings.json"
+    if reporting.exists():
+        content = reporting.read_text(encoding="utf-8")
+        updated, count = re.subn(
+            r'("POSEntities"\s*:\s*")[^"]*(")',
+            lambda match: f"{match.group(1)}{connection_string}{match.group(2)}",
+            content,
+            count=1,
+        )
+        if count:
+            print(f"> write {reporting}")
+            if not dry_run:
+                reporting.write_text(updated, encoding="utf-8")
+
+    mark_skip_worktree(
+        be_path,
+        (
+            "MyHospital/appsettings.Development.json",
+            "MyHospital/Properties/launchSettings.json",
+            "MyHospital.Reporting/appsettings.json",
+        ),
+        dry_run=dry_run,
+    )
+
+
+def local_cors_origins() -> str:
+    return ",".join(
+        [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://localhost:3002",
+            "http://localhost:3003",
+            "http://localhost:3004",
+            "http://localhost:5000",
+            "http://localhost:5001",
+            "http://localhost:5002",
+            "http://localhost:5003",
+            "http://localhost:5004",
+        ]
+    )
+
+
+def configure_fe_env(fe_worktree: Path, cfg: SlotConfig, template_path: Path, *, dry_run: bool = False) -> None:
+    fe_lines = read_env_lines(template_path)
+    fe_lines = set_env_line(fe_lines, "VITE_DEV_PORT", cfg.fe_port)
+    fe_lines = set_env_line(fe_lines, "VITE_BACKEND_URL", f"http://localhost:{cfg.be_port}")
+    fe_lines = set_env_line(fe_lines, "VITE_CDN_URL", f"http://localhost:{cfg.be_port}")
+    fe_lines = set_env_line(fe_lines, "VITE_INDEXEDDB_VERSION", 100 + cfg.slot)
+    fe_lines = set_env_line(fe_lines, "VITE_DEV_PERSIST_ALL", "true")
+    fe_lines = set_env_line(fe_lines, "VITE_HOSPITAL_TEMPLATE_URL", f"http://localhost:{cfg.fe_port}/import-templates/")
+    write_lines(fe_worktree / ".env", fe_lines, dry_run=dry_run)
+
+
+def configure_be_env(
+    be_worktree: Path,
+    cfg: SlotConfig,
+    template_path: Path,
+    *,
+    sql_password: str,
+    dry_run: bool = False,
+) -> str:
+    target_connection = sql_connection_string(cfg.sql_port, database=cfg.database_name, password=sql_password)
+    be_lines = read_env_lines(template_path)
+    be_lines = set_env_line(be_lines, "ASPNETCORE_ENVIRONMENT", "Development")
+    be_lines = set_env_line(be_lines, "ASPNETCORE_URLS", f"http://localhost:{cfg.be_port}")
+    be_lines = set_env_line(be_lines, "MyHospital__LoginUrl", f"http://localhost:{cfg.fe_port}/login")
+    be_lines = set_env_line(be_lines, "ConnectionStrings__DefaultConnection", target_connection)
+    be_lines = set_env_line(be_lines, "ConnectionStrings__ReadOnlyConnection", target_connection)
+    be_lines = set_env_line(be_lines, "CORS_ORIGINS", local_cors_origins())
+    be_env = parse_env_lines(be_lines, str(be_worktree / ".env"))
+    write_lines(be_worktree / ".env", be_lines, dry_run=dry_run)
+    configure_be_local_runtime(
+        be_worktree,
+        cfg=cfg,
+        connection_string=target_connection,
+        env_values=be_env,
+        dry_run=dry_run,
+    )
+    return target_connection
+
+
+def current_git_branch(path: Path) -> str:
+    branch = output(["git", "-C", str(path), "rev-parse", "--abbrev-ref", "HEAD"], check=False)
+    return branch or "HEAD"
+
+
+def infer_slot_config(task_root: Path) -> SlotConfig:
+    metadata: dict[str, object] = {}
+    meta_path = task_root / WORKTREE_META_FILE
+    if meta_path.exists():
+        try:
+            metadata = json.loads(meta_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            metadata = {}
+
+    fe_env, _ = safe_parse_env(task_root / "fe" / ".env")
+    be_env, _ = safe_parse_env(task_root / "be" / ".env")
+    candidates: list[int] = []
+
+    meta_slot = int_or_none(metadata.get("slot"))
+    if meta_slot is not None and 1 <= meta_slot <= 4:
+        candidates.append(meta_slot)
+    fe_port = int_or_none(fe_env.get("VITE_DEV_PORT"))
+    if fe_port is not None and 3001 <= fe_port <= 3004:
+        candidates.append(fe_port - 3000)
+    be_port = url_port(be_env.get("ASPNETCORE_URLS"))
+    if be_port is not None and 5001 <= be_port <= 5004:
+        candidates.append(be_port - 5000)
+    sql_port = sql_connection_port(be_env.get("ConnectionStrings__DefaultConnection"))
+    if sql_port is not None and 1434 <= sql_port <= 1437:
+        candidates.append(sql_port - 1433)
+
+    unique = sorted(set(candidates))
+    if len(unique) != 1:
+        raise ToolError(f"Cannot infer a single slot for {task_root}; candidates={candidates or 'none'}")
+    return slot_config(unique[0])
+
+
+def repair_worktree_config(args: argparse.Namespace) -> None:
+    root = workspace_root()
+    if args.all == bool(args.slug):
+        raise ToolError("Pass exactly one of --slug or --all.")
+    worktrees_root = root / "worktrees"
+    task_roots = [worktrees_root / safe_slug(args.slug)] if args.slug else [
+        child for child in sorted(worktrees_root.iterdir(), key=lambda p: p.name)
+        if child.is_dir() and child.name != "_db-backups"
+    ]
+
+    for task_root in task_roots:
+        if not task_root.exists():
+            raise ToolError(f"Task worktree folder not found: {task_root}")
+        cfg = infer_slot_config(task_root)
+        fe_worktree = task_root / "fe"
+        be_worktree = task_root / "be"
+        ensure_dotnet_sdk_workaround(be_worktree, dry_run=args.dry_run)
+        ensure_servicestack_license(be_worktree, dry_run=args.dry_run)
+        fe_template = fe_worktree / ".env" if (fe_worktree / ".env").exists() else root / "myhospital-fe" / ".env"
+        if not fe_template.exists():
+            alt = root / "myhospital-fe" / "env"
+            fe_template = alt if alt.exists() else fe_template
+        be_template = be_worktree / ".env" if (be_worktree / ".env").exists() else root / "myhospital-be" / ".env"
+        print()
+        print(f"Repairing {task_root.name}: slot {cfg.slot}")
+        configure_fe_env(fe_worktree, cfg, fe_template, dry_run=args.dry_run)
+        configure_be_env(
+            be_worktree,
+            cfg,
+            be_template,
+            sql_password=args.sql_password,
+            dry_run=args.dry_run,
+        )
+        write_worktree_metadata(
+            task_root=task_root,
+            slug=task_root.name,
+            cfg=cfg,
+            fe_worktree=fe_worktree,
+            be_worktree=be_worktree,
+            fe_branch=current_git_branch(fe_worktree),
+            be_branch=current_git_branch(be_worktree),
+            dry_run=args.dry_run,
+        )
 
 
 def migrations_path(be_path: Path) -> Path:
@@ -784,15 +1094,6 @@ def create_worktree(args: argparse.Namespace) -> None:
     if task_root.exists():
         raise ToolError(f"Task worktree folder already exists: {task_root}")
 
-    migration_source = None
-    if not args.skip_db_sync or args.migration_be_path:
-        migration_source = resolve_migration_source(
-            root,
-            preferred_path=Path(args.migration_be_path) if args.migration_be_path else None,
-            scan_worktrees=args.scan_worktrees,
-        )
-        print(f"Using migration source: {migration_source.path} ({migration_source.label})")
-
     fe_source_ref = f"refs/remotes/origin/{args.fe_base}"
     be_source_ref = f"refs/remotes/origin/{args.be_base}"
     run(["git", "-C", str(fe_repo), "fetch", "origin", f"+refs/heads/{args.fe_base}:{fe_source_ref}"], dry_run=args.dry_run)
@@ -849,39 +1150,14 @@ def create_worktree(args: argparse.Namespace) -> None:
         fe_template = fe_repo / ".env"
         if not fe_template.exists():
             fe_template = fe_repo / "env"
-        fe_lines = read_env_lines(fe_template)
-        fe_lines = set_env_line(fe_lines, "VITE_DEV_PORT", cfg.fe_port)
-        fe_lines = set_env_line(fe_lines, "VITE_BACKEND_URL", f"http://localhost:{cfg.be_port}")
-        fe_lines = set_env_line(fe_lines, "VITE_CDN_URL", f"http://localhost:{cfg.be_port}")
-        fe_lines = set_env_line(fe_lines, "VITE_INDEXEDDB_VERSION", 100 + args.slot)
-        fe_lines = set_env_line(fe_lines, "VITE_DEV_PERSIST_ALL", "true")
-        fe_lines = set_env_line(fe_lines, "VITE_HOSPITAL_TEMPLATE_URL", f"http://localhost:{cfg.fe_port}/import-templates/")
-        write_lines(fe_worktree / ".env", fe_lines, dry_run=args.dry_run)
-
-        target_connection = sql_connection_string(cfg.sql_port, database=cfg.database_name, password=args.sql_password)
-        cors_origins = ",".join(
-            [
-                "http://localhost:5173",
-                "http://localhost:3000",
-                "http://localhost:3001",
-                "http://localhost:3002",
-                "http://localhost:3003",
-                "http://localhost:3004",
-                "http://localhost:5000",
-                "http://localhost:5001",
-                "http://localhost:5002",
-                "http://localhost:5003",
-                "http://localhost:5004",
-            ]
+        configure_fe_env(fe_worktree, cfg, fe_template, dry_run=args.dry_run)
+        configure_be_env(
+            be_worktree,
+            cfg,
+            be_repo / ".env",
+            sql_password=args.sql_password,
+            dry_run=args.dry_run,
         )
-        be_lines = read_env_lines(be_repo / ".env")
-        be_lines = set_env_line(be_lines, "ASPNETCORE_ENVIRONMENT", "Development")
-        be_lines = set_env_line(be_lines, "ASPNETCORE_URLS", f"http://localhost:{cfg.be_port}")
-        be_lines = set_env_line(be_lines, "MyHospital__LoginUrl", f"http://localhost:{cfg.fe_port}/login")
-        be_lines = set_env_line(be_lines, "ConnectionStrings__DefaultConnection", target_connection)
-        be_lines = set_env_line(be_lines, "ConnectionStrings__ReadOnlyConnection", target_connection)
-        be_lines = set_env_line(be_lines, "CORS_ORIGINS", cors_origins)
-        write_lines(be_worktree / ".env", be_lines, dry_run=args.dry_run)
         write_worktree_metadata(
             task_root=task_root,
             slug=slug,
@@ -920,10 +1196,11 @@ def create_worktree(args: argparse.Namespace) -> None:
             print("Skipping FE dependency install because --skip-fe-install was passed.")
 
         if not args.skip_db_sync:
+            migration_be_path = str(Path(args.migration_be_path).resolve()) if args.migration_be_path else str(be_worktree)
             sync_args = argparse.Namespace(
                 slot=args.slot,
                 be_path=str(be_worktree),
-                migration_be_path=str(migration_source.path) if migration_source and migration_source.path != be_worktree else None,
+                migration_be_path=migration_be_path,
                 source_server="localhost",
                 source_port=1433,
                 source_database="MyHospital",
@@ -1252,6 +1529,17 @@ def run_be(args: argparse.Namespace) -> None:
     ensure_dotnet_sdk_workaround(be_path)
     ensure_servicestack_license(be_path)
     env_values = parse_env_file(env_file)
+    sql_port = sql_connection_port(env_values.get("ConnectionStrings__DefaultConnection"))
+    be_port = url_port(env_values.get("ASPNETCORE_URLS"))
+    if sql_port is not None and be_port is not None and 1434 <= sql_port <= 1437 and 5001 <= be_port <= 5004:
+        slot = sql_port - 1433
+        if slot == be_port - 5000:
+            configure_be_local_runtime(
+                be_path,
+                cfg=slot_config(slot),
+                connection_string=env_values["ConnectionStrings__DefaultConnection"],
+                env_values=env_values,
+            )
     project = args.project or "MyHospital/MyHospital.csproj"
     cmd = ["dotnet", "run", "--project", project, "--no-launch-profile"]
     if args.no_build:
@@ -1322,6 +1610,12 @@ def cleanup(args: argparse.Namespace) -> None:
             print("Re-run with --delete-branch, or delete manually:")
             for label, repo, branch in branches:
                 print(f"  git -C {repo} branch -D {branch}   # {label}")
+
+    metadata_file = task_root / WORKTREE_META_FILE
+    if metadata_file.exists():
+        print(f"> remove managed metadata {metadata_file}")
+        if not args.dry_run:
+            metadata_file.unlink()
 
     if task_root.exists() and not any(task_root.iterdir()):
         print(f"> remove empty {task_root}")
@@ -1477,6 +1771,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=create_worktree)
 
+    p = sub.add_parser("repair-config", help="Rewrite existing worktree FE/BE local runtime config from its slot.")
+    p.add_argument("--slug", help="Task worktree slug to repair.")
+    p.add_argument("--all", action="store_true", help="Repair every active worktree under worktrees/.")
+    p.add_argument("--sql-password", default=DEFAULT_SQL_PASSWORD)
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=repair_worktree_config)
+
     p = sub.add_parser("sync-db", help="Reset a slot DB from the main DB data and BE migrations.")
     p.add_argument("--slot", type=int, required=True, choices=[1, 2, 3, 4])
     p.add_argument("--be-path", required=True)
@@ -1534,6 +1835,9 @@ def main(argv: list[str] | None = None) -> int:
     except ToolError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
+    except KeyboardInterrupt:
+        print("\nInterrupted.", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

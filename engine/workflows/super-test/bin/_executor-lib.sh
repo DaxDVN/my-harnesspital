@@ -10,6 +10,10 @@
 #
 # auto = prefer opencode if on PATH, else mimo-code. So whichever the owner has, Super-Test runs.
 
+SUPERTEST_EXECUTOR_LIB_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+. "$SUPERTEST_EXECUTOR_LIB_DIR/../../_shared/opencode-retry.sh"
+
 supertest_pick_runtime() {
   local r="${SUPERTEST_RUNTIME:-auto}"
   if [ "$r" = auto ]; then
@@ -30,15 +34,18 @@ run_executor() {
   case "$rt" in
     opencode)
       command -v opencode >/dev/null 2>&1 || { echo "OPENCODE_NOT_FOUND" >"$errlog"; return 127; }
-      opencode run --model "$cli_model" "$(cat "$prompt_file")" >"$outlog" 2>"$errlog"; return $? ;;
+      supertest_run_with_retry "$outlog" "$errlog" "" opencode run --model "$cli_model" "$(cat "$prompt_file")"
+      return $? ;;
     mimo-code)
       local bin="${SUPERTEST_MIMO_CODE_BIN:-mimo}"
       if [ -n "${SUPERTEST_MIMO_CODE_CMD:-}" ]; then
         local cmd="${SUPERTEST_MIMO_CODE_CMD//\{prompt_file\}/$prompt_file}"
-        bash -lc "$cmd" >"$outlog" 2>"$errlog"; return $?
+        supertest_run_with_retry "$outlog" "$errlog" "" bash -lc "$cmd"
+        return $?
       fi
       command -v "$bin" >/dev/null 2>&1 || { echo "MIMO_CODE_NOT_FOUND ($bin) — set SUPERTEST_MIMO_CODE_BIN/_CMD" >"$errlog"; return 127; }
-      "$bin" < "$prompt_file" >"$outlog" 2>"$errlog"; return $? ;;
+      supertest_run_with_retry "$outlog" "$errlog" "$prompt_file" "$bin"
+      return $? ;;
     *)
       echo "NO_EXECUTOR_RUNTIME — need opencode OR mimo-code on PATH (or set SUPERTEST_RUNTIME / SUPERTEST_MIMO_CODE_CMD)" >"$errlog"
       return 127 ;;

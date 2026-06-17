@@ -33,7 +33,8 @@ For a form / multi-input step:
 
 ## Cross-round no-repeat (bounded randomness, not amnesia)
 Record every tried scenario (the exact order + values) in the step's **fuzz ledger**
-(super-test: `<run-dir>/fuzz-ledger.md`; progressive-test: read prior `round-*` bug-packets). Before choosing,
+(super-test: `<run-dir>/fuzz-ledger.md`; progressive-test: `engine/workflows/progressive-test/.agentflow/fuzz-ledger.md`
+— a CROSS-round file, since each round targets one bug). Before choosing,
 read the ledger (incl. prior runs/rounds) and pick scenarios **NOT yet tried** — cover new combinations first.
 Only when the legal space is exhausted, fall back to a prior scenario (prefer the one that last FAILED / is most
 informative). So a later round ≠ an earlier round unless nothing new remains.

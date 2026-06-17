@@ -428,7 +428,7 @@ def check_super_test() -> None:
             out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
     else:
         add(WARN, "super-test:lib", "lib/supertest.py missing")
-    for b in ("sweep", "supertest", "repair", "retest", "call-opus-batch-rca", "call-codex-review", "mimocode-preflight"):
+    for b in ("sweep", "supertest", "repair", "retest", "call-opus-batch-rca", "call-codex-review", "mimocode-preflight", "agent-browser-evidence"):
         p = st / "bin" / b
         if not p.exists():
             add(WARN, f"super-test:bin:{b}", "missing")
@@ -458,7 +458,7 @@ def check_workflow_shared() -> None:
             add(FAIL, "workflow-shared:schema", f"envelope.schema.json INVALID: {exc}")
     else:
         add(WARN, "workflow-shared:schema", "envelope.schema.json missing")
-    for name in ("validate-envelope", "gate-check", "module-state", "allowlist-check"):
+    for name in ("validate-envelope", "gate-check", "module-state", "allowlist-check", "run-init"):
         p = shared / f"{name}.py"
         if not p.exists():
             add(WARN, f"workflow-shared:{name}", "missing")
@@ -470,7 +470,7 @@ def check_workflow_shared() -> None:
 
 def check_learning() -> None:
     """Self-learning intake (H13): the capture/check/list scripts must self-test green; second-brain present."""
-    for name in ("learning_capture", "learning_check", "learning_list"):
+    for name in ("learning_capture", "learning_check", "learning_list", "learning_recall"):
         p = root() / "scripts" / f"{name}.py"
         if not p.exists():
             add(WARN, f"learning:{name}", "missing (self-learning MVP)")
@@ -494,6 +494,15 @@ def check_learning() -> None:
     sb = root() / "second-brain"
     add(OK if sb.exists() else WARN, "learning:second-brain",
         "second-brain/ present (provisional intake buffer)" if sb.exists() else "second-brain/ missing")
+    idx = sb / "INDEX.md"
+    if sb.exists() and idx.exists():
+        body = idx.read_text(encoding="utf-8", errors="ignore")
+        live = [p for p in sb.glob("*.md") if p.name not in ("INDEX.md", "README.md")
+                and "status: provisional" in p.read_text(encoding="utf-8", errors="ignore")[:400]]
+        missing = [p.name for p in live if p.name not in body]
+        add(OK if not missing else WARN, "learning:map",
+            f"INDEX.md maps all {len(live)} live note(s)" if not missing
+            else f"INDEX.md stale — missing {missing}; run: python scripts/learning_recall.py --rebuild-map")
 
 
 def check_maturity() -> None:
