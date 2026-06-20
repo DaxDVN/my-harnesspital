@@ -4,7 +4,11 @@
 
 ## Vị trí output
 
-`docs/audit/<module>-review-v<n>-<YYYY-MM-DD>.md` — `<n>` = số vòng (1,2,3). Một file/vòng; vòng sau tham chiếu file vòng trước.
+**Folder NGÀY + ROUND-VERSION (bắt buộc, theo rule canon AGENTS.md):** `docs/audit/<YYYY-MM-DD>/<base>.round-<N>.md`.
+`<N>` = round, tự tăng theo `<base>` đã có dưới `docs/audit/` (lần đầu = 1). Resolve deterministic bằng
+`python scripts/audit_path.py "<base>"` (tự `mkdir -p` folder ngày). Một file/round; round sau tham chiếu round
+trước (warm-start từ ledger round trước). `<base>` = vd `<module>-review` (round thay cho hậu tố `-v<n>` cũ).
+KHÔNG ghi phẳng vào `docs/audit/`. File cũ (`<module>-review-v<n>-<date>.md` phẳng) giữ nguyên; chỉ áp cho file mới.
 
 ## Template
 

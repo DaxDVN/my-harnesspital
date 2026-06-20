@@ -274,6 +274,14 @@ References: `MyHospital/Configure.AppHost.cs`, `MyHospital.Apis/DepartmentApi.cs
 
 - Do not edit existing migration files or `MyHospitalContextModelSnapshot` manually.
 - Do not hand-write migrations; generate new migrations only through EF CLI when model changes require it.
+
+Running migrations — full authority, but data MUST be restorable (owner-authorized):
+
+- You **may run migrations freely** on a worktree slot DB (apply / remake / re-run) when a fix needs a schema change — this is authorized, not blocked. (Hand-EDITING generated migration files is still forbidden; regenerate via EF CLI.)
+- **Hard precondition: current DB data must be recoverable.** Never run a destructive migrate without a backup that can be re-inserted afterward. The data must be backed up first and restored after the migrate re-run.
+- **Preferred command: `make migrate-data`** (run from the worktree BE dir, connection string from its `.env` — verify `.env` points at the intended slot DB). It does the safe sequence: `backup-data → db-clear → migrate-remake → migrate-up → restore-data`. The backup file stays on disk even if it fails mid-way. Non-interactive: `CONFIRM=yes make migrate-data`.
+- **Caveat (state it after running):** `restore-data` skips any table whose structure changed (it imports `backup-data.sql`, skipping tables that no longer match) — so rows in a reshaped table are NOT auto-restored. If a fix reshapes a table holding data you need to keep, re-seed it (`make seed-tables <scenario> <Table>`) or migrate the data explicitly, and report what was/wasn't restored.
+- Only the slot DB — never the real/shared source DB. Additive NOT NULL columns consumed by a new query still need a backfill (`migrationBuilder.Sql(...)`), even with `migrate-data`.
 - Existing migration history under `MyHospital.ServiceInterface/Migrations/` currently includes initial create, stored procedures, and model snapshot files.
 - Do not modify generated TypeScript output, generated DTO/client artifacts, generated catalogs, `*.csproj`, `.sln`, or config files unless the current task explicitly allows it.
 - Schema changes need matching model configuration, unique-index filter, FK delete behavior, and migration review.

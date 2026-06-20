@@ -36,6 +36,8 @@ Follow this ordered procedure, not ad-hoc poking. Full detail + `file:line`: `do
 
 **Top traps:** 200≠success · stale master-data in IndexedDB (DevTools→Application→IndexedDB→`myhospital-db`, `window.__idbLogs`) · row cached-but-filtered-out (`filterActiveRows`) · RQ not invalidated (missing `invalidateQueries`+`invalidateMasterDataEntity` pair) · id/name compare (FE-V3 — `mh_scan` catches) · DTO/contract drift (`tsc --noEmit`) · `GetAllByTenant` throws a 500 when `CurrentTenantId==0`.
 
+**Stale-DTO rule for FE bugs:** before concluding root cause for an FE bug, the fixer must have BE running + run `npm run dtos:update` (fresh DTOs) — if the symptom is contract drift, RCA verdict is "regenerate DTOs", NOT an FE-code patch (`engine/rules/frontend.md` → "FE bug-fix prerequisite").
+
 ## Verdict
 - `DIRECT_PATCH` — small, local, low-risk, you are confident (`requires_codex_review: false`).
 - `CODEX_REQUIRED` — data/API/schema/state/business-rule/multi-file/uncertain/side-effect risk (`requires_codex_review: true`).

@@ -313,6 +313,28 @@ Preferred pattern:
 - Reset form on open/edit identity changes.
 - Use unsaved-change guard for sheets when relevant.
 
+Form/widget/surface reuse is a coding convention, not a visual preference:
+
+- Before creating or wiring any visible UI element, classify its semantic role and search for the existing
+  component or live-code pattern that already owns that role. Examples of semantic roles: date input,
+  date-time input, master-data selector, user selector, product selector, diagnosis selector, status badge,
+  list/grid shell, saved filter, tab/segmented view switcher, right-side CRUD sheet, document/workflow sheet,
+  destructive confirmation, attachment uploader, read-only patient summary, typed create action.
+- Reuse the existing component/pattern for that semantic role. Falling back to raw HTML, generic `Input`, or
+  a hand-rolled local control is allowed only after CodeGraph/bounded search finds no suitable shared or
+  module-local pattern, and the code/review notes state why. Existing legacy deviations are exceptions to
+  preserve, not examples to copy.
+- The required implementation artifact is a small reuse matrix for every new/changed visible surface:
+  `UI element → semantic role → chosen existing component/pattern (file:line) → actual implementation`.
+  A feature with no such matrix has not satisfied FE discovery, even if it builds.
+- CTA-specific create flows must preserve the semantic type chosen by the CTA. Do not expose a generic type
+  selector that lets the user silently switch to another document/entity kind unless a live module pattern
+  explicitly supports a generic "create any type" flow.
+- Choose the sheet/dialog/page surface by matching an existing surface class, not by copying classes by
+  appearance. Small CRUD forms use the right-sheet pattern; large document/workflow forms can use page-mode
+  sheets, but inside the normal app shell they should follow the shell-aware page pattern unless the intended
+  behavior is to cover the entire viewport.
+
 Overlay/testability contract:
 
 - Sheet/Dialog/Drawer content must be discoverable by both accessibility and automation. Prefer accessible
@@ -465,6 +487,12 @@ DTO/client regeneration:
 - `npm run dtos:update`
 - `npm run client:generate`
 - Then validate both generated presence and impacted FE compile/type behavior.
+
+FE bug-fix prerequisite — BE up + fresh DTOs FIRST (BLOCK):
+
+- **Before fixing any FE bug, the matching BE must be running and you MUST run `npm run dtos:update` first** (then `npm run client:generate` if the client changed). Many FE bugs are stale-contract symptoms (DTO/enum/field drift after a BE change) — fixing FE against stale generated artifacts hides the real cause or "fixes" the wrong layer.
+- Order: start BE for the worktree slot → `npm run dtos:update` (+ `client:generate`) → re-check whether the bug still reproduces against fresh DTOs → only then fix FE. If the symptom disappears after regen, the bug was stale generated artifacts, not FE code.
+- Applies to the fix-flow (`/mh-fix`, `/bug-fix`, `bugfix-from-report`) and FE work in `/mh-implement`. BE need not be edited if the contract is already correct — but it must be **running** and DTOs **freshly regenerated** before the FE fix is judged.
 
 ## Common Automated Review Checks
 

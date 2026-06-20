@@ -34,6 +34,14 @@ Source-of-truth bundle: `engine/workflows/deep-review/protocol.md` · `engine/wo
 
 ## 2. Per-finding fix loop (BLOCK → HIGH → MED; skip LOW/NIT)
 
+**Per-bug PREP before fixing (canon `engine/rules/`):**
+- **FE bug** → BE must be running (worktree slot) + run **`npm run dtos:update`** (then `client:generate` if changed) FIRST; re-check repro against fresh DTOs — symptom gone ⇒ it was stale generated artifacts, not FE code (`engine/rules/frontend.md` → "FE bug-fix prerequisite").
+- **FE visible-UI bug or convention finding** → before editing, build a scoped reuse matrix for the affected
+  surface: `UI element/surface/action → semantic role → existing component/pattern (file:line) → intended fix`.
+  Use CodeGraph + bounded search. If the fix creates or changes a visible control/surface, it must reuse the
+  existing semantic component/pattern unless the matrix proves no suitable pattern exists.
+- **Schema change** → running migrations is allowed on the slot DB, but data must be restorable: use **`make migrate-data`** (backup→clear→remake→migrate→restore; `CONFIRM=yes` non-interactive); verify `.env` targets the slot; `restore-data` skips reshaped tables (re-seed + report). Never the real/shared DB (`engine/rules/backend.md` → "Running migrations").
+
 Iterate findings with `status: OPEN` (or `REOPENED`), severity-first. For each:
 
 ### 2a. Locate
@@ -73,6 +81,8 @@ Then re-check the **relevant checklist dimension(s)** (`engine/workflows/deep-re
 
 - No new bug in the same dimension the finding lived in.
 - No cross-dimension regression (especially: D2/D5 for BE data-access, D3/D10 for FE state/reuse, D6 for auth).
+- For FE visible UI, the final diff still matches the scoped reuse matrix. A D3/D10 claim is not clean if the
+  changed UI element/surface/action lacks a cited live exemplar or a documented CREATE-NEW rationale.
 
 If the self-review uncovers a new issue, open a new finding in the findings file (F-00N+1, `status: OPEN`, `round_found: current`) and fix it in the same session if severity >= HIGH, or log it for the next round otherwise.
 

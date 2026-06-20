@@ -25,9 +25,12 @@ from typing import Iterable
 
 
 DEFAULT_SQL_PASSWORD = os.environ.get("MYHOSPITAL_SQL_PASSWORD", "Hospital123!")
-DEFAULT_SERVICESTACK_LICENSE = (
-    "TRIAL30WEB-e3JlZjpUUklBTDMwV0VCLG5hbWU6Ni8xNy8yMDI2IDUzZjcxZDcxNmQyNzQwOTJhOWY3ODVhN2I2OTE5MDk2LHR5cGU6VHJpYWwsbWV0YTowLGhhc2g6c1F6RWkzVGY3UzJOUmhXYno1b1Uwa3k5T1ZDbmRQS2FycmEvbk1WZW1ob2J4SCs3K25KLzBRY1Y5SGpoVEk1K2V5amxwN0ZvQllPM1Z1T00zdzl3VFpIb0tvZitQaERBVHVZMThYTngzbUhtaVE4OVVtQTlUSVVLakMwRmRYZ1lWdlgxaXNDWlBjdFRkZWUwNThKSXZ3bmoweGNRb2NzSkIwa2ZmbHlZQXh3PSxleHBpcnk6MjAyNi0wNy0xN30="
+DEFAULT_INTERNAL_TOKEN_SECRET = os.environ.get(
+    "MYHOSPITAL_INTERNAL_TOKEN_SECRET",
+    "0a3ab85d1105f192703ca4fadf429817b3e2145f2a84eae27c00d0084ed60fcd",
 )
+DEFAULT_BFF_BRIDGE_URL = os.environ.get("MYHOSPITAL_BFF_BRIDGE_URL", "http://localhost:5000")
+DEFAULT_BFF_BRIDGE_SECRET = os.environ.get("MYHOSPITAL_BFF_BRIDGE_SECRET", "dev-only-dummy")
 WORKTREE_META_FILE = ".myhospital-worktree.json"
 
 
@@ -138,42 +141,45 @@ def ensure_dotnet_sdk_workaround(be_path: Path, *, dry_run: bool = False) -> Non
     mark_skip_worktree_if_task(be_path, ("Directory.Build.props",), dry_run=dry_run)
 
 
-def csharp_string_literal(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-
 def ensure_servicestack_license(be_path: Path, *, dry_run: bool = False) -> None:
-    """Register the local ServiceStack trial license in BE worktree Program.cs.
+    """Ensure local ServiceStack runtime patch exists in a BE worktree.
 
-    The main BE repo intentionally remains untouched; worktrees get the local
-    runtime patch during creation and before run-be.
+    Older harness versions inserted `ServiceStack.Licensing.RegisterLicense`
+    into Program.cs. Current local-dev setup uses a patched ServiceStack.Text
+    DLL copied by MyHospital.csproj after Build/Publish, so new worktrees must
+    have both `patched/` files and the MSBuild target.
     """
-    program = be_path / "MyHospital" / "Program.cs"
-    if not program.exists():
-        print(f"Warning: {program} not found; cannot apply ServiceStack license.")
-        return
-    content = program.read_text(encoding="utf-8")
-    license_key = os.environ.get("MYHOSPITAL_SERVICESTACK_LICENSE", DEFAULT_SERVICESTACK_LICENSE)
-    line = f"ServiceStack.Licensing.RegisterLicense({csharp_string_literal(license_key)});"
-    registration_re = re.compile(r"^[ \t]*ServiceStack\.Licensing\.RegisterLicense\([^;\n]*\);[ \t]*$", re.MULTILINE)
-    if registration_re.search(content):
-        updated = registration_re.sub(line, content, count=1)
-        if updated == content:
-            mark_skip_worktree_if_task(be_path, ("MyHospital/Program.cs",), dry_run=dry_run)
-            return
-        print(f"> patch {program} (ServiceStack license)")
+    root = workspace_root()
+    source_dir = root / "myhospital-be" / "patched"
+    target_dir = be_path / "patched"
+    required = ("ServiceStack.Text.dll", "ServiceStack.Text.xml")
+    for name in required:
+        src = source_dir / name
+        dst = target_dir / name
+        if not src.exists():
+            raise ToolError(f"ServiceStack patched assembly source missing: {src}")
+        if dst.exists():
+            continue
+        print(f"> copy {src} -> {dst}")
         if not dry_run:
-            program.write_text(updated, encoding="utf-8")
-        mark_skip_worktree_if_task(be_path, ("MyHospital/Program.cs",), dry_run=dry_run)
-        return
-    marker = "var builder = WebApplication.CreateBuilder(args);"
-    if marker not in content:
-        raise ToolError(f"Cannot apply ServiceStack license; missing builder marker in {program}")
-    updated = content.replace(marker, f"{line}\n\n{marker}", 1)
-    print(f"> patch {program} (ServiceStack license)")
-    if not dry_run:
-        program.write_text(updated, encoding="utf-8")
-    mark_skip_worktree_if_task(be_path, ("MyHospital/Program.cs",), dry_run=dry_run)
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+
+    csproj = be_path / "MyHospital" / "MyHospital.csproj"
+    if not csproj.exists():
+        raise ToolError(f"MyHospital.csproj not found: {csproj}")
+    content = csproj.read_text(encoding="utf-8")
+    if "OverwritePatchedServiceStackText" not in content:
+        source_csproj = root / "myhospital-be" / "MyHospital" / "MyHospital.csproj"
+        source_content = source_csproj.read_text(encoding="utf-8") if source_csproj.exists() else ""
+        marker = "<!--\n    Copy đè ServiceStack.Text.dll"
+        if marker not in source_content:
+            raise ToolError(f"Patched ServiceStack MSBuild target missing from {source_csproj}")
+        target_block = source_content[source_content.index(marker): source_content.rindex("</Project>")].rstrip()
+        updated = content.replace("</Project>", f"\n  {target_block}\n\n</Project>", 1)
+        print(f"> patch {csproj} (ServiceStack.Text patched DLL target)")
+        if not dry_run:
+            csproj.write_text(updated, encoding="utf-8")
 
 
 def python_has_module(python_exe: str, module_name: str) -> bool:
@@ -372,6 +378,49 @@ def relative_to_root(path: Path) -> str:
         return str(path)
 
 
+def is_git_worktree_dir(path: Path) -> bool:
+    """Return true only for an actual Git worktree checkout at this path.
+
+    `git -C path status` is not sufficient inside this workspace because a
+    partial folder under `worktrees/` can be treated as part of the harness root
+    Git repository. Real linked worktrees have a `.git` file or directory.
+    """
+    return (path / ".git").exists()
+
+
+def is_harness_partial_task_root(task_root: Path) -> bool:
+    """Detect a failed create attempt that left only harness-generated artifacts."""
+    if not task_root.exists() or not task_root.is_dir():
+        return False
+    allowed_files = {
+        WORKTREE_META_FILE,
+        "be/patched/ServiceStack.Text.dll",
+        "be/patched/ServiceStack.Text.xml",
+    }
+    for path in task_root.rglob("*"):
+        if path.is_dir():
+            continue
+        try:
+            rel = path.relative_to(task_root).as_posix()
+        except ValueError:
+            return False
+        if rel not in allowed_files:
+            return False
+    return True
+
+
+def remove_harness_partial_task_root(task_root: Path, *, dry_run: bool = False) -> None:
+    print(f"> remove partial harness-created task folder {task_root}")
+    if dry_run:
+        return
+    for path in sorted(task_root.rglob("*"), key=lambda p: len(p.parts), reverse=True):
+        if path.is_file() or path.is_symlink():
+            path.unlink()
+        elif path.is_dir():
+            path.rmdir()
+    task_root.rmdir()
+
+
 def write_worktree_metadata(
     *,
     task_root: Path,
@@ -438,6 +487,10 @@ def collect_worktree_info(task_root: Path) -> dict[str, object]:
         errors.append(f"fe-env:{fe_error}")
     if be_error:
         errors.append(f"be-env:{be_error}")
+    if not is_git_worktree_dir(task_root / "fe"):
+        errors.append("fe-worktree:missing")
+    if not is_git_worktree_dir(task_root / "be"):
+        errors.append("be-worktree:missing")
     appsettings, appsettings_error = read_json_object(task_root / "be" / "MyHospital" / "appsettings.Development.json")
     if appsettings_error and appsettings_error != "missing":
         errors.append(f"appsettings:{appsettings_error}")
@@ -730,6 +783,9 @@ def configure_be_env(
     be_lines = set_env_line(be_lines, "ConnectionStrings__DefaultConnection", target_connection)
     be_lines = set_env_line(be_lines, "ConnectionStrings__ReadOnlyConnection", target_connection)
     be_lines = set_env_line(be_lines, "CORS_ORIGINS", local_cors_origins())
+    be_lines = set_env_line(be_lines, "InternalTokenSecret", DEFAULT_INTERNAL_TOKEN_SECRET)
+    be_lines = set_env_line(be_lines, "Bff__BridgeUrl", DEFAULT_BFF_BRIDGE_URL)
+    be_lines = set_env_line(be_lines, "Bff__BridgeSecret", DEFAULT_BFF_BRIDGE_SECRET)
     be_env = parse_env_lines(be_lines, str(be_worktree / ".env"))
     write_lines(be_worktree / ".env", be_lines, dry_run=dry_run)
     configure_be_local_runtime(
@@ -795,6 +851,10 @@ def repair_worktree_config(args: argparse.Namespace) -> None:
         cfg = infer_slot_config(task_root)
         fe_worktree = task_root / "fe"
         be_worktree = task_root / "be"
+        if not is_git_worktree_dir(fe_worktree):
+            raise ToolError(f"FE git worktree not found: {fe_worktree}")
+        if not is_git_worktree_dir(be_worktree):
+            raise ToolError(f"BE git worktree not found: {be_worktree}")
         ensure_dotnet_sdk_workaround(be_worktree, dry_run=args.dry_run)
         ensure_servicestack_license(be_worktree, dry_run=args.dry_run)
         fe_template = fe_worktree / ".env" if (fe_worktree / ".env").exists() else root / "myhospital-fe" / ".env"
@@ -1041,6 +1101,28 @@ def copy_skip_worktree_files(repo: Path, worktree: Path, label: str, *, dry_run:
             print(f"Warning: {label} skip-worktree source not found in main repo: {rel}")
 
 
+def ensure_local_git_exclude(repo: Path, pattern: str, *, dry_run: bool = False) -> None:
+    """Add a worktree-local ignore pattern without changing tracked .gitignore."""
+    proc = run(["git", "-C", str(repo), "rev-parse", "--git-path", "info/exclude"], capture=True, check=False)
+    if proc.returncode != 0:
+        print(f"Warning: cannot resolve git exclude path for {repo}; skipping {pattern!r}.")
+        return
+    exclude_path = Path(proc.stdout.strip())
+    if not exclude_path.is_absolute():
+        exclude_path = repo / exclude_path
+    existing = exclude_path.read_text(encoding="utf-8").splitlines() if exclude_path.exists() else []
+    if pattern in existing:
+        return
+    print(f"> add {pattern} to {exclude_path}")
+    if dry_run:
+        return
+    exclude_path.parent.mkdir(parents=True, exist_ok=True)
+    with exclude_path.open("a", encoding="utf-8") as handle:
+        if existing and existing[-1] != "":
+            handle.write("\n")
+        handle.write(f"{pattern}\n")
+
+
 def _rollback_create(
     created: list[tuple[Path, str, Path]],
     task_root: Path,
@@ -1072,6 +1154,30 @@ def _rollback_create(
         pass
 
 
+def init_codegraph(fe_worktree: Path, be_worktree: Path, *, dry_run: bool = False) -> None:
+    """Build the CodeGraph index for a freshly-created worktree (be + fe).
+
+    Best-effort: CodeGraph is an optional local aid. If the binary is missing or a
+    build fails, warn and continue — a worktree without an index still works (callers
+    fall back to bounded `rg`). Never let this roll back an otherwise-good worktree.
+    """
+    if shutil.which("codegraph") is None:
+        print("Skipping CodeGraph index: 'codegraph' not found on PATH.")
+        return
+    for label, wt in (("BE", be_worktree), ("FE", fe_worktree)):
+        if not wt.exists():
+            continue
+        ensure_local_git_exclude(wt, ".codegraph/", dry_run=dry_run)
+        print(f"Building CodeGraph index ({label}: {wt}) ...")
+        if dry_run:
+            print(f"> codegraph init  (cwd={wt})")
+            continue
+        proc = subprocess.run(["codegraph", "init"], cwd=str(wt))
+        if proc.returncode != 0:
+            print(f"Warning: CodeGraph index for {label} failed (exit {proc.returncode}); "
+                  f"run `cd {wt} && codegraph init` manually later.", file=sys.stderr)
+
+
 def create_worktree(args: argparse.Namespace) -> None:
     root = workspace_root()
     slug = safe_slug(args.slug)
@@ -1087,12 +1193,17 @@ def create_worktree(args: argparse.Namespace) -> None:
     require_command("git")
     if not args.skip_fe_install:
         require_command("npm")
+    if not args.skip_db_sync and args.db_setup == "migrate-data":
+        require_command("make")
     if not fe_repo.exists():
         raise ToolError(f"FE repo not found: {fe_repo}")
     if not be_repo.exists():
         raise ToolError(f"BE repo not found: {be_repo}")
     if task_root.exists():
-        raise ToolError(f"Task worktree folder already exists: {task_root}")
+        if is_harness_partial_task_root(task_root):
+            remove_harness_partial_task_root(task_root, dry_run=args.dry_run)
+        else:
+            raise ToolError(f"Task worktree folder already exists: {task_root}")
 
     fe_source_ref = f"refs/remotes/origin/{args.fe_base}"
     be_source_ref = f"refs/remotes/origin/{args.be_base}"
@@ -1195,7 +1306,20 @@ def create_worktree(args: argparse.Namespace) -> None:
             print()
             print("Skipping FE dependency install because --skip-fe-install was passed.")
 
-        if not args.skip_db_sync:
+        if not args.skip_db_sync and args.db_setup == "migrate-data":
+            print()
+            print("Running BE migrate-data for the slot DB...")
+            init_db_slots(
+                argparse.Namespace(
+                    slots=[args.slot],
+                    image=args.image,
+                    sa_password=args.sql_password,
+                    pull=False,
+                    dry_run=args.dry_run,
+                )
+            )
+            run(["make", "migrate-data", "CONFIRM=yes"], cwd=be_worktree, dry_run=args.dry_run)
+        elif not args.skip_db_sync and args.db_setup == "sync-db":
             migration_be_path = str(Path(args.migration_be_path).resolve()) if args.migration_be_path else str(be_worktree)
             sync_args = argparse.Namespace(
                 slot=args.slot,
@@ -1231,6 +1355,14 @@ def create_worktree(args: argparse.Namespace) -> None:
         print(f"\nERROR: worktree creation failed: {exc}", file=sys.stderr)
         _rollback_create(created, task_root, dry_run=args.dry_run)
         raise
+
+    if not getattr(args, "skip_codegraph", False):
+        print()
+        print("Building CodeGraph index for the new worktree...")
+        init_codegraph(fe_worktree, be_worktree, dry_run=args.dry_run)
+    else:
+        print()
+        print("Skipping CodeGraph index because --skip-codegraph was passed.")
 
     print()
     print(f"Worktree ready: {task_root}")
@@ -1763,9 +1895,20 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--migration-be-path")
     p.add_argument("--sql-password", default=DEFAULT_SQL_PASSWORD)
     p.add_argument("--image", default="mcr.microsoft.com/mssql/server:2022-latest")
-    p.add_argument("--skip-db-sync", action="store_true", help="Skip copying main DB data; still ensures the slot SQL container exists.")
+    p.add_argument(
+        "--db-setup",
+        choices=["migrate-data", "sync-db"],
+        default="migrate-data",
+        help=(
+            "Slot DB setup mode. Default: run `make migrate-data CONFIRM=yes` "
+            "inside the BE worktree so migrations are regenerated from the current model. "
+            "`sync-db` keeps the older committed-migration copy-from-main flow."
+        ),
+    )
+    p.add_argument("--skip-db-sync", action="store_true", help="Skip DB data/migration setup; still ensures the slot SQL container exists.")
     p.add_argument("--skip-db-init", action="store_true", help="With --skip-db-sync, also skip Docker/SQL slot init (true light worktree, no DB infra touched).")
     p.add_argument("--skip-fe-install", action="store_true")
+    p.add_argument("--skip-codegraph", action="store_true", help="Skip building the CodeGraph index for the new worktree (be+fe).")
     p.add_argument("--allow-port-in-use", action="store_true")
     p.add_argument("--scan-worktrees", action="store_true", help="Allow scanning existing worktrees for migration sources.")
     p.add_argument("--dry-run", action="store_true")

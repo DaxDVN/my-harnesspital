@@ -14,10 +14,14 @@ python scripts/mh_scan --root worktrees/<slug>/fe --scope (git -C worktrees/<slu
 3. **Structural lint** — `python scripts/mh_scan --root worktrees/<slug>/fe --scope <changed> --format summary` (wraps the ast-grep pack in `scripts/sgconfig/`). Flags dead `@/lib/dtos/dtos` import (**FE-V1**, HIGH), raw `fetch()` in UI (**FE-V2/V5**), master-data name-compare like `=== 'kinh'` (**FE-V3**), `serviceStackClient.*` in a component. WARN hits are advisory — verify against audit §6 legit exceptions (blob fetch, dynamic-form, sub-form FormProvider) before "fixing".
 4. **No committed backups** — `fd -t f '\.(bak|orig|v2\.bak)$' <changed dir>` must be empty (audit **V12**: 14 `.v2.bak` in retail).
 5. **Contract** — if a generated file would change: `npm run dtos:update && npm run client:generate`, then re-run step 1. Never hand-edit generated files.
-6. **Browser** — for visible UI, run the dev server and verify (smoke login: customer `bvtest3` / `lynkhanh9822@gmail.com` / `12.[s7HXZQ;NfAoF`).
+6. **Reuse matrix** — for visible UI, the implementation/review notes must include
+   `UI element/surface/action → semantic role → existing component/pattern (file:line) → actual implementation/decision`.
+   Every CREATE-NEW row needs an evidence-backed reason. If the matrix is missing, or the diff does not match it,
+   the FE gate fails even when build/scanner pass.
+7. **Browser** — for visible UI, run the dev server and verify (smoke login: customer `bvtest3` / `lynkhanh9822@gmail.com` / `12.[s7HXZQ;NfAoF`).
 
 ## BE gate (if BE touched)
 - `dotnet build` clean. EF: change the model + `dotnet ef migrations add` (never hand-edit a generated migration). Conventions per `backend.md` (BaseService, no transaction/lock, no N+1, tenant scope, soft-delete/audit auto).
 
 ## Pass criteria
-0 type errors · 0 ESLint errors on changed files · ast-grep warnings each either fixed or justified (audit §6 exception, with an `eslint-disable`/comment rationale — do not widen rules) · no committed `.bak` · generated artifacts regenerated not hand-edited. Then proceed to self-review-diff (B5/F4).
+0 type errors · 0 ESLint errors on changed files · ast-grep warnings each either fixed or justified (audit §6 exception, with an `eslint-disable`/comment rationale — do not widen rules) · visible-UI reuse matrix present and matched by the diff · no committed `.bak` · generated artifacts regenerated not hand-edited. Then proceed to self-review-diff (B5/F4).

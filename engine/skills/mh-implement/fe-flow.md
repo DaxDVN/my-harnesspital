@@ -39,6 +39,7 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
 
 ## F1 — Contract intake & DTO/client sync gate
 - **Input:** the DTOs / hooks / permission-constants this feature needs (from `08-api.md`, or the BE worktree if FE+BE).
+- **Fixing an FE bug (not greenfield build):** BE must be **running** + run **`npm run dtos:update`** FIRST, then re-check the bug against fresh DTOs before touching FE code (`engine/rules/frontend.md` → "FE bug-fix prerequisite"). A schema change needed mid-fix → running migrations on the slot DB is allowed if data is restorable (**`make migrate-data`**, `engine/rules/backend.md` → "Running migrations"); never the real DB.
 - **Do:** (a) FE+BE → land the BE contract first, then `npm run dtos:update && npm run client:generate` **in the
   worktree**. (b) FE-only → assert the generated layer (`generated-dtos.ts` / `generated-api-client.ts` /
   `Constants.ts`) already carries every referenced symbol, and that `@/lib/dtos/generated-dtos` resolves
@@ -62,10 +63,16 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
   means copying a monolith.
   - The reuse source is the **UI.md reuse map** (`03-ui.md`, preferred) + **CodeGraph** / bounded `rg`. *(The
     legacy `*.generated.md` catalogs + `npm run components:index` were **removed** — they never existed in fe.)*
+  - If `03-ui.md` is absent or incomplete for the changed visible surface, create the same reuse matrix locally
+    before coding: `UI element/surface/action → semantic role → existing component/pattern (file:line) →
+    decision REUSE|EXTEND|CREATE-NEW → why`. This matrix is required for every new/changed visible form, list,
+    filter, dialog/sheet, action cluster, and control group. Do not implement a hand-rolled component/control
+    until the matrix shows no suitable existing pattern.
 - **FE pitfall prevented:** rebuilding an existing component/hook; copying the monolith / inline-schema
   anti-patterns.
-- **Done-check:** a 5–10-line reuse note (= `preflight.md` output, now driven by the UI.md map): components/
-  hooks/adapters reused, exemplar GOOD parts mirrored, the 1–2 genuinely new pieces.
+- **Done-check:** the reuse matrix exists and every CREATE-NEW row has a search-backed reason; plus a 5–10-line
+  summary (= `preflight.md` output, now driven by the UI.md map): components/hooks/adapters reused, exemplar GOOD
+  parts mirrored, the 1–2 genuinely new pieces.
 
 ## F3 — Scaffold the canonical skeleton  *(calls `/mh-scaffold`)*
 - **Input:** the reuse note (F2) + module/feature name.
@@ -102,7 +109,9 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
 - **Do:** `forms/<f>-schema.ts`: `export const get<F>FormSchema = (t?) => z.object({...})` + inferred
   `<F>FormValues`. `useForm<<F>FormValues>({ resolver: zodResolver(get<F>FormSchema(t)) })` — **resolver
   REQUIRED**. Create/edit in `<Sheet>`; destructive confirm in `<AlertDialog>`; reset on open/identity
-  change; unsaved-change guard.
+  change; unsaved-change guard. For each visible field/control/action, use the component/pattern selected in
+  the F2 reuse matrix; if coding reveals the selected component cannot fit, update the matrix with evidence
+  before creating/wrapping a new one.
 - **FE pitfall prevented:** `useForm` without resolver (FE-V4 → **validation silently absent**; ~half of the
   repo's call-sites have no resolver); inline schema (un-i18n-able, copied from warehouse); missing
   dirty-guard.
@@ -148,7 +157,9 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
 - **Input:** the diff.
 - **Do:** run `mh-review` on **only the diff** (explicit file set = changed files) — reviewer D3/D7/D10 already
   carry the FE bug-classes; fix what it flags **now**, do not push regressions to a later round. For visible
-  UI, run the dev server + smoke login (`bvtest3` / `lynkhanh9822@gmail.com` / `12.[s7HXZQ;NfAoF`). For a real user flow, run the FE E2E path
+  UI, self-review must compare the final diff back to the F2 reuse matrix: every visible element/surface/action
+  either uses the selected exemplar/pattern or has an updated, evidence-backed CREATE-NEW rationale. Then run the
+  dev server + smoke login (`bvtest3` / `lynkhanh9822@gmail.com` / `12.[s7HXZQ;NfAoF`). For a real user flow, run the FE E2E path
   (`engine/workflows/progressive-test/` → agent-browser) — the testids added in F6 make this fast.
 - **FE pitfall prevented:** pushing regressions/convention drift to a later review round (the thing that makes
   review take 3+ rounds); shipping a flow that does not actually work in the browser.

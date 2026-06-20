@@ -24,6 +24,10 @@ If the bug is **unambiguous + local + low-risk** (typo, label/i18n, obvious off-
 ## State
 INTAKE → REPRODUCING → REPRODUCED → RCA_RUNNING → FIX_PLAN_READY → CODEX_REVIEW_REQUIRED|DIRECT_FIX_APPROVED → FIX_APPROVED → IMPLEMENTING → VERIFYING → VERIFIED_FIXED | FIX_FAILED | NEEDS_MORE_EVIDENCE | HUMAN_DECISION_REQUIRED.
 
+## Per-bug prep (canon `engine/rules/`)
+- **FE bug** → BE running (worktree slot) + **`npm run dtos:update`** (+`client:generate` if changed) BEFORE fixing; re-verify repro on fresh DTOs (symptom gone ⇒ stale generated artifacts, not FE code). `engine/rules/frontend.md` → "FE bug-fix prerequisite".
+- **Schema change** → may run migrations on the slot DB, data must be restorable: **`make migrate-data`** (backup→clear→remake→migrate→restore). Never the real/shared DB; `restore-data` skips reshaped tables (re-seed + report). `engine/rules/backend.md` → "Running migrations".
+
 ## Boundaries
 RCA never edits (mh-rca is read-only). Fix only via `/mh-fix` in a worktree, allowlist-bounded. No symptom-fix without root cause; no scope-creep; verification mandatory. Honor the guard.
 

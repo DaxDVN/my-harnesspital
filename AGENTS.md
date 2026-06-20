@@ -8,8 +8,8 @@ load the repo-specific harness before touching code.
 **At the very first prompt of every session**, before doing any code work:
 
 1. Run `python scripts/worktree.py list` from the workspace root to list active worktrees. Do not scan `worktrees/` directly unless the task requires it.
-2. Ask the user: **"Bạn muốn làm việc trong worktree nào?"** — show the slug list and slot map below.
-3. Wait for confirmation before touching any code.
+2. **Auto-resolve from the first prompt — skip the question when unambiguous.** If the first prompt already names a worktree (its **slug**, or its **Vietnamese name/nội dung** describing the worktree) and that name resolves to **exactly one** active worktree from step 1, **do NOT ask** — proceed directly in that worktree and state which one you picked in your response (e.g. "Làm trong `worktrees/<slug>`."). Only ask **"Bạn muốn làm việc trong worktree nào?"** (showing the slug list + slot map below) when: the prompt names **no** worktree, OR the name is **ambiguous** (≥2 active worktrees share that slug / Vietnamese name / content) — then list the matches and have the user disambiguate.
+3. Wait for confirmation before touching any code **only when step 2 had to ask**. When step 2 auto-resolved unambiguously, no confirmation is needed — go.
 
 The user's interactive shell is `fish`, but repository automation must be shell-agnostic Python. For user-facing copy/paste commands, use fish syntax. For bash-only snippets, wrap them as `bash -lc '...'`.
 
@@ -173,6 +173,14 @@ wired into another tool's hook system — see `engine/rules/cross-tool-enforceme
 
 Explicitly ALLOWED (never block — implementers need these): run/kill/restart dev servers
 (`npm run dev`, `dotnet run`, `kill`, `pkill`), build/test, and DTO/client regen.
+
+**Running migrations is ALLOWED on a worktree slot DB** (owner-authorized) **provided current data is
+restorable** — use **`make migrate-data`** (backup-data → db-clear → migrate-remake → migrate-up →
+restore-data; `CONFIRM=yes` for non-interactive). Never on the real/shared source DB; backup must exist
+before any destructive migrate. Note `restore-data` skips reshaped tables (re-seed those). Hand-EDITING
+generated migration files stays forbidden (regenerate via EF CLI). Full rule: `engine/rules/backend.md`
+→ "Running migrations". **Fixing an FE bug requires the BE running + `npm run dtos:update` first**
+(stale-contract guard) — `engine/rules/frontend.md` → "FE bug-fix prerequisite".
 
 ## Stop Protocol
 
@@ -386,7 +394,11 @@ The workspace root (`/home/dax/Documents/arabica/roast`) is reserved for harness
 | One-off scripts (Python) | `scripts/` |
 | Feature specs, BA docs | `specs/<module>/` |
 
-This applies to **all agents** (Claude, Codex, Antigravity): if a tool generates a file as a side-effect (screenshot, report, diff), save it to the correct subfolder before returning.
+**Date-folder rule (all agent-generated artifacts):** group session output by day — write to `<dir>/<YYYY-MM-DD>/<file>` (today = `date +%F`), **auto-creating the folder if missing** (`mkdir -p`). Applies to `docs/audit/`, `docs/tasks/`, `docs/session-notes/`, `docs/testing/` (incl. `screenshots/`). Example: audit findings → `docs/audit/2026-06-19/full-audit-vital-signs.round-1.md`, not flat `docs/audit/full-audit-…`. Pre-existing flat files stay where they are — the rule applies to **new** files only. (Specs under `specs/<module>/` and one-off scripts under `scripts/` are NOT date-foldered.)
+
+**Audit round-versioning rule (OVERRIDES any filename a prompt/skill specifies).** Every document under `docs/audit/` is versioned by round: **`<base>.round-<N>.md`**. `N` = `1` if no `<base>.round-*.md` exists **anywhere** under `docs/audit/` (any date-folder); else `max(existing round) + 1`. This **overrides** what a system prompt asks for — if a prompt says "write `<base>.md`", you still write `<base>.round-<N>.md`. Resolve the path deterministically with the helper (do NOT eyeball the round number): `python scripts/audit_path.py "<base>"` prints `docs/audit/<today>/<base>.round-<N>.md` and creates the folder; add `--vi` for the Vietnamese clone (same round, `.vi.md`), `--current` for the highest existing round, `--dry-run` to print without mkdir. The bilingual `.vi.md` clone shares the round number — it is not a new round. (`docs/audit/` only; other `docs/*` dirs are date-foldered but not round-versioned unless a workflow says so.)
+
+This applies to **all agents** (Claude, Codex, Antigravity): if a tool generates a file as a side-effect (screenshot, report, diff), save it to the correct subfolder (under today's date-folder) before returning.
 
 > **Tracked vs ignored (reconcile with `.gitignore`):** `docs/harness/**` (harness history — reviews, plans, notes) + `docs/graphify-agent-guide.md` are **version-controlled** → put durable harness reports/research/plans there. The other `docs/*` dirs above (`docs/session-notes`, `docs/tasks`, `docs/testing`) are **gitignored working space** (ephemeral, not committed) — fine for session runtime artifacts, but anything you want kept in git history goes under `docs/harness/notes|plans`.
 
