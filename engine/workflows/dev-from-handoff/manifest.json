@@ -1,0 +1,42 @@
+{
+  "name": "dev-from-handoff",
+  "description": "Owner-gated workflow for implementing from owner-supplied business/design handoff documents. Intake verifies the handoff, drafts a technical implementation plan, waits for owner approval, executes bounded dev slices, then records validation and receipt. It does not perform BA discovery, invent business/design rules, or run BMAD-style requirement discovery.",
+  "kind": "workflow",
+  "implementation_kind": "manual-handoff-dev",
+  "maturity": "scaffolded",
+  "public_entry": true,
+  "manual_only": true,
+  "owner_invocation_required": true,
+  "auto_route_allowed": false,
+  "lifecycle_status": "DRAFT",
+  "entry_skill": "dev-from-handoff",
+  "recommended_prompt_file": "",
+  "required_inputs": ["owner-supplied business/design handoff document(s)", "target worktree slug before source edits", "owner approval of the technical plan"],
+  "allowed_writes": [
+    "engine/workflows/dev-from-handoff/rounds/**",
+    "docs/tasks/**",
+    "docs/session-notes/**",
+    "worktrees/<slug>/fe/**",
+    "worktrees/<slug>/be/**"
+  ],
+  "validators": [
+    "python scripts/harness_doctor.py",
+    "python engine/workflows/_shared/validate-envelope.py <envelope>",
+    "python engine/workflows/_shared/allowlist-check.py <allowlist> <diff>",
+    "targeted build/test/typecheck from approved plan"
+  ],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "eval_summary": {
+    "last_real_run": "",
+    "artifact_path": "",
+    "verdict": ""
+  },
+  "agents": [],
+  "external_agents": [],
+  "skills_used": ["mh-implement", "impact-analysis", "robust-test"],
+  "rules": ["backend", "frontend", "source-discovery", "artifact-policy", "spec-driven-development", "ponytail", "quality-gates"],
+  "uses_shared": ["allowlist-check.py", "envelope.schema.json", "validate-envelope.py", "runtime-boundary.md"]
+}

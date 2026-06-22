@@ -1,9 +1,10 @@
-# Agent Shortcuts & Tool Routing
+# Agent Shortcuts & Tool Routing Reference
 
-> **Auto-loaded** (referenced by `AGENTS.md`; `@`-imported by `CLAUDE.md`). Purpose: the user should
-> **not** have to memorize commands. When the user's message matches an intent or a short prompt below,
-> the agent **proactively uses the mapped tool** — *except* items marked **USER-DRIVEN** (there the
-> agent prints the command / points to a guide and runs it only on an explicit "do it").
+> **Lazy-loaded reference.** P1+ routing starts with `python scripts/harness_router.py "<prompt>"`
+> for non-trivial workflow choices. This file remains a human-readable shortcut map so the user does not
+> have to memorize commands. Items marked **USER-DRIVEN** still require explicit "do it" permission.
+> Router output may include `prompt_file_recommended`; treat it as a fresh/external-agent runbook pointer,
+> not a normal `files_to_load` item for daily work.
 
 ## 1. Short-prompt aliases (terse trigger → action)
 | You type (VN / EN) | Agent runs |
@@ -47,7 +48,7 @@
   preflight before any risky change.
 - **Fast-path (skip the chain)** → a trivial + local change with **no** contract/schema/business-rule/
   multi-module impact: go DIRECT to `/mh-implement` (feature) or `/mh-fix` (bug) — no design/slice/preflight.
-  "Trivial" mirrors `progressive-test`'s deterministic `classify`.
+  "Trivial" means no contract/business/security/schema uncertainty and obvious local root cause.
 
 ## 3. USER-DRIVEN — never auto-run (print the command / point to the guide)
 - **Review / audit** (`/mh-review`): **explicit only**. Run it solely when the user asks for a review
@@ -55,12 +56,11 @@
 - **Promote learning** (`/promote`): **owner-invoked only** — the agent NEVER self-invokes. Moves a
   `second-brain/` entry into the gated `main-brain/` (or graduates it into a new skill). The owner
   authorizes by typing `! touch main-brain/.promote-unlock`. Agents **must never write `main-brain/`**.
-- **Worktree / Zellij** (`just wt-*`, `zorch`, `zimpl`, `zkillwt`, `worktree.py`): user-driven. Print
-  the exact fish command and/or point to **`docs/guides/worktree-zellij-manual.md`**; run only on an
-  explicit "do it for me".
+- **Worktree lifecycle** (`just wt-*`, `worktree.py`): user-driven. Print the exact command; run only on
+  an explicit "do it for me". Terminal/session management is outside the harness and owner-controlled manually.
 - **`git commit`/`push`, dependency installs, recursive delete**: blocked by the guard / require an
   explicit user action regardless.
 
 ## Notes
-- This file is the source of truth for shortcuts — edit it freely; the agent re-reads it each session.
+- This file is no longer auto-loaded by `CLAUDE.md`; use it only when the router or user intent calls for shortcut detail.
 - If a mapped tool is missing (`just doctor` confirms presence), say so — don't silently skip.

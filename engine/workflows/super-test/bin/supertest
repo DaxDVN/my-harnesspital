@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# Thin launcher → the deterministic core. e.g.  bin/supertest init-run <module>
-exec python3 "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)/lib/supertest.py" "$@"

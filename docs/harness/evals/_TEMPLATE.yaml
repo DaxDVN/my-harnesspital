@@ -1,0 +1,24 @@
+# Harness workflow eval ledger template.
+# P4 status: validated by scripts/harness_eval.py. Do not invent unknown metrics.
+
+workflow:
+lifecycle_status:
+risk_tier: UNKNOWN # T0|T1|T2|T3|UNKNOWN
+model:
+executor:
+input_artifacts: []
+output_artifacts: []
+validations_run: []
+tool_calls:
+estimated_tokens:
+elapsed:
+bugs_found:
+bugs_verified:
+false_positives:
+reopened_bugs:
+rounds:
+human_interventions:
+verdict: UNKNOWN # PASS|PARTIAL|FAIL|UNKNOWN
+cost_of_pass:
+lessons: []
+residual_risks: []

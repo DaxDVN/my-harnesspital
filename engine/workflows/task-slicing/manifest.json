@@ -1,12 +1,31 @@
 {
   "name": "task-slicing",
   "description": "Turns an approved technical design (specs/<module>/07,08,03) into specs/<module>/10-plan.md — vertical slices, per-task file-allowlist, per-task validation, dependency order — and updates 04-traceability.md. Gated on design ambiguity / missing API contract. Prevents large uncontrolled 'implement module' prompts.",
-  "kind": "orchestrated-sdd",
+  "kind": "workflow",
+  "implementation_kind": "orchestrated-sdd",
   "maturity": "scaffolded",
+  "public_entry": true,
+  "manual_only": true,
+  "owner_invocation_required": true,
+  "auto_route_allowed": false,
+  "lifecycle_status": "DRAFT",
   "entry_skill": "task-slicing",
+  "recommended_prompt_file": "engine/prompts/task-slicing.md",
+  "required_inputs": ["approved requirements/design baseline", "module state", "target specs/<module>/"],
+  "allowed_writes": ["engine/workflows/task-slicing/rounds/**", "specs/<module>/10-plan.md", "specs/<module>/04-traceability.md"],
+  "validators": ["python engine/workflows/_shared/gate-check.py <module>", "python engine/workflows/_shared/module-state.py <module>"],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "eval_summary": {
+    "last_real_run": "",
+    "artifact_path": "",
+    "verdict": ""
+  },
   "agents": [],
   "external_agents": [],
   "skills_used": ["impact-analysis"],
-  "rules": ["backend", "frontend"],
+  "rules": ["backend", "frontend", "ponytail", "quality-gates"],
   "uses_shared": ["gate-check.py", "module-state.py", "envelope.schema.json", "validate-envelope.py"]
 }

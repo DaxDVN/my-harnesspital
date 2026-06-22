@@ -82,21 +82,20 @@ def parse_frontmatter(text: str) -> dict | None:
 def check_frontmatter_schema() -> None:
     print("\n--- Check 1: second-brain frontmatter schema ---")
     skip = {"README.md", "INDEX.md"}
-    files = sorted(SECOND_BRAIN.glob("*.md"))
+    files = sorted([p for p in SECOND_BRAIN.glob("*.md") if p.name not in skip] +
+                   list((SECOND_BRAIN / "grouped").glob("[0-9][0-9]-*.md")))
     checked = 0
     for md in files:
-        if md.name in skip:
-            continue
         text = md.read_text(encoding="utf-8")
         fm = parse_frontmatter(text)
         if fm is None:
-            fail(f"{md.name}: missing or malformed frontmatter")
+            fail(f"{md.relative_to(SECOND_BRAIN)}: missing or malformed frontmatter")
             continue
         missing = REQUIRED_KEYS - set(fm.keys())
         if missing:
-            fail(f"{md.name}: missing frontmatter keys: {', '.join(sorted(missing))}")
+            fail(f"{md.relative_to(SECOND_BRAIN)}: missing frontmatter keys: {', '.join(sorted(missing))}")
         else:
-            ok(f"{md.name}: frontmatter OK")
+            ok(f"{md.relative_to(SECOND_BRAIN)}: frontmatter OK")
         checked += 1
     if checked == 0:
         ok("second-brain/ has no learning entries yet")
@@ -135,9 +134,9 @@ def check_no_provisional_as_canon() -> None:
     mb_text = MAIN_BRAIN_KNOWLEDGE.read_text(encoding="utf-8")
 
     skip = {"README.md", "INDEX.md"}
-    for md in sorted(SECOND_BRAIN.glob("*.md")):
-        if md.name in skip:
-            continue
+    files = sorted([p for p in SECOND_BRAIN.glob("*.md") if p.name not in skip] +
+                   list((SECOND_BRAIN / "grouped").glob("[0-9][0-9]-*.md")))
+    for md in files:
         text = md.read_text(encoding="utf-8")
         fm = parse_frontmatter(text)
         if fm is None:

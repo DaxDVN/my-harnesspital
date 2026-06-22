@@ -1,12 +1,31 @@
 {
   "name": "technical-design",
-  "description": "Turns a Confirmed functional spec into ONE coherent BE+FE+API technical design WRITTEN INTO the existing SDD files specs/<module>/{07-schema,08-api,03-ui,06-decision-log,04-traceability}.md (NOT a parallel set). Design-gated on unresolved 05-open-questions. BE+FE+API kept together for contract coherence.",
-  "kind": "orchestrated-sdd",
+  "description": "Turns confirmed requirements into an API-contract technical design written into existing SDD files (primarily specs/<module>/08-api.md, with decision/traceability updates as needed). Schema is owner-authored, UI details come from ui-spec; design remains gated on unresolved 05-open-questions.",
+  "kind": "workflow",
+  "implementation_kind": "orchestrated-sdd",
   "maturity": "scaffolded",
+  "public_entry": true,
+  "manual_only": true,
+  "owner_invocation_required": true,
+  "auto_route_allowed": false,
+  "lifecycle_status": "DRAFT",
   "entry_skill": "technical-design",
+  "recommended_prompt_file": "engine/prompts/technical-api-design.md",
+  "required_inputs": ["confirmed requirements", "owner-authored schema baseline if schema exists", "module state"],
+  "allowed_writes": ["engine/workflows/technical-design/rounds/**", "specs/<module>/08-api.md", "specs/<module>/06-decision-log.md", "specs/<module>/04-traceability.md"],
+  "validators": ["python engine/workflows/_shared/gate-check.py <module>", "python engine/workflows/_shared/module-state.py <module>"],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "eval_summary": {
+    "last_real_run": "",
+    "artifact_path": "",
+    "verdict": ""
+  },
   "agents": ["mh-rule-auditor"],
   "external_agents": ["codex-reviewer"],
   "skills_used": ["impact-analysis"],
-  "rules": ["backend", "frontend"],
-  "uses_shared": ["gate-check.py", "module-state.py", "envelope.schema.json", "validate-envelope.py"]
+  "rules": ["backend", "frontend", "ponytail", "quality-gates"],
+  "uses_shared": ["gate-check.py", "module-state.py", "envelope.schema.json", "validate-envelope.py", "runtime-boundary.md"]
 }

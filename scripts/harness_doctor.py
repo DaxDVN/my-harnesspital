@@ -3,8 +3,7 @@
 
 Verifies the things that silently break this workspace: missing tools, invalid
 hook JSON, non-compiling hooks, a stale/cross-OS graphify graph, secret leakage
-into the graph, missing fish/Zellij helpers, and routing-doc drift. It changes
-nothing.
+into the graph, and routing-doc drift. It changes nothing.
 
 Usage:
     python scripts/harness_doctor.py            # human report, always exits 0
@@ -48,10 +47,12 @@ def which(name: str) -> str | None:
     return shutil.which(name, path=env_with_dotnet_tools().get("PATH"))
 
 
-def _run(argv: list[str], timeout: int = 30) -> tuple[int, str]:
+def _run(argv: list[str], timeout: int = 30, input_text: str | None = None) -> tuple[int, str]:
     try:
+        stdin_args = {"input": input_text} if input_text is not None else {"stdin": subprocess.DEVNULL}
         proc = subprocess.run(
-            argv, cwd=str(root()), stdin=subprocess.DEVNULL,
+            argv, cwd=str(root()),
+            **stdin_args,
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=timeout,
             env=env_with_dotnet_tools(),
         )
@@ -62,7 +63,7 @@ def _run(argv: list[str], timeout: int = 30) -> tuple[int, str]:
 
 def check_tools() -> None:
     required = ["python", "git"]
-    recommended = ["docker", "dotnet", "npm", "just", "graphify", "zellij", "fish", "rg"]
+    recommended = ["docker", "dotnet", "npm", "just", "graphify", "rg"]
     for tool in required:
         if which(tool):
             add(OK, f"tool:{tool}", "on PATH")
@@ -170,20 +171,6 @@ def check_graph_secrets() -> None:
         missing = [n for n in needed if n not in body]
         add(OK if not missing else WARN, "graphify-ignore",
             "excludes secrets/legacy" if not missing else f"missing patterns: {missing}")
-
-
-def check_helpers_and_layouts() -> None:
-    fish_helper = root() / "scripts/fish/myhospital-zellij.fish"
-    if not fish_helper.exists():
-        add(FAIL, "fish-helpers", "scripts/fish/myhospital-zellij.fish missing")
-    elif shutil.which("fish"):
-        code, out = _run(["fish", "-n", str(fish_helper)])
-        add(OK if code == 0 else FAIL, "fish-helpers", "parses" if code == 0 else f"parse error: {out.strip()}")
-    else:
-        add(INFO, "fish-helpers", "present (fish not installed to parse-check)")
-    for name in ["myhospital-orch.kdl", "myhospital-impl.kdl"]:
-        p = root() / "scripts/zellij" / name
-        add(OK if p.exists() else WARN, f"layout:{name}", "present" if p.exists() else "missing repo template")
 
 
 def check_just() -> None:
@@ -414,33 +401,21 @@ def check_codegraph_freshness() -> None:
             add(OK, f"codegraph-fresh:{repo}", "index newer than last commit (fresh)")
 
 
-def check_super_test() -> None:
-    """super-test (MiMo-led harvest) deterministic core: lib self-test + launcher/sweep bins present+executable.
-    (check_registry already validates its manifest/entry_skill/rules.)"""
-    st = root() / "engine" / "workflows" / "super-test"
-    if not st.exists():
-        add(INFO, "super-test", "engine/workflows/super-test/ absent")
-        return
-    lib = st / "lib" / "supertest.py"
-    if lib.exists():
-        code, out = _run([sys.executable, str(lib), "--self-test"])
-        add(OK if code == 0 else FAIL, "super-test:lib",
-            out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
-    else:
-        add(WARN, "super-test:lib", "lib/supertest.py missing")
-    for b in ("sweep", "supertest", "repair", "retest", "call-opus-batch-rca", "call-codex-review", "mimocode-preflight", "agent-browser-evidence"):
-        p = st / "bin" / b
-        if not p.exists():
-            add(WARN, f"super-test:bin:{b}", "missing")
-        elif not os.access(p, os.X_OK):
-            add(WARN, f"super-test:bin:{b}", "present but NOT executable (chmod +x)")
-        else:
-            add(OK, f"super-test:bin:{b}", "present + executable")
-    preflight = st / "bin" / "mimocode-preflight"
-    if preflight.exists() and os.access(preflight, os.X_OK):
-        code, out = _run([str(preflight)], timeout=20)
-        summary = next((l for l in reversed(out.splitlines()) if l.startswith("Summary:")), f"exit {code}")
-        add(OK if code == 0 else WARN, "super-test:mimocode-preflight", summary)
+def check_removed_legacy_workflows() -> None:
+    """Deprecated autonomous workflow runtimes should stay removed from active harness paths."""
+    stale = []
+    for rel in (
+        "engine/workflows/progressive-test",
+        "engine/workflows/super-test",
+        "engine/skills/agentflow",
+        "engine/skills/super-test",
+        "engine/agents/mh-batch-rca.md",
+    ):
+        if (root() / rel).exists():
+            stale.append(rel)
+    add(OK if not stale else WARN, "legacy-workflows-removed",
+        "progressive-test/super-test runtime removed; robust-test is the replacement"
+        if not stale else "stale deprecated runtime paths still present: " + ", ".join(stale))
 
 
 def check_workflow_shared() -> None:
@@ -458,6 +433,9 @@ def check_workflow_shared() -> None:
             add(FAIL, "workflow-shared:schema", f"envelope.schema.json INVALID: {exc}")
     else:
         add(WARN, "workflow-shared:schema", "envelope.schema.json missing")
+    runtime_boundary = shared / "runtime-boundary.md"
+    add(OK if runtime_boundary.exists() else WARN, "workflow-shared:runtime-boundary",
+        "runtime-boundary.md present" if runtime_boundary.exists() else "runtime-boundary.md missing")
     for name in ("validate-envelope", "gate-check", "module-state", "allowlist-check", "run-init"):
         p = shared / f"{name}.py"
         if not p.exists():
@@ -497,12 +475,25 @@ def check_learning() -> None:
     idx = sb / "INDEX.md"
     if sb.exists() and idx.exists():
         body = idx.read_text(encoding="utf-8", errors="ignore")
-        live = [p for p in sb.glob("*.md") if p.name not in ("INDEX.md", "README.md")
+        candidates = list(sb.glob("*.md")) + list((sb / "grouped").glob("[0-9][0-9]-*.md"))
+        live = [p for p in candidates if p.name not in ("INDEX.md", "README.md")
                 and "status: provisional" in p.read_text(encoding="utf-8", errors="ignore")[:400]]
-        missing = [p.name for p in live if p.name not in body]
+        missing = []
+        for p in live:
+            rel = p.relative_to(sb).as_posix()
+            if rel not in body and p.name not in body:
+                missing.append(rel)
         add(OK if not missing else WARN, "learning:map",
             f"INDEX.md maps all {len(live)} live note(s)" if not missing
             else f"INDEX.md stale — missing {missing}; run: python scripts/learning_recall.py --rebuild-map")
+        if live and th.exists():
+            code, out = _run(
+                [sys.executable, str(th)],
+                input_text='{"prompt":"fix frontend form bug"}',
+            )
+            ok = code == 0 and "[learning-recall]" in out
+            add(OK if ok else FAIL, "learning:trigger-recall",
+                "work prompt emits recall nudge" if ok else "work prompt did not emit recall nudge")
 
 
 def check_maturity() -> None:
@@ -514,6 +505,8 @@ def check_maturity() -> None:
         try:
             d = json.loads(m.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
+            continue
+        if d.get("lifecycle_status") == "DEPRECATED":
             continue
         (levels.__setitem__(m.parent.name, d["maturity"]) if d.get("maturity") else missing.append(m.parent.name))
     if missing:
@@ -544,6 +537,93 @@ def check_codex_guard_wiring() -> None:
         add(WARN, "codex-guard-wiring", "guard not clearly wired in .codex/hooks.json")
 
 
+def check_router() -> None:
+    """P1 router dry-run: present, documented, and self-test green. The router is advisory only."""
+    readme = root() / "engine" / "router" / "README.md"
+    script = root() / "scripts" / "harness_router.py"
+    add(OK if readme.exists() else WARN, "router:readme",
+        "engine/router/README.md present" if readme.exists() else "engine/router/README.md missing")
+    if not script.exists():
+        add(WARN, "router:selftest", "scripts/harness_router.py missing")
+        return
+    code, out = _run([sys.executable, str(script), "--self-test"])
+    add(OK if code == 0 else FAIL, "router:selftest",
+        out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+    for label, rel in (
+        ("preflight:selftest", "scripts/harness_preflight.py"),
+        ("codex-preflight:selftest", "scripts/codex_preflight.py"),
+    ):
+        p = root() / rel
+        if not p.exists():
+            add(WARN, label, f"{rel} missing")
+            continue
+        code, out = _run([sys.executable, str(p), "--self-test"])
+        add(OK if code == 0 else FAIL, label,
+            out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+
+
+def check_rule_cards() -> None:
+    """Compact FE/BE rule cards keep daily tasks from loading full convention docs by default."""
+    script = root() / "scripts" / "rule_card.py"
+    if not script.exists():
+        add(WARN, "rule-card:selftest", "scripts/rule_card.py missing")
+        return
+    code, out = _run([sys.executable, str(script), "--self-test"])
+    add(OK if code == 0 else FAIL, "rule-card:selftest",
+        out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+
+
+def check_eval_ledger() -> None:
+    """P4 eval/cost ledger: lightweight evidence for lifecycle promotion and future cost comparison."""
+    readme = root() / "docs" / "harness" / "evals" / "README.md"
+    template = root() / "docs" / "harness" / "evals" / "_TEMPLATE.yaml"
+    script = root() / "scripts" / "harness_eval.py"
+    add(OK if readme.exists() else WARN, "eval-ledger:readme",
+        "docs/harness/evals/README.md present" if readme.exists() else "docs/harness/evals/README.md missing")
+    add(OK if template.exists() else WARN, "eval-ledger:template",
+        "docs/harness/evals/_TEMPLATE.yaml present" if template.exists() else "docs/harness/evals/_TEMPLATE.yaml missing")
+    if not script.exists():
+        add(WARN, "eval-ledger:selftest", "scripts/harness_eval.py missing")
+        return
+    code, out = _run([sys.executable, str(script), "--self-test"])
+    add(OK if code == 0 else WARN, "eval-ledger:selftest",
+        out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+    code, out = _run([sys.executable, str(script), "scan"])
+    summary = out.strip().splitlines()[-1] if out.strip() else f"exit {code}"
+    add(OK if code == 0 else WARN, "eval-ledger:scan", summary)
+
+
+def check_workflow_governance() -> None:
+    """P5 workflow taxonomy/deprecation governance: safe consolidation requires evidence and replacements."""
+    policy = root() / "engine" / "workflows" / "LIFECYCLE.md"
+    script = root() / "scripts" / "harness_workflow_governance.py"
+    add(OK if policy.exists() else WARN, "workflow-governance:policy",
+        "engine/workflows/LIFECYCLE.md present" if policy.exists() else "engine/workflows/LIFECYCLE.md missing")
+    if not script.exists():
+        add(WARN, "workflow-governance:selftest", "scripts/harness_workflow_governance.py missing")
+        return
+    code, out = _run([sys.executable, str(script), "--self-test"])
+    add(OK if code == 0 else WARN, "workflow-governance:selftest",
+        out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+    code, out = _run([sys.executable, str(script), "scan"])
+    summary = out.strip().splitlines()[-1] if out.strip() else f"exit {code}"
+    add(OK if code == 0 else WARN, "workflow-governance:scan", summary)
+
+
+def check_runtime_contract() -> None:
+    """P7 runtime contract scanner: catches prompt-only boundary drift in workflow manifests."""
+    script = root() / "scripts" / "harness_runtime_contract.py"
+    if not script.exists():
+        add(WARN, "runtime-contract:selftest", "scripts/harness_runtime_contract.py missing")
+        return
+    code, out = _run([sys.executable, str(script), "--self-test"])
+    add(OK if code == 0 else WARN, "runtime-contract:selftest",
+        out.strip().splitlines()[-1] if out.strip() else f"exit {code}")
+    code, out = _run([sys.executable, str(script), "scan"])
+    summary = out.strip().splitlines()[-1] if out.strip() else f"exit {code}"
+    add(OK if code == 0 else WARN, "runtime-contract:scan", summary)
+
+
 def check_registry() -> None:
     """engine/REGISTRY.md + per-workflow manifest.json: every referenced agent/skill/rule must resolve to a pool file."""
     r = root(); eng = r / "engine"
@@ -556,13 +636,58 @@ def check_registry() -> None:
         add(INFO, "registry:manifests", "no engine/workflows/*/manifest.json yet")
         return
     bad: list[str] = []
+    governance: list[str] = []
+    lifecycle_levels: dict[str, str] = {}
+    allowed_kinds = {"workflow", "internal", "advisory"}
+    allowed_lifecycle = {"DRAFT", "LAB", "PROVEN", "DEFAULT", "DEPRECATED"}
     for m in manifests:
         try:
             d = json.loads(m.read_text(encoding="utf-8"))
         except Exception as exc:  # noqa: BLE001
             bad.append(f"{m.parent.name}: invalid JSON ({exc})"); continue
-        for field in ("name", "kind", "entry_skill", "agents", "rules"):
+        for field in ("name", "entry_skill", "agents", "rules"):
             if field not in d: bad.append(f"{m.parent.name}: missing '{field}'")
+        for field in ("kind", "public_entry", "auto_route_allowed", "lifecycle_status", "recommended_prompt_file", "budget", "eval_summary"):
+            if field not in d:
+                governance.append(f"{m.parent.name}: missing '{field}'")
+        kind = d.get("kind")
+        if kind is not None and kind not in allowed_kinds:
+            governance.append(f"{m.parent.name}: unknown kind '{kind}' (expected workflow|internal|advisory)")
+        lifecycle = d.get("lifecycle_status")
+        if lifecycle:
+            lifecycle_levels[m.parent.name] = str(lifecycle)
+        if lifecycle is not None and lifecycle not in allowed_lifecycle:
+            governance.append(f"{m.parent.name}: unknown lifecycle_status '{lifecycle}'")
+        if d.get("auto_route_allowed") is True and lifecycle in {"DRAFT", "LAB"}:
+            governance.append(f"{m.parent.name}: auto_route_allowed=true but lifecycle_status={lifecycle}")
+        if d.get("public_entry") is True and not d.get("entry_skill"):
+            governance.append(f"{m.parent.name}: public_entry=true but entry_skill missing")
+        budget = d.get("budget")
+        if "budget" in d and not isinstance(budget, dict):
+            governance.append(f"{m.parent.name}: budget is not an object")
+        eval_summary = d.get("eval_summary")
+        if "eval_summary" in d and not isinstance(eval_summary, dict):
+            governance.append(f"{m.parent.name}: eval_summary is not an object")
+        artifact = eval_summary.get("artifact_path") if isinstance(eval_summary, dict) else ""
+        if lifecycle in {"PROVEN", "DEFAULT"} and not artifact:
+            governance.append(f"{m.parent.name}: lifecycle_status={lifecycle} but eval_summary.artifact_path is empty")
+        if lifecycle in {"PROVEN", "DEFAULT"} and artifact:
+            artifact_path = r / artifact
+            if not artifact_path.exists():
+                governance.append(f"{m.parent.name}: eval_summary.artifact_path does not exist: {artifact}")
+            else:
+                code, out = _run([sys.executable, "scripts/harness_eval.py", "validate", str(artifact_path)])
+                if code != 0:
+                    detail = next((line for line in out.splitlines() if line.startswith("FAIL")), f"exit {code}")
+                    governance.append(f"{m.parent.name}: eval artifact invalid ({detail})")
+        if lifecycle == "DEFAULT" and d.get("auto_route_allowed") is not True:
+            governance.append(f"{m.parent.name}: lifecycle_status=DEFAULT but auto_route_allowed is not true")
+        prompt_file = d.get("recommended_prompt_file")
+        if "recommended_prompt_file" in d:
+            if not isinstance(prompt_file, str):
+                governance.append(f"{m.parent.name}: recommended_prompt_file is not a string")
+            elif prompt_file and not (r / prompt_file).exists():
+                governance.append(f"{m.parent.name}: recommended_prompt_file does not exist: {prompt_file}")
         es = d.get("entry_skill")
         if es and not (eng / "skills" / es / "SKILL.md").exists(): bad.append(f"{m.parent.name}: entry_skill '{es}' not in engine/skills/")
         for a in (d.get("agents") or []):
@@ -571,6 +696,11 @@ def check_registry() -> None:
             if not (eng / "rules" / f"{ru}.md").exists(): bad.append(f"{m.parent.name}: rule '{ru}' not in engine/rules/")
     add(FAIL if bad else OK, "registry:manifests",
         "; ".join(bad[:6]) if bad else f"{len(manifests)} workflow manifest(s); all entry_skill/agent/rule refs resolve")
+    add(WARN if governance else OK, "registry:manifest-governance",
+        "; ".join(governance[:8]) if governance else "lifecycle/public/auto-route/prompt metadata present")
+    if lifecycle_levels:
+        add(OK, "registry:lifecycle",
+            ", ".join(f"{k}={v}" for k, v in sorted(lifecycle_levels.items())))
 
 
 def main() -> int:
@@ -579,11 +709,12 @@ def main() -> int:
     for fn in (
         check_tools, check_root_versioning, check_json, check_pycompile,
         check_guard_selftest, check_guard_wired, check_worktree_cli, check_graphify_trust,
-        check_graph_secrets, check_helpers_and_layouts, check_just,
+        check_graph_secrets, check_just,
         check_routing, check_legacy_isolation, check_codegraph, check_codegraph_freshness,
         check_convention_scan, check_convention_truth, check_opencode_guard,
-        check_brains, check_symlinks, check_workflow_shared, check_super_test,
-        check_learning, check_maturity, check_codex_guard_wiring, check_registry,
+        check_brains, check_symlinks, check_workflow_shared, check_removed_legacy_workflows,
+        check_learning, check_maturity, check_codex_guard_wiring, check_router, check_rule_cards,
+        check_eval_ledger, check_workflow_governance, check_runtime_contract, check_registry,
     ):
         try:
             fn()

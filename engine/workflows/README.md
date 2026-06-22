@@ -5,10 +5,8 @@ Canonical home for **named, standalone** Workflow-tool scripts. Like all harness
 tool resolves `{name: "<x>"}` to `<x>.js`). Running `.js` workflows is a **Claude Code feature** (Codex/
 opencode don't execute them), but the files still live here in `engine/` so there is one source.
 
-This folder ALSO hosts **orchestrated multi-agent subsystems** — self-contained workflow dirs with their
-own `bin/`/`lib/`/`schemas/` driven by a Claude orchestrator skill (e.g. `progressive-test/`, run by the
-`/agentflow` skill: a Claude-orchestrated OpenCode/mimo + Opus-RCA + Codex-gate FE-bug-fix loop over file
-artifacts + envelopes). Same principle: one canonical source under `engine/`, every tool points in.
+This folder also hosts workflow-specific runbooks. Current active workflows are owner-gated; deprecated
+autonomous multi-agent subsystems have been removed from active harness paths.
 
 ## One folder per workflow (the rule)
 EVERY workflow = a folder `engine/workflows/<name>/` containing its machinery (`.js` and/or `bin/lib/schemas`)
@@ -17,7 +15,7 @@ EVERY workflow = a folder `engine/workflows/<name>/` containing its machinery (`
 **agents/rules** are referenced from their pools — **never duplicated** into the workflow folder. A single
 bare named `.js` (invoked by `{name}`) may sit flat as `engine/workflows/<name>.js`.
 **Inventory of everything → `engine/REGISTRY.md`.** Examples: `deep-review/` (workflow.js + manifest),
-`progressive-test/` (`.agentflow/` subsystem + manifest).
+`robust-test/` (manual targeted/sweep testing protocol + manifest).
 
 ## Rules every workflow obeys
 1. **Orchestrate, don't legislate.** A workflow fans out agents and loops/verifies; it reads the rules
@@ -33,12 +31,12 @@ bare named `.js` (invoked by `{name}`) may sit flat as `engine/workflows/<name>.
 
 ## Current workflows
 - `deep-review/` — `workflow.js` + review knowledge (`protocol`/`checklist`/`findings-schema.md`) + manifest. Entry skill: `/mh-review`.
-- `progressive-test/` — `.agentflow/` orchestrated subsystem (bin/lib/schemas) + manifest. Entry skill: `/agentflow`.
+- `robust-test/` — owner-gated targeted/sweep testing protocol. It writes per-bug folders and a review-ready bundle; no autonomous agent handoff or source edits.
 - `impact-analysis/` — CodeGraph-backed preflight blast-radius (READ-ONLY). Entry skill: `/impact-analysis`.
 - `bug-fix/` — investigate→RCA→fix→verify from any source; `mh-rca` follows the bug-trace playbook. Entry skill: `/bug-fix`.
 - `ui-spec/` — **FE keystone**: DOCX + PNG mockups → detailed `specs/<m>/03-ui.md` reuse-map (multimodal + deep FE reuse-audit). Entry skill: `/ui-spec`. Feeds the FE dev workflow.
-- `technical-design/` (**API-contract only**: `08`; schema=owner, UI=`/ui-spec`) · `task-slicing/` (large/cross-cutting modules) · `incremental-impl/` (**internal** per-task executor of `/mh-implement`). Entry skills of the same name.
-
+- `technical-design/` (**API-contract only**: `08`; schema=owner, UI=`/ui-spec`) · `task-slicing/` (large/cross-cutting modules) · `incremental-impl/` (**internal** per-task executor of `/mh-implement`). Entry skills of the same name, owner-gated/manual-only.
+- `dev-from-handoff/` — owner-supplied business/design handoff → technical plan → owner approval → bounded dev slices → validation/receipt. Manual-only DRAFT; no BA discovery or invented business rules.
 > **FE dev pipeline:** owner authors `02-requirements`+`07-schema` → `/ui-spec` → `03-ui.md` → `/mh-implement` FE-mode (`engine/skills/mh-implement/fe-flow.md`; folds `incremental-impl` per task).
 
 ## Shared support — `_shared/` (NOT a workflow)

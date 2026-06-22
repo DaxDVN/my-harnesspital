@@ -45,7 +45,7 @@
     },
     "next_recommended_workflow": {
       "type": ["string", "null"],
-      "description": "the workflow this result should chain into, e.g. impact-analysis | technical-design | task-slicing | incremental-impl | bug-fix | progressive-test | deep-review, or null when terminal"
+      "description": "the workflow this result should chain into, e.g. impact-analysis | technical-design | task-slicing | incremental-impl | bug-fix | robust-test | deep-review, or null when terminal"
     },
     "requires_human_review": { "type": "boolean" },
     "content_sha256": {

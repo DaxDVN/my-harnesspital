@@ -28,14 +28,9 @@ TRIGGERS = [
 _RE = re.compile("|".join(TRIGGERS), re.IGNORECASE)
 
 REMINDER = (
-    "[learning-trigger] The owner signalled a durable learning. Before ending this turn, capture it as a "
-    "PROVISIONAL second-brain entry:\n"
-    "  python scripts/learning_capture.py --title \"…\" --source conversation "
-    "--scope <workspace|backend|frontend|module:X|workflow:X> --confidence <low|medium|high> "
-    "--proposed-target <engine/rules/*|engine/skills/*|deep-review/checklist|main-brain|skill|spec-decision|reject> "
-    "--what \"…\" --why \"…\"\n"
-    "Rules: writes second-brain/ ONLY — NEVER main-brain/ (owner-gated via /promote). A decision scoped to ONE "
-    "module → specs/<m>/06-decision-log.md instead. Purely task-local → skip. Recurrence auto-appends 'Seen again'."
+    "[learning-trigger] Durable learning signal. If reusable, capture to second-brain only:\n"
+    "  python scripts/learning_capture.py --title \"...\" --source conversation --scope <scope> "
+    "--confidence <low|medium|high> --proposed-target <target> --what \"...\" --why \"...\""
 )
 
 
@@ -48,10 +43,8 @@ WORK_TRIGGERS = [
 _RE_WORK = re.compile("|".join(WORK_TRIGGERS), re.IGNORECASE)
 
 RECALL_REMINDER = (
-    "[learning-recall] Relevant work + second-brain has notes. BEFORE acting, consult the applicability MAP "
-    "(do NOT read the full second-brain):\n"
-    "  python scripts/learning_recall.py --context \"<this task in a few words>\"\n"
-    "Open ONLY the matched notes — provisional strong-hints: apply if they fit, but verify."
+    "[learning-recall] Work intent + notes exist. Run: "
+    "python scripts/learning_recall.py --context \"<task>\". Open matched notes only."
 )
 
 
@@ -63,13 +56,19 @@ def detect_work(prompt: str) -> bool:
     return bool(prompt and _RE_WORK.search(prompt))
 
 
-def _has_live_notes() -> bool:
+def _live_note_paths(second_brain=None):
     from pathlib import Path
-    sb = Path(__file__).resolve().parents[2] / "second-brain"
+    sb = Path(second_brain) if second_brain else Path(__file__).resolve().parents[2] / "second-brain"
+    paths = list(sb.glob("*.md")) + list((sb / "grouped").glob("[0-9][0-9]-*.md"))
+    for p in sorted(paths):
+        if p.name in ("INDEX.md", "README.md"):
+            continue
+        yield p
+
+
+def _has_live_notes(second_brain=None) -> bool:
     try:
-        for p in sb.glob("*.md"):
-            if p.name in ("INDEX.md", "README.md"):
-                continue
+        for p in _live_note_paths(second_brain):
             if "status: provisional" in p.read_text(encoding="utf-8", errors="ignore")[:400]:
                 return True
     except Exception:
@@ -78,6 +77,9 @@ def _has_live_notes() -> bool:
 
 
 def _self_test() -> int:
+    import tempfile
+    from pathlib import Path
+
     for p in ("nhớ cái này: luôn dùng BaseService", "from now on never use axios",
               "để ý cái này nhé", "remember this for later", "đừng bao giờ sửa generated file"):
         assert detect(p), f"missed trigger: {p!r}"
@@ -87,6 +89,15 @@ def _self_test() -> int:
         assert detect_work(p), f"missed work: {p!r}"
     for p in ("hello there", "what is this", ""):
         assert not detect_work(p), f"false work: {p!r}"
+    with tempfile.TemporaryDirectory() as d:
+        sb = Path(d) / "second-brain"
+        grouped = sb / "grouped"
+        grouped.mkdir(parents=True)
+        (grouped / "01-test.md").write_text(
+            "---\nstatus: provisional\n---\n# What\nGrouped live note.\n",
+            encoding="utf-8",
+        )
+        assert _has_live_notes(sb), "grouped live notes must trigger recall"
     print("learning_trigger self-test: OK")
     return 0
 

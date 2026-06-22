@@ -90,7 +90,7 @@ Phân loại: **Adopt now** · **Adapt** · **Defer** · **Reject** · **UNCERTA
 ## 6. Thích nghi (What to adapt)
 
 1. **Single-agent → fan-out + 1 synthesizer (divergence có chủ đích).** Báo cáo chọn single-agent vì **production** (latency/cost/governance). Audit của bạn **offline**, không bị ràng latency/cost ở scale này, mục tiêu là **recall** → chạy **N reviewer độc lập** (mỗi người một chiều/layer, mù lẫn nhau) rồi **1 synthesizer** gộp. Lợi ích governance của báo cáo **vẫn giữ** vì synthesizer/Workflow là **policy loop duy nhất** quyết định cái gì vào `.md`. → Đây chính là pattern review của công cụ **Workflow** (fan-out → verify → dedup → synthesize).
-2. **"Rule store YAML" → markdown sẵn có + spec làm rule nghiệp vụ.** Rule **convention** = `agent-rules/*`. Rule **nghiệp vụ** (BHYT/BHTM/admission/bed-day) = `specs/<module>/02-requirements.md` (Confirmed) + `06-decision-log.md` + `04-traceability.md`. Spec **chính là** rule store nghiệp vụ — reviewer chấm code theo *Confirmed requirement*, dùng `04` để soi requirement nào chưa có design/test.
+2. **"Rule store YAML" → markdown sẵn có + tài liệu BA làm rule nghiệp vụ.** Rule **convention** = `agent-rules/*`. Rule **nghiệp vụ** (BHYT/BHTM/admission/bed-day) = **`specs/Tài liệu Nội trú.md`** (nguồn sự thật duy nhất). `specs/<module>/` chỉ dùng cho MVP dev (schema, API, UI), KHÔNG phải nguồn rule nghiệp vụ.
 3. **Confidence gating → verify đối kháng.** Trước khi finding vào `.md`, một agent thứ hai cố **bác bỏ** nó (mặc định "bác bỏ nếu không chắc"). Sống thì giữ. Rẻ, diệt false positive.
 4. **Eval nặng → eval nhẹ.** Dual-audit (bạn đã làm với `vital-sign`) = inter-rater check sẵn. Giữ cho module rủi ro cao: chạy 2 harness độc lập (Claude-workflow + Codex), diff hai tập finding; cái chỉ một bên bắt = tín hiệu lỗ hổng recall → nuôi checklist.
 
@@ -120,7 +120,7 @@ Output: danh sách **file-group** + con trỏ requirement Confirmed.
 
 **B. Dimension checklist (rule fabric).**
 ~10 chiều cho hệ này (nguồn: `agent-rules/*` + `CONVENTIONS.md` + guard hook):
-1. **Nghiệp vụ** — đúng *Confirmed requirement* + `06-decision-log` (BHYT/BHTM/admission/inpatient/bed-day).
+1. **Nghiệp vụ** — đúng mô tả trong **`specs/Tài liệu Nội trú.md`** (BHYT/BHTM/admission/inpatient/bed-day). KHÔNG dùng `specs/<module>/02-requirements.md` làm nguồn rule nghiệp vụ.
 2. **Contract/DTO/client** — không sửa tay file generated; FE client khớp BE (guard rule **[FACT]**).
 3. **Convention FE** — `frontend-rules-conventions-patterns.md` (adapter, EnhancedDataGrid, không network ở UI, không global state, không tự tính tiền/tồn FE…).
 4. **Convention BE** — `backend-rules-conventions-patterns.md` (BaseService, không transaction/lock, **không N+1**, 1 query/bảng/API, multi-tenant scope, soft-delete/audit auto).

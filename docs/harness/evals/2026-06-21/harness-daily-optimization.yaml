@@ -1,0 +1,30 @@
+workflow: harness-daily-optimization
+lifecycle_status: DRAFT
+risk_tier: UNKNOWN
+model: n/a
+executor: local-scripts
+input_artifacts: []
+output_artifacts:
+  - docs/harness/evals/2026-06-21/harness-daily-optimization.yaml
+validations_run:
+  - python scripts/harness_router.py --json <sample>
+  - python scripts/harness_preflight.py --json <sample>
+  - python scripts/harness_quality_eval.py run
+  - python scripts/harness_context_audit.py scan --json
+  - python scripts/harness_ready.py
+tool_calls: 15
+estimated_tokens:
+elapsed:
+bugs_found: 0
+bugs_verified: 0
+false_positives: 0
+reopened_bugs: 0
+rounds: 1
+human_interventions: 0
+verdict: PASS
+cost_of_pass:
+lessons:
+  - entry_words=3864
+  - skill_stub_words=1450
+  - context_trap_words=0
+residual_risks: []

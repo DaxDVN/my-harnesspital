@@ -1,190 +1,89 @@
-# AGENTS.md - MyHospital workspace harness
+# AGENTS.md - MyHospital Harness Bootloader
 
-This file is the root dispatcher for coding agents. It is intentionally short:
-load the repo-specific harness before touching code.
+Thin bootloader only. Keep global invariants here; load details through the router.
 
-## Session Start Protocol
+<!-- CODEGRAPH_START -->
+## CodeGraph
 
-**At the very first prompt of every session**, before doing any code work:
+Use CodeGraph before grep/find/direct reads for source code when the repo has `.codegraph/`.
+Workspace root is not a source index; FE/BE indexes live in `myhospital-fe/`, `myhospital-be/`, and
+`worktrees/<slug>/{fe,be}`. Source policy: `engine/rules/source-discovery.md`.
+<!-- CODEGRAPH_END -->
 
-1. Run `python scripts/worktree.py list` from the workspace root to list active worktrees. Do not scan `worktrees/` directly unless the task requires it.
-2. **Auto-resolve from the first prompt — skip the question when unambiguous.** If the first prompt already names a worktree (its **slug**, or its **Vietnamese name/nội dung** describing the worktree) and that name resolves to **exactly one** active worktree from step 1, **do NOT ask** — proceed directly in that worktree and state which one you picked in your response (e.g. "Làm trong `worktrees/<slug>`."). Only ask **"Bạn muốn làm việc trong worktree nào?"** (showing the slug list + slot map below) when: the prompt names **no** worktree, OR the name is **ambiguous** (≥2 active worktrees share that slug / Vietnamese name / content) — then list the matches and have the user disambiguate.
-3. Wait for confirmation before touching any code **only when step 2 had to ask**. When step 2 auto-resolved unambiguously, no confirmation is needed — go.
+## 1. Session Start
 
-The user's interactive shell is `fish`, but repository automation must be shell-agnostic Python. For user-facing copy/paste commands, use fish syntax. For bash-only snippets, wrap them as `bash -lc '...'`.
+At first prompt: run `python scripts/worktree.py list`.
 
-Slot map (for reference when creating or selecting):
+- If exactly one active worktree is named, use it and state it.
+- If source-edit scope is ambiguous, ask: `Bạn muốn làm việc trong worktree nào?`
+- Requirement/design-only/spec/harness sessions do not require a worktree.
+- Slot/port and browser-login details are lazy refs in `engine/rules/session-boot-details.md`.
 
-| Slot | FE | BE | SQL |
-|---|---|---|---|
-| 1 | :3001 | :5001 | localhost,1434 |
-| 2 | :3002 | :5002 | localhost,1435 |
-| 3 | :3003 | :5003 | localhost,1436 |
-| 4 | :3004 | :5004 | localhost,1437 |
+## 2. Router First
 
-**Default:** `myhospital-fe/` and `myhospital-be/` are main branches — do not edit them directly. All normal changes go into a worktree under `worktrees/<slug>/fe` or `worktrees/<slug>/be`.
+For non-trivial harness/workflow routing:
 
-### Owner-Authorized Bypass Protocol
+```bash
+python scripts/harness_router.py "<user prompt>"
+python scripts/harness_preflight.py "<user prompt>"
+```
 
-The workspace owner may explicitly authorize bypassing harness rules for the current session, including
-direct work in `myhospital-fe/` or `myhospital-be/`, when maintenance or recovery requires it.
+Router and preflight are advisory/read-only. They must not execute workflows or enforce fast-path. Load only
+files returned by the decision unless local evidence requires more.
 
-When the user explicitly says they allow bypass (for example: "cho phép bypass", "bypass rule",
-"override harness", or equivalent wording):
+For natural-language actionable work, present the preflight route card and wait for owner confirmation before
+executing workflows, launching agents/subagents, running browser/E2E sweeps, or making non-trivial source edits.
+Skip only for read-only explanation, simple terminal facts, local non-mutating inspection, or an owner-named exact
+command. Details: `engine/rules/preflight-confirmation.md`.
 
-- Treat the relevant harness block as `WARN` instead of `BLOCK` for that session and continue.
-- State the bypassed rule and the reason in the final response.
-- Keep the smallest practical scope: do only the requested maintenance/recovery work.
-- Continue to avoid needless destructive actions. If an action is destructive and not explicitly requested,
-  ask for confirmation first.
-- Generated/managed files should still be regenerated rather than hand-edited unless the owner explicitly
-  asks for emergency manual intervention.
+## 3. Owner-Gated Execution
 
-Worktree/Zellij is **user-driven** (manual) — see **`docs/guides/worktree-zellij-manual.md`**. Agents must **not** auto-create or auto-open worktrees/sessions; print the command for the user to run.
+- Do not self-launch multi-agent loops, external executors, browser sweeps, `mh-review`, `robust-test`, or workflow state machines from intent words.
+- Workflows below `PROVEN` or with `auto_route_allowed=false` need explicit owner instruction before execution.
+- `incremental-impl`, `technical-design`, `task-slicing`, and `ui-spec` are manual-only owner-gated workflows.
+- Direct single-agent fix/implement work is allowed when the owner asks for it, bounded by worktree, discovery, and validation rules.
 
-PowerShell is deprecated in this workspace. Do not use `powershell`, `pwsh`, or `*.ps1` as the primary runtime.
+## 4. Hard Safety Rules
 
-## Self-Learning — main-brain · engine · second-brain (the harness's memory)
+Default: do not edit `myhospital-fe/` or `myhospital-be/` directly. Source changes go under `worktrees/<slug>/fe|be`.
 
-The harness is organized like a person who cannot remember everything: a concise **brain**, a detailed
-**recipe library**, and **scratch notebooks**. Every agent + every compaction MUST keep these straight.
+Hard blocks unless explicitly authorized:
 
-| Tier | Role | Holds | Loaded? | Who writes |
-|---|---|---|---|---|
-| **`main-brain/`** | the BRAIN — source of truth | distilled lessons + durable cross-cutting truths/decisions + "what exists & when to use it"; **refers down** to `engine/` (which holds the skills/agents/rules) | **always** (lean — bloat burns tokens) | **owner only, via `/promote`** (guard BLOCKS all agent writes) |
-| **`engine/`** | the recipe library / governing core — **CANONICAL HOME for every asset** | rules (convention canon + policies), review protocol, routing, **AND the skills / agents / hooks / workflows themselves** — the ONE source every coding tool shares | on-demand | maintenance |
-| `.claude/` · `.codex/` · `.opencode/` | per-tool **pointers + config** (NOT copies) | **Claude: fully wired** — `.claude/{skills,agents,hooks,workflows}` are real **symlinks → `engine/…`**. **Codex: guard only** (Bash PreToolUse hook via walk-up; `.codex/config.toml` = model config — engine skills are read as workflow DOCS, not callable slash-skills). **opencode / mimocode: opencode-fork that auto-loads `AGENTS.md`** + a global guard plugin (no per-skill pointers yet). "Add a tool = add pointers once" is the DESIGN; only Claude is fully wired today. | on invocation | the pointer only (assets live in `engine/`) |
-| **`second-brain/`** | scratch notebooks — learning buffer | provisional learnings ("remember this / pay attention / idea"); may be right OR wrong | never (on-demand) | **any agent, freely (no gate)** |
-| `docs/` · `specs/` · `scripts/` | reference · SDD · commands | (unchanged) | freely |
+- no `git commit`, `git push`, `git reset --hard`, `git clean`, or destructive checkout;
+- no recursive delete;
+- no dependency install/add;
+- no DB/data mutation except approved worktree-slot migration/data workflows;
+- no manual edits to generated FE DTO/client/`Constants.ts` or BE EF migrations;
+- no direct writes to `main-brain/`;
+- no workflow runtime gate removal unless that is the explicit task.
 
-**Write rules (BINDING):**
-- Append to **`second-brain/`** freely when the owner says "nhớ cái này / để ý cái này", or you discover a
-  durable cross-cutting fact worth keeping (one file per learning, `status: provisional`). This is the
-  **in-repo, cross-tool** learning store — NOT `~/.claude/.../memory/` (Claude-only, ephemeral).
-- **NEVER write `main-brain/`.** It is the gated source of truth; the guard hook blocks every agent write.
-  Knowledge reaches it ONLY through the owner-invoked **`/promote`** skill (owner authorizes with
-  `! touch main-brain/.promote-unlock`). `/promote` is **explicit-only — never self-invoke it.**
+PowerShell is deprecated.
 
-**Boundary test (which tier?):** "always use BaseService" → coding convention → `engine/rules/`. "admission
-step 3 confirms BHYT; owner decided never auto-patch public-endpoint auth" → durable cross-cutting
-truth/decision → `main-brain/` (via promote). "decision scoped to one module" → `specs/<m>/06-decision-log.md`.
-"I suspect bed-day double-counts" → provisional → `second-brain/`.
+## 5. Ponytail Always On
 
-**Lifecycle of a learning:** drop it in `second-brain/` (detailed) → owner reviews → `/promote` either
-**distills it into `main-brain/`** (a lean truth/lesson) or **graduates it into a new `engine/skills/<x>`**
-(a reusable recipe; `.claude/skills` is a symlink → `engine/skills`). It lives until promoted/graduated OR the owner deletes it.
+Before fix/implement/scaffold/design/review work, prefer the smallest correct change: reuse existing project behavior/component/helper/pattern first; stdlib/platform/current dependency second; local change third; new abstraction last.
 
-**Learning intake (operational — DO it, don't just rely on memory):** when the owner says "nhớ cái này /
-để ý cái này / từ giờ / lần sau / always / never / remember this / make this a rule", OR a review/bug-fix
-surfaces a recurring bug-class / convention gap / cross-cutting owner decision → run
-`python scripts/learning_capture.py …` to create a structured **provisional** `second-brain/` entry
-(schema: status/scope/confidence/proposed_target). A decision scoped to ONE module → `specs/<m>/06-decision-log.md`,
-not the brain. At session end, capture any new durable learning or explicitly state "no durable learning captured."
-NEVER write `main-brain/` (owner-gated via `/promote`). `python scripts/learning_check.py` verifies learning health.
+Never simplify away validation, security, accessibility, clinical/business correctness, generated-code discipline, or required artifacts. Details: `engine/rules/ponytail.md`.
 
-**Learning recall (the other half — USE what was learned):** second-brain is on-demand, so a note is useless if
-never re-read. Before fix / review / implement / design / scaffold work, **consult the applicability MAP** — do
-NOT read the full buffer: `python scripts/learning_recall.py --context "<task>"` (or `--scope/--task/--keywords/--touch`)
-returns ONLY the notes whose `applies_when` fits; open just those and apply as **provisional strong-hints (verify
-first)**. `--all` prints the map (`second-brain/INDEX.md`); `--rebuild-map` regenerates it. The `learning_trigger`
-hook nudges recall on work prompts when notes exist. Each captured note must declare `applies_when` (tasks/globs/keywords)
-so the map can route it.
+## 6. Source, Rules, Memory
 
-## Worktree + Zellij — USER-DRIVEN (manual; agents do NOT auto-run)
+- Source discovery: CodeGraph first → bounded exact search → narrowed reads.
+- FE work: load `myhospital-fe/CLAUDE.md`, then run `python scripts/rule_card.py fe "<task>"` and open the returned quick/topic cards. Open full `engine/rules/frontend.md` only when the cards do not cover the task or risk is high.
+- BE work: run `python scripts/rule_card.py be "<task>"` and open the returned quick/topic cards. Open full `engine/rules/backend.md` only when the cards do not cover the task or risk is high; `myhospital-be/CONVENTIONS.md` is advisory only.
+- FE+BE work: BE contract first, regenerate FE DTO/client second, validate both sides.
+- `main-brain/knowledge.md` is mandatory standing memory. If the tool did not preload it, read it once before substantive work.
+- Before fix/review/implement/design/scaffold: `python scripts/learning_recall.py --context "<task>"`; open matched notes only.
+- Before fix/implement/review/test: apply `engine/rules/quality-gates.md` when the routed task triggers reuse evidence, fix-plan, regression-map, adjudication, robust-test triage, or validation gates.
+- Before executing a natural-language workflow route: apply `engine/rules/preflight-confirmation.md`.
+- Never write `main-brain/` directly; capture reusable provisional lessons in `second-brain/`.
 
-Worktree and Zellij are **driven by the user**, not automated by the agent. The user wants explicit
-control over creating / opening / cleaning worktrees and Zellij sessions.
+## 7. Validation And Artifacts
 
-**Agent rules:**
-- Do **NOT** auto-run `worktree.py` (create/cleanup/sync), `zorch`, `zimpl`, `zkillwt`, or any Zellij
-  command in response to intent words ("create / join / setup / cleanup / sync worktree").
-- When the user asks about worktrees/Zellij: **print the exact command for them to run** (fish syntax)
-  and/or point to the manual guide. Execute a command **only** if the user explicitly says "run it /
-  do it for me" for that specific command.
-- Step-by-step the user follows: **`docs/guides/worktree-zellij-manual.md`**. Low-level command
-  reference: `engine/rules/worktree-workflow.md` (reference only — not an auto-execution mandate).
+Report actual validation commands run. If validation cannot run, state why and residual risk.
 
-The default safety rule still holds: **do not edit `myhospital-fe/` or `myhospital-be/` directly — all
-normal code changes go in a `worktrees/<slug>/…`** that the user created manually, unless the
-Owner-Authorized Bypass Protocol above is explicitly invoked.
+Use `engine/rules/artifact-policy.md` before reports/evals/screenshots/audit/runtime artifacts. Use `engine/rules/session-boot-details.md` for lazy reference inventory.
 
-## Agent Shortcuts & Tool Routing (proactive — so the user need not memorize commands)
-
-The user should speak naturally or use short prompts; the agent maps intent → the right harness tool
-and **uses it proactively**. Full cheat-sheet + short-prompt aliases: **`engine/agent-shortcuts.md`**
-— read it and treat its aliases as triggers.
-
-Compact routing (intent → tool; auto-use unless marked user-driven):
-
-| Intent | Tool the agent uses |
-|---|---|
-| scaffold endpoint/service/listing/error path · new FE page/list/form/module | skill **`/mh-scaffold`** |
-| implement / build a feature/page/module | skill **`/mh-implement`** (in a worktree the user opened) |
-| fix a bug / a review finding before merge | skill **`/mh-fix`** |
-| BE convention scan (bug-classes) | **`just mh-scan`** (signal-first; `--advisory` full; `--fail-on high` CI) |
-| FE structural rules (raw fetch / dead dtos / name-compare / no-axios) | **`just mh-scan`** (ast-grep bridge, FE-gated) |
-| harness health · convention drift · snapshot | **`just doctor`** · **`just convention-truth`** · **`just harness-backup`** |
-| "where/how/what-calls X", locate code | **CodeGraph** (`codegraph_explore` / `codegraph explore`) then bounded `rg` |
-| CodeGraph index status / sync | **`just codegraph-status`** / **`just codegraph-sync-main`** |
-| regenerate FE DTOs / client | **`npm run dtos:update`** / **`client:generate`** (FE worktree) |
-
-**USER-DRIVEN — never auto-run (print the command / point to the guide):**
-- **Review** — `/mh-review` is **explicit only**: run it solely when the user asks for a review/audit by
-  name (confirm scope first). Do **not** auto-trigger it after implement/fix.
-- **Worktree / Zellij** — see the user-driven rule above + `docs/guides/worktree-zellij-manual.md`.
-
-## Scope Routing
-
-- Work under `myhospital-fe/`: read and obey `myhospital-fe/CLAUDE.md`.
-- Work under `myhospital-be/`: **`engine/rules/backend.md` is the canon — read it FIRST**; `myhospital-be/CONVENTIONS.md` is **legacy/superseded, advisory only** (known drift in prefixes / SettingKeys / action-names / TS-endpoints — see `engine/rules/README.md` + `just convention-truth`). If a package-level `AGENTS.md` is later added, obey it too.
-- Work spanning FE and BE: load both harnesses, then implement BE contract first, regenerate FE DTO/client second, and validate both sides.
-- If a rule conflicts with the user's explicit instruction in the current thread, stop and report the conflict before editing, unless the Owner-Authorized Bypass Protocol has been explicitly invoked for this session.
-
-## Severity Model
-
-Agents must classify any risky decision before editing:
-
-- `BLOCK`: do not implement. Stop and report the violated rule, the exact file/symbol, and a safe alternative.
-- `WARN`: implementation can continue only after choosing the least risky option. Record the warning and rationale in the final response.
-- `INFO`: normal convention guidance. Follow it unless local code proves a more specific pattern.
-
-When uncertain whether a rule is `BLOCK` or `WARN`, treat it as `BLOCK` until the local harness says otherwise.
-
-## Forbidden Actions (ALL agents & tools)
-
-Hard `BLOCK` rules for **every** agent — Claude Code, Codex, opencode, Cursor, and any other, unless
-the Owner-Authorized Bypass Protocol has been explicitly invoked for the relevant action in the current
-session.
-Obey them **by instruction even where no enforcement hook exists** (hooks are per-tool; this file
-is the cross-tool source of truth). Claude Code *also* enforces them via
-`.claude/hooks/myhospital_guard.py` (PreToolUse); the same script is payload-tolerant and can be
-wired into another tool's hook system — see `engine/rules/cross-tool-enforcement.md`.
-
-- **No git history mutation:** `git commit`, `git push`, `git reset --hard`, `git clean -f…`,
-  `git checkout -- <file>` — **including the `git -C <path> …` form.** (Allowed: `git pull`,
-  `git status`, `git add`, `git worktree …`, `git branch -D`, `git checkout <branch>`.)
-- **No recursive delete:** `rm -r` / `-rf` / `-fr` / `--recursive` without explicit user approval.
-- **No new dependencies:** `npm|pnpm|yarn|bun install|add <pkg>`, `dotnet add package` without
-  approval. (Allowed: bare `npm install` / `npm ci` to restore an existing lockfile.)
-- **No hand-editing generated/managed files:** generated FE DTO/client/`Constants.ts` and BE EF
-  migrations — regenerate instead (`npm run dtos:update`, `npm run client:generate`;
-  `dotnet ef migrations add`). Applies in the main repos **and** in `worktrees/<slug>/…`.
-- **No direct edits to `myhospital-fe/` or `myhospital-be/` by default** — all normal changes go in a worktree. Owner-authorized bypass may permit direct maintenance/recovery work in main repos for the current session.
-
-Explicitly ALLOWED (never block — implementers need these): run/kill/restart dev servers
-(`npm run dev`, `dotnet run`, `kill`, `pkill`), build/test, and DTO/client regen.
-
-**Running migrations is ALLOWED on a worktree slot DB** (owner-authorized) **provided current data is
-restorable** — use **`make migrate-data`** (backup-data → db-clear → migrate-remake → migrate-up →
-restore-data; `CONFIRM=yes` for non-interactive). Never on the real/shared source DB; backup must exist
-before any destructive migrate. Note `restore-data` skips reshaped tables (re-seed those). Hand-EDITING
-generated migration files stays forbidden (regenerate via EF CLI). Full rule: `engine/rules/backend.md`
-→ "Running migrations". **Fixing an FE bug requires the BE running + `npm run dtos:update` first**
-(stale-contract guard) — `engine/rules/frontend.md` → "FE bug-fix prerequisite".
-
-## Stop Protocol
-
-Use this format when stopping:
+## 8. Stop Protocol
 
 ```text
 BLOCKED_RULE: <short rule name>
@@ -192,231 +91,3 @@ Evidence: <file/symbol or planned change that violates it>
 Why it matters: <project-specific risk>
 Recommended path: <safe option>
 ```
-
-Do not work around a blocked rule by inventing a different pattern.
-
-## Mandatory Discovery
-
-Before implementation:
-
-- Find existing code with **CodeGraph first** (broad "how/where/what-calls/what-breaks" exploration), then a **bounded** `rg -l` for exact strings — never broad-scan all of FE/BE and dump output. Reuse project patterns instead of inventing. Full policy + command table: **`engine/rules/source-discovery.md`**.
-- For FE UI/component work: **CodeGraph first** (from the FE repo) for live components/hooks; if a spec exists, consume the **`/ui-spec` reuse-map** in `specs/<module>/03-ui.md`; then bounded `rg`. *(The `*.generated.md` reuse catalogs + `npm run components:index` were removed — they never existed in `myhospital-fe`.)*
-- For BE data access, inspect existing service/query patterns around the target entity before writing queries.
-
-## Review Harness (mh-review) — cross-tool
-
-When a module / dirty worktree / changeset is finished and needs an audit before merge, use the
-**`mh-review`** harness. Goal: maximize first-pass recall so review converges in **≤3 rounds**
-(1 round = audit → fix → verify), instead of many. Tool-neutral policy lives in
-**`engine/workflows/deep-review/`** (plain `.md`, every tool reads it by path; the conventions it checks against live in `engine/rules/`) —
-every tool (Claude, Codex, opencode) follows the same protocol and emits the same findings file:
-
-- **`protocol.md`** — the ≤3-round runbook (scope freeze → partitioned audit → adversarial verify →
-  dedup → bounded completeness check → fix with self-review → verify → learning loop).
-- **`checklist.md`** — the 10 review dimensions (D1–D10) + accumulated bug-classes (the *maturing*
-  rule fabric; bug-classes get promoted here / into the convention docs / into guard+ESLint after
-  each module so recall rises over time).
-- **`findings-schema.md`** — the single findings `.md` interchange format + status lifecycle +
-  coverage ledger. Output goes to `docs/audit/<module>-review-v<round>-<date>.md`.
-
-Key principle: **recall comes from partition** (one focused reviewer per dimension), **not from
-re-auditing many times** — a single broad reviewer hits an attention bottleneck and surfaces only the
-most salient issues. Audit rounds are **read-only**; fixes happen only in a worktree.
-
-- **Claude:** invoke the **`/mh-review`** skill (orchestrates the partition via the `mh-reviewer`
-  subagent; optional `workflow.js` power-mode needs the Workflow tool).
-- **Codex / opencode / others:** follow `protocol.md` directly; fan out reviewers by dimension; write
-  the findings file per `findings-schema.md` so the fix session (any tool) can consume it.
-
-Rationale + feasibility analysis: `docs/harness/notes/review-harness-feasibility-2026-06-16.md`.
-
-## Source-Code Discovery (CodeGraph)
-
-Source code is explored with **CodeGraph** — a local, pre-indexed code knowledge graph — **not** graphify and **not** a broad `rg` dump. Canonical policy + full command table: **`engine/rules/source-discovery.md`**.
-
-- **Order:** CodeGraph first for any "how does X work / where is X / what calls X / what breaks if I change X" question → bounded `rg -l` / `ast-grep` for an exact string in a known small scope → read files only after narrowing to a few candidates. Treat CodeGraph-returned source as already read unless you need exact lines to edit/quote.
-- **Tools:** MCP tools `codegraph_explore` / `codegraph_node` / `codegraph_search` / `codegraph_callers` when the agent has them; otherwise the CLI `codegraph explore|query|node|callers|callees|impact|affected` from inside an indexed repo.
-- **Indexes are per code repo**, never at root (the root `.gitignore` excludes `myhospital-fe/`, `myhospital-be/`, `worktrees/`): `myhospital-be/`, `myhospital-fe/`, and an **active** `worktrees/<slug>/{be,fe}`. CodeGraph honors each repo's `.gitignore`, skips `node_modules`/build output/files > 1 MB, and auto-syncs on edit (~2 s debounce). `just codegraph-status` checks them; `just doctor` includes CodeGraph health.
-- **Never** broad-scan all of FE/BE with `rg`/`fd` and dump output. **Never** use graphify for source code — graphify is docs/specs design intent only (and currently **absent/stale** — skip it for code).
-
-## Knowledge Graph (graphify)
-
-A queryable knowledge graph of `docs/` + `specs/` (BA specs, design decisions, task slices, conventions)
-is built at `graphify-out/graph.json`. It maps **design intent and spec relationships — not code**.
-
-- **Optional, not mandatory.** graphify is a convenience for *docs/specs design-intent* questions
-  (admission, inpatient, bed-day, BHYT-BHTM relationships, locked decisions). Reading the spec file
-  directly is always an acceptable substitute. It is **never** a prerequisite for reading or searching code.
-- **Never use graphify for code.** For FE/BE **source** use **CodeGraph** (broad exploration) plus a
-  bounded `rg` / `fd` / `bat` (exact strings); for `.docx`/`.pdf` use `rga`. The graph does **not**
-  contain code. Source-code discovery policy: `engine/rules/source-discovery.md`.
-- When you do use it: `graphify query "<question>"`, `graphify explain "<node>"`,
-  `graphify path "A" "B"`, `graphify affected "<node>"` (no API key needed). Treat `INFERRED` edges as unverified.
-- **The graph may be ABSENT (not merely stale).** Current state: `graphify-out/` does not exist —
-  `python scripts/harness_doctor.py` reports `no graph.json`. **If absent, skip graphify entirely and read the
-  source docs.** (Any earlier graph was a Windows build whose `src=` paths don't exist on Linux — untrusted
-  anyway.) Rebuild on Linux with `/graphify` only when a fresh graph is actually needed.
-- **Freshness probe:** the `SessionStart` hook (`python .claude/hooks/graphify_stale_check.py .`) prints a
-  `[graphify] … STALE …` line when the recorded build root does not match this workspace (the Windows case
-  above) or when it cannot confirm freshness. It only *flags* — it never rebuilds. When it fires, tell the
-  user the graph is stale and prefer the source docs; rebuild on Linux with `/graphify` only when a fresh
-  graph is actually needed. Build scope is fixed by the root `.graphifyignore`.
-- Full usage for every supported agent (Codex, Antigravity, Grok, Cursor — via CLI / MCP / `graphify install`):
-  see **`docs/graphify-agent-guide.md`**.
-
-## Spec-Driven Requirement & Design Protocol
-
-Applies to **Requirement Analysis** and **Design** work in `specs/<module>/`. This protocol is
-**advisory/WARN only** — there are no new hard hooks. It governs *how* specs are authored, not code.
-Agents assist co-authoring (Q&A, source analysis, tradeoffs, open-question tracking, iterative edits);
-they do **not** auto-generate finished specs and do **not** invent business/design decisions.
-
-### Canonical module layout (numbered lowercase-kebab — reading order, not workflow gates)
-
-Copy `specs/_TEMPLATE/` to start a module. `00-*` files load every session; numbers are reading slots.
-
-```
-specs/<module>/
-  00-module-state.md     00-session-handoff.md     (living — read first every session)
-  01-source-audit.md     02-requirements.md        03-ui.md
-  04-traceability.md     05-open-questions.md      06-decision-log.md     (04/05/06 living)
-  07-schema.md           08-api.md
-  09-test-cases.md       10-plan.md                11-review-checklist.md
-  12-change-log.md       assets/manifest.md        (living)
-```
-
-### Source precedence (two-axis)
-
-- **Business truth** (what the system *should* do), highest first: BA DOCX / official business document >
-  confirmed user/BA answer (logged in `06-decision-log.md`) > mockup / Figma / screenshot > draft notes >
-  agent inference (must be flagged Assumption).
-- **Technical truth** (what the system *currently can* do): existing BE APIs/services + FE generated
-  client/DTOs/codebase facts, cited as `file:line`.
-- **Conflict rule:** when business truth wants behavior technical truth doesn't support, do **not** let code
-  silently win. Raise an entry in `05-open-questions.md` **and** record the chosen path in `06-decision-log.md`.
-- Mockups are UI evidence, not business-rule authority. A mockup that implies a business rule, or contradicts
-  the DOCX, becomes an Open Question — never a silent assumption.
-
-### Requirement states
-
-`Candidate → Confirmed` (source confirmed + acceptance criteria + feasibility checked) ·
-`Candidate → Open Question → Confirmed | Deferred` ·
-`Confirmed → Assumption` (agent-derived, unverified — must not back a *frozen* baseline) ·
-`Confirmed → Deferred` (out of scope) · `Confirmed → Superseded` (replaced; log it in `06-decision-log.md`).
-
-### Three-session workflow (bounds context rot)
-
-Each session reads `00-module-state.md` + `00-session-handoff.md` + only its **primary** files, and ends by
-updating both `00-*` files (and `12-change-log.md` if anything changed).
-
-1. **Requirement Discovery & Source Mapping** — primary: `01`, `02` (Candidate), `03` (evidence), `05`,
-   `assets/manifest`. Exit: every source fact is a Candidate requirement or an Open Question; no silent assumptions.
-2. **Design Contract & Baseline** — primary: `07`, `08`, `03` (contract), `06`. Exit: each Confirmed
-   requirement maps to a design element in `04`; non-obvious choices logged as `DL-00x`; baseline set
-   `draft|frozen` in `00-module-state.md`.
-3. **Delivery Plan & Review** — primary: `10`, `09`, `11`, `12`. Exit: requirement→task→test linked in `04`;
-   review checklist passed or exceptions logged.
-
-### module-state / session-handoff rule
-
-Every spec module MUST keep `00-module-state.md` (short, loaded every session) and `00-session-handoff.md`
-(append-only). Start a session by reading them; end by updating them. They are the deterministic re-entry point.
-
-### Change-control loop (specs are wrong-then-fixed)
-
-Practical rule: **stop only the affected task; continue unrelated tasks if safe; never let an implementer
-invent business/design rules.** When something forces a spec change:
-
-- Add to `05-open-questions.md` when it needs a human/BA answer.
-- Add/update `06-decision-log.md` for any chosen path; mark replaced decisions **Superseded**.
-- Append to `12-change-log.md` for the chronological history (this file is the history of record while
-  `specs/` is not under git).
-- Update requirements/schema/api/ui/test/plan **only after** the question is answered / decision logged.
-- Use `graphify affected "<node>"` to find every doc impacted by the change.
-
-Implementers (any agent, incl. Codex/opencode) that discover a gap MUST file an **Implementation Discovery
-Report** and pause only the affected slice — they do not edit `02/03/06/07/08` themselves. Report template:
-
-```text
-# Implementation Discovery Report
-Module / affected slice / type (missing-requirement | codebase-constraint | contradiction | infeasible-design)
-What I found (evidence: file:line or DOCX §)
-Why it blocks/changes the spec (which <PREFIX>-R-00x or DL-00x)
-Options (cost/impact) — do NOT pick a business/design rule
-Technical recommendation only
-Requested routing: open-question? decision from owner/BA? tasks to PAUSE vs CONTINUE
-```
-
-### Worktrees and specs
-
-- **Do not** use `scripts/worktree.py` for Requirement/Design sessions. They are documentation-only
-  (no build, DB, ports), edited directly on `specs/` in the main workspace.
-- Spec sessions are not "code work" for the **Session Start Protocol**; do not ask for or create a worktree
-  for Requirement Analysis or Design sessions unless the user explicitly asks.
-- **Use** `scripts/worktree.py` for the later **Development** phase that *consumes* a finished spec.
-
-### Advisory vs blocking
-
-All rules in this section are WARN/advisory. Surface a clear warning (do not silently proceed) in only two
-cases: (a) editing a `frozen` baseline without a `DL-00x`, and (b) an implementer changing a `Confirmed`
-business rule. Neither is a hard hook.
-
-## Multi-Agent Execution
-
-This section is standing user authorization for Codex sessions that read this harness to use subagents for multi-task implementation work.
-
-- The primary agent acts as the implementation orchestrator: read harnesses/specs/tasks, build the dependency order, classify risk, own integration, review, and validation.
-- Use `gpt-5.3-codex-spark` workers only for bounded implementation tasks with clear, disjoint file/module ownership.
-- Spawn workers by dependency-safe rounds, not all at once. After each round, wait for worker results, review diffs, integrate, validate, then decide the next round.
-- Do not delegate architecture, cross-contract decisions, blocker resolution, final validation ownership, or any task that requires violating a `BLOCK`/`WARN` protocol.
-- For work spanning FE and BE, implement the BE contract first, regenerate FE DTO/client second, and implement FE usage after the contract is available.
-- Each worker prompt must say the worker is not alone in the codebase, must not revert changes made by others, must stay inside its owned scope, and must report files changed plus validation commands run.
-
-## Local Agent Browser Smoke Login
-
-At session start only, remember this local test credential when Agent Browser needs to login: customer code `bvtest3`, username `lynkhanh9822@gmail.com`, password `12.[s7HXZQ;NfAoF`.
-
-## Validation Contract
-
-Report actual validation commands run. If a command cannot run, say why. Do not claim the harness is satisfied without either running validation or naming the residual risk.
-
-## Workspace File Organization
-
-The workspace root (`/home/dax/Documents/arabica/roast`) is reserved for harness files only (`AGENTS.md`, `CLAUDE.md`) and repo/tooling folders. Prefer relative paths in docs and scripts. Never save artifacts directly to root.
-
-| Artifact type | Save to |
-|---|---|
-| Task plans, implementation plans | `docs/tasks/` |
-| Session analysis, audit reports, research notes | `docs/session-notes/` |
-| Test cases, test setup docs | `docs/testing/` |
-| Browser screenshots, UI captures | `docs/testing/screenshots/` |
-| DTO dumps, API diffs, BE diffs | `docs/session-notes/` |
-| One-off scripts (Python) | `scripts/` |
-| Feature specs, BA docs | `specs/<module>/` |
-
-**Date-folder rule (all agent-generated artifacts):** group session output by day — write to `<dir>/<YYYY-MM-DD>/<file>` (today = `date +%F`), **auto-creating the folder if missing** (`mkdir -p`). Applies to `docs/audit/`, `docs/tasks/`, `docs/session-notes/`, `docs/testing/` (incl. `screenshots/`). Example: audit findings → `docs/audit/2026-06-19/full-audit-vital-signs.round-1.md`, not flat `docs/audit/full-audit-…`. Pre-existing flat files stay where they are — the rule applies to **new** files only. (Specs under `specs/<module>/` and one-off scripts under `scripts/` are NOT date-foldered.)
-
-**Audit round-versioning rule (OVERRIDES any filename a prompt/skill specifies).** Every document under `docs/audit/` is versioned by round: **`<base>.round-<N>.md`**. `N` = `1` if no `<base>.round-*.md` exists **anywhere** under `docs/audit/` (any date-folder); else `max(existing round) + 1`. This **overrides** what a system prompt asks for — if a prompt says "write `<base>.md`", you still write `<base>.round-<N>.md`. Resolve the path deterministically with the helper (do NOT eyeball the round number): `python scripts/audit_path.py "<base>"` prints `docs/audit/<today>/<base>.round-<N>.md` and creates the folder; add `--vi` for the Vietnamese clone (same round, `.vi.md`), `--current` for the highest existing round, `--dry-run` to print without mkdir. The bilingual `.vi.md` clone shares the round number — it is not a new round. (`docs/audit/` only; other `docs/*` dirs are date-foldered but not round-versioned unless a workflow says so.)
-
-This applies to **all agents** (Claude, Codex, Antigravity): if a tool generates a file as a side-effect (screenshot, report, diff), save it to the correct subfolder (under today's date-folder) before returning.
-
-> **Tracked vs ignored (reconcile with `.gitignore`):** `docs/harness/**` (harness history — reviews, plans, notes) + `docs/graphify-agent-guide.md` are **version-controlled** → put durable harness reports/research/plans there. The other `docs/*` dirs above (`docs/session-notes`, `docs/tasks`, `docs/testing`) are **gitignored working space** (ephemeral, not committed) — fine for session runtime artifacts, but anything you want kept in git history goes under `docs/harness/notes|plans`.
-
-## graphify
-
-This project has a knowledge graph at graphify-out/ with god nodes, community structure, and cross-file relationships.
-
-When the user types `/graphify`, invoke the `skill` tool with `skill: "graphify"` before doing anything else.
-
-Rules:
-- graphify is **optional** and scoped to `docs/`+`specs/` **design intent — not code**. Use it only for a
-  docs/specs design-decision/relationship question, and only as an alternative to reading the spec directly.
-  For source code use **CodeGraph** (broad) + bounded `rg`/`fd`/`bat` (exact) — see
-  `engine/rules/source-discovery.md`; for `.docx`/`.pdf` use `rga`. Never run graphify before reading source code.
-- **Trust check:** the graph may be **absent** (currently `graphify-out/` does not exist) or Windows-stale.
-  Run `python scripts/harness_doctor.py` (it reports `no graph.json` when absent); if absent or stale, read the
-  source docs instead. Do not assume the graph exists.
-- When used: `graphify query "<question>"` / `graphify path "<A>" "<B>"` / `graphify explain "<concept>"`
-  return a scoped subgraph. `GRAPH_REPORT.md` is for broad architecture orientation only.
-- After materially changing `docs/`/`specs/`, the graph needs a Linux rebuild (`/graphify`) to be fresh; the
-  freshness hook only flags staleness. The graph build scope is fixed by the root `.graphifyignore`.

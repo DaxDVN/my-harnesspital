@@ -155,12 +155,13 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
 
 ## F8 — Self-review-diff + E2E  *(== B5; shared spine)*
 - **Input:** the diff.
-- **Do:** run `mh-review` on **only the diff** (explicit file set = changed files) — reviewer D3/D7/D10 already
-  carry the FE bug-classes; fix what it flags **now**, do not push regressions to a later round. For visible
-  UI, self-review must compare the final diff back to the F2 reuse matrix: every visible element/surface/action
-  either uses the selected exemplar/pattern or has an updated, evidence-backed CREATE-NEW rationale. Then run the
+- **Do:** self-review **only the diff** (explicit file set = changed files) against the relevant D3/D7/D10
+  checklist items, deterministic scanner output, and the F2 reuse matrix. Do **not** invoke the full partitioned
+  `mh-review` workflow here unless the owner explicitly asks for review/audit or the router selected a review
+  workflow. Every visible element/surface/action either uses the selected exemplar/pattern or has an updated,
+  evidence-backed CREATE-NEW rationale. Then run the
   dev server + smoke login (`bvtest3` / `lynkhanh9822@gmail.com` / `12.[s7HXZQ;NfAoF`). For a real user flow, run the FE E2E path
-  (`engine/workflows/progressive-test/` → agent-browser) — the testids added in F6 make this fast.
+  (`engine/workflows/robust-test/` targeted mode or a focused browser scenario) — the testids added in F6 make this fast.
 - **FE pitfall prevented:** pushing regressions/convention drift to a later review round (the thing that makes
   review take 3+ rounds); shipping a flow that does not actually work in the browser.
 - **Done-check:** self-review findings closed; UI verified in browser; E2E green (when the feature is a flow).
@@ -176,7 +177,7 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
 - **`mh-implementer`** subagent — bounded disjoint-file workers inside the worktree for F3–F6.
 - **`mh_scan`** + `scripts/sgconfig/rules/` — the F4/F7 deterministic floor (FE-V1/V2/V3).
 - **`engine/workflows/deep-review`** D3/D7/D10 — the F8 self-review dimensions (this flow *prevents* what they *detect*).
-- **`engine/workflows/progressive-test`** + agent-browser — the F8 E2E step.
+- **`engine/workflows/robust-test`** targeted mode + browser/manual scenario — the F8 E2E step.
 
 ## ⚠ Owner-decision — ONE residual that touches `myhospital-fe`
 Resolved in-harness: **contract-sync** is just the F1 `tsc`-on-baseline check (worktree regen, no main-fe edit);

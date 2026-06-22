@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """allowlist-check — enforce a writer worker's ACTUAL diff against its declared allowlist.
 
-The boundary gap (boundary audit 2026-06-17): writer workers (mh-implementer, the progressive-test
-mimo executor, /mh-fix) get an allowlist by INSTRUCTION ("stay in scope") but nothing checks the diff
+The boundary gap (boundary audit 2026-06-17): writer workers (mh-implementer, external repair
+executors, /mh-fix) get an allowlist by INSTRUCTION ("stay in scope") but nothing checks the diff
 they actually produced. A worker that edits outside its allowlist overreaches silently → context rot +
 wasted tokens + scope creep. This turns the instructed "stop if outside allowlist" into a runnable gate.
 

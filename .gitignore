@@ -22,6 +22,7 @@
 /docs/*
 !/docs/graphify-agent-guide.md
 !/docs/harness/
+docs/harness/archive/removed-runtime/
 
 # --- main-brain owner-gated promotion marker (transient; created by /promote, removed after) ---
 main-brain/.promote-unlock
@@ -43,6 +44,7 @@ session-auth.json
 __pycache__/
 *.pyc
 node_modules/
+.promptfoo/
 dist/
 build/
 bin/
@@ -51,24 +53,16 @@ obj/
 .vite/
 coverage/
 
-# --- progressive-test subsystem (engine/workflows): track SOURCE; the global bin/ rule above
-#     would hide its wrappers, so re-include .agentflow/bin/; exclude the 73M vendored agent-browser
-#     package + per-round runtime output (re-vendor agent-browser on a fresh clone — see its NOTES). ---
-!engine/workflows/progressive-test/.agentflow/bin/
-engine/workflows/progressive-test/.agentflow/vendor/
-engine/workflows/progressive-test/.agentflow/rounds/round-*/
-# probe/runtime screenshots + logs are evidence artifacts, not workflow source — keep the dir, drop the contents
-engine/workflows/progressive-test/.agentflow/logs/**
-!engine/workflows/progressive-test/.agentflow/logs/.gitkeep
-
 # --- SDLC workflows (impact-analysis/bug-fix/technical-design/task-slicing/incremental-impl):
 #     track the workflow SOURCE, ignore per-run round artifacts (envelopes/payloads). ---
 engine/workflows/*/rounds/
 
-# --- super-test (engine/workflows/super-test): track SOURCE incl. bin/ (the global `bin/` rule hides it);
-#     ignore per-run harvest output under runs/. ---
-!engine/workflows/super-test/bin/
-engine/workflows/super-test/runs/
+# --- robust-test runtime output: keep workflow source, ignore per-run test artifacts. ---
+engine/workflows/robust-test/runs/
+
+# --- Promptfoo eval outputs: keep configs, ignore volatile run results. ---
+docs/harness/promptfoo/results/*
+!docs/harness/promptfoo/results/.gitkeep
 
 # --- Runtime locks ---
 .claude/scheduled_tasks.lock

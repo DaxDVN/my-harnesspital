@@ -1,0 +1,73 @@
+description: "MyHospital harness router deterministic eval"
+
+prompts:
+  - "{{user_prompt}}"
+
+providers:
+  - id: "exec:python ../../../scripts/promptfoo_harness_router_provider.py"
+    label: "harness-router"
+
+tests:
+  - description: "Vietnamese owner handoff routes to dev-from-handoff"
+    vars:
+      user_prompt: "bắt đầu dev từ tài liệu handoff module nội trú"
+    assert:
+      - type: contains
+        value: "candidate_workflow=dev-from-handoff"
+      - type: contains
+        value: "risk_tier=T3"
+      - type: contains
+        value: "auto_route_allowed=False"
+      - type: contains
+        value: "confirmation_required=True"
+
+  - description: "Legacy super-test intent routes to robust-test"
+    vars:
+      user_prompt: "super-test inpatient module"
+    assert:
+      - type: contains
+        value: "candidate_workflow=robust-test"
+      - type: contains
+        value: "risk_tier=T3"
+      - type: contains
+        value: "auto_route_allowed=False"
+
+  - description: "Trivial local fix routes to mh-fix"
+    vars:
+      user_prompt: "fix trivial label typo local"
+    assert:
+      - type: contains
+        value: "candidate_workflow=mh-fix"
+      - type: contains
+        value: "risk_tier=T1"
+
+  - description: "FE/BE contract change routes to implementation with T2"
+    vars:
+      user_prompt: "implement admission API DTO change"
+    assert:
+      - type: contains
+        value: "candidate_workflow=mh-implement"
+      - type: contains
+        value: "risk_tier=T2"
+
+  - description: "Review before merge routes to deep-review"
+    vars:
+      user_prompt: "run deep review before merge"
+    assert:
+      - type: contains
+        value: "candidate_workflow=deep-review"
+      - type: contains
+        value: "risk_tier=T3"
+
+  - description: "Harness optimization routes to harness-maintenance"
+    vars:
+      user_prompt: "tối ưu harness hiện tại để giảm đốt token nhưng quality không giảm"
+    assert:
+      - type: contains
+        value: "candidate_workflow=harness-maintenance"
+      - type: contains
+        value: "risk_tier=T2"
+      - type: contains
+        value: "auto_route_allowed=False"
+      - type: contains
+        value: "confirmation_required=True"

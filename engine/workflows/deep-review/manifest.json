@@ -1,13 +1,35 @@
 {
   "name": "deep-review",
-  "description": "Exhaustive <=3-round partitioned code review (D1-D10): one reviewer per dimension, adversarial verify, bounded completeness.",
-  "kind": "workflow-tool-js",
+  "description": "Aggressive <=3-round partitioned code review (D1-D10): repeated weak-model passes per dimension, candidate union, stronger adjudication, bounded completeness.",
+  "kind": "workflow",
+  "implementation_kind": "workflow-tool-js",
   "maturity": "smoke-tested",
+  "public_entry": true,
+  "auto_route_allowed": false,
+  "lifecycle_status": "LAB",
   "entry_skill": "mh-review",
+  "recommended_prompt_file": "engine/prompts/deep-audit-orchestrator.md",
+  "required_inputs": ["frozen review scope", "target module, diff, or worktree", "audit base name"],
+  "allowed_writes": ["docs/audit/**"],
+  "validators": ["python scripts/audit_path.py <base>", "engine/workflows/deep-review/findings-schema.md"],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "review_mode": {
+    "default": "aggressive-weak-multipass",
+    "passes_per_dimension_default": 3,
+    "block_high_requires_adjudication": true
+  },
+  "eval_summary": {
+    "last_real_run": "",
+    "artifact_path": "",
+    "verdict": ""
+  },
   "workflow_script": "workflow.js",
   "agents": ["mh-reviewer"],
   "external_agents": [],
   "skills_used": [],
-  "rules": ["backend", "frontend"],
+  "rules": ["backend", "frontend", "ponytail", "quality-gates"],
   "knowledge": ["engine/workflows/deep-review/protocol.md", "engine/workflows/deep-review/checklist.md", "engine/workflows/deep-review/findings-schema.md"]
 }

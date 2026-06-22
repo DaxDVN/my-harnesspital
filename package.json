@@ -1,0 +1,18 @@
+{
+  "name": "myhospital-harness-tooling",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Optional local tooling for MyHospital harness eval, structural scans, and library-doc lookup.",
+  "scripts": {
+    "tooling:doctor": "promptfoo --version && ast-grep --version && ctx7 --version",
+    "promptfoo:router": "promptfoo eval -c docs/harness/promptfoo/router.eval.yaml --no-progress-bar --no-cache",
+    "promptfoo:router:json": "promptfoo eval -c docs/harness/promptfoo/router.eval.yaml --no-progress-bar --no-cache -o docs/harness/promptfoo/results/router-latest.json",
+    "ast-grep:version": "ast-grep --version",
+    "ctx7:version": "ctx7 --version"
+  },
+  "devDependencies": {
+    "@ast-grep/cli": "^0.43.0",
+    "ctx7": "^0.5.3",
+    "promptfoo": "^0.121.17"
+  }
+}

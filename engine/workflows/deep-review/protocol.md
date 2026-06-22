@@ -9,13 +9,33 @@
 - Nguyên nhân không hội tụ (cũ): audit lặp lại với recall thấp + ngẫu nhiên + không trí nhớ xuyên vòng → đuôi bug vô tận.
 - Ba cơ chế đóng nó: **(M1) audit phân vùng** (recall cao mỗi lần, KHÔNG lặp) · **(M2) verify đối kháng + provenance** (diệt false-positive/churn) · **(M3) fix tự-review-diff** (diệt hồi quy).
 
-## 1. M1 — Audit phân vùng (recall đến từ phủ, không từ lặp)
+## 1. M1 — Audit phân vùng + aggressive weak-model multi-pass
 
 Một reviewer đơn lẻ trải attention trên *(toàn diff × mọi loại lỗi)* → chỉ ra ~10 cái nổi nhất, phần còn lại **chìm dưới ngưỡng**. Phân vùng gỡ nút: mỗi reviewer giữ **1 lát code × 1 chiều** trong full-focus → không cái nào chìm.
 
 - **Phân vùng mặc định = theo chiều** (10 chiều trong [checklist.md](./checklist.md)). Mỗi chiều một reviewer, quét **toàn scope qua 1 lăng kính**, chỉ nạp đúng nguồn rule của chiều đó (token bounded).
+- **Aggressive weak-model mode mặc định cho deep-review:** mỗi chiều chạy nhiều pass độc lập bằng model rẻ/yếu hơn, rồi union findings. False positive được chấp nhận ở audit stage; fix chỉ chạy sau adjudication.
+- Pass mặc định mỗi chiều: `P1 rule/convention`, `P2 regression/correctness`, `P3 reuse/edge-case`. D1/business hoặc file high-risk có thể thêm `P4 skeptic-from-BA`, `P5 contract-cross-check`.
 - Ô **nghiệp vụ rủi ro cao** → thêm 2–3 reviewer độc lập (chỉ ô đó), hợp nhất.
 - **KHÔNG re-audit toàn bộ nhiều lần.** Phủ thiếu thì mót bằng *completeness check có chặn* (mục 4.5).
+
+### 1.1 Candidate-first adjudication
+
+Deep-review is allowed to be noisy. Every reviewer pass emits **candidate findings**. Parent does not delete a
+candidate just because another weak pass missed it. Parent dedups, tags confidence, and writes `review_status:
+NEEDS_ADJUDICATION` for any BLOCK/HIGH or contested finding. A stronger reasoning pass later decides:
+
+```text
+NEEDS_ADJUDICATION -> CONFIRMED | REJECTED | DEFERRED-Q
+```
+
+Do not implement/fix a finding solely because a weak pass found it. The value of weak models is cheap recall;
+the value of strong models is adjudication and fix-quality review.
+
+Every real finding must carry `bug_class` and `scanner_candidate` metadata from
+[findings-schema.md](./findings-schema.md). This keeps aggressive weak-model passes useful even when noisy:
+false positives are retained as learning data, while repeated true bug classes can be promoted to deterministic
+checks.
 
 ## 2. Scope freeze (đầu mỗi vòng — read-only)
 
@@ -23,7 +43,8 @@ Cố định phạm vi, chống "review trôi":
 
 1. **Dirty set:** `git -C <repo> diff --name-only <base>` (guard hook cho phép `git diff`/`status`). Với worktree: base = branch gốc.
 2. **Blast radius:** CodeGraph `impact`/`affected` trên symbol đã đổi → file phụ thuộc bị kéo theo (đưa vào scope nếu rủi ro).
-3. **Spec set:** `specs/<module>/{02-requirements,03-ui,06-decision-log,07-schema,08-api,04-traceability}.md` (nguồn rule nghiệp vụ).
+3. **Nghiệp vụ source:** `specs/Tài liệu Nội trú.md` (hoặc `.docx`) — **nguồn sự thật duy nhất** cho rule nghiệp vụ. **KHÔNG** dùng `specs/<module>/02-requirements.md` làm nguồn rule nghiệp vụ (chỉ dùng cho MVP dev: schema, API, UI).
+4. **Spec set (design/contract):** `specs/<module>/{03-ui,07-schema,08-api,04-traceability}.md` (nguồn rule thiết kế & contract, không phải nguồn rule nghiệp vụ).
 
 Output scope = `{file-group}` × `{requirement Confirmed}`.
 
@@ -39,11 +60,11 @@ Output scope = `{file-group}` × `{requirement Confirmed}`.
 
    **Rationale:** the scanner provides the deterministic floor — mechanical findings (auth missing, raw throw, dict DTO) are surfaced for free, raising first-pass recall (the M1 convergence lever) and stopping reviewers from re-deriving what a regex already caught. Scanner hits still need the reviewer's adversarial verify for HIGH/BLOCK (e.g. `missing_hospital_scope` flags *candidate* tenancy gaps — the reviewer must confirm the entity is `:Base` and the filter is genuinely absent).
 
-3. Với mỗi chiều áp dụng (checklist) → spawn 1 reviewer (`mh-reviewer`) ở **tier model** chiều đó khuyến nghị, nạp: lát scope + nguồn rule chiều đó + requirement Confirmed + **Step 2.0 candidate list cho chiều đó**. Reviewer trả finding **theo schema** + **coverage attestation** (mỗi file: finding hoặc `CLEAN` hoặc `N/A`).
-3. **(M2) Verify đối kháng:** mỗi finding BLOCK/HIGH → 1 agent cố **bác bỏ** (mặc định "bác nếu không chắc"). Sống thì giữ.
-4. **Dedup** theo `(file, line-range, dimension)`; xếp severity (BLOCK/HIGH/MED/LOW/NIT — mục 6).
-5. **Completeness check CÓ CHẶN:** dựng Coverage ledger `(file × chiều)`. Ô nào **không** có finding **và** **không** có attestation → re-run **chỉ ô đó** (thường 0–1 mini-wave). Lặp tối đa K=2; quá K mà vẫn trống thì ghi `UNATTESTED` (không giả vờ sạch). Mọi Confirmed requirement phải có finding **hoặc** `verified-present`.
-6. Ghi **một** file findings (mục 5 schema) + Coverage ledger vào `docs/audit/<module>-review-v<n>-<YYYY-MM-DD>.md`.
+3. Với mỗi chiều áp dụng (checklist) → spawn `mh-reviewer` theo **multi-pass**. Mỗi pass dùng cùng scope nhưng prompt khác góc nhìn. Reviewer ghi report dài ra artifact theo schema + coverage attestation; trả về parent **bản compact**: artifact path, counts, top BLOCK/HIGH, coverage gaps, blockers. Không paste full report vào parent chat vì các turn sau sẽ re-read toàn bộ.
+4. **(M2) Verify/adjudicate đối kháng:** mỗi finding BLOCK/HIGH → 1 stronger skeptic/adjudicator cố **bác bỏ** (mặc định "bác nếu không chắc"). Không xóa khỏi report; mark `CONFIRMED` hoặc `REJECTED` để học false-positive.
+5. **Dedup** theo `(file, line-range, dimension)`; xếp severity (BLOCK/HIGH/MED/LOW/NIT — mục 6).
+6. **Completeness check CÓ CHẶN:** dựng Coverage ledger `(file × chiều)`. Ô nào **không** có finding **và** **không** có attestation → re-run **chỉ ô đó** (thường 0–1 mini-wave). Lặp tối đa K=2; quá K mà vẫn trống thì ghi `UNATTESTED` (không giả vờ sạch). Mọi Confirmed requirement phải có finding **hoặc** `verified-present`.
+7. Ghi **một** file findings (mục 5 schema) + Coverage ledger vào `docs/audit/<module>-review-v<n>-<YYYY-MM-DD>.md`.
 
 > Chi phí: ≈ một pass kĩ + overhead vừa. KHÔNG ×N. Mỗi reviewer chỉ nạp context của chiều nó.
 
@@ -70,7 +91,7 @@ Output scope = `{file-group}` × `{requirement Confirmed}`.
 - **MED** — đúng nhưng rủi ro/khó bảo trì. Fix nếu rẻ; nếu không → backlog có lý do.
 - **LOW / NIT** — style/cosmetic. **Không** tốn vòng; gom backlog.
 
-**Kỷ luật provenance (bắt buộc cho BLOCK/HIGH):** mỗi finding phải có ≥1 bằng chứng **sống**: `rule-hit:<tool>` (ESLint/guard/CodeGraph) · `spec:<DL-/REQ-id>` · `exemplar:<file:line>` (mẫu đúng trong code sống). **Chỉ-dựa-doc → tối đa WARN/MED**, gắn cờ "verify vs live code" — vì một số convention docs đã **stale** (xem checklist §Staleness).
+**Kỷ luật provenance (bắt buộc cho BLOCK/HIGH):** mỗi finding phải có ≥1 bằng chứng **sống**: `rule-hit:<tool>` (ESLint/guard/CodeGraph) · `ba-source:<trang/mục trong Tài liệu BA>` · `exemplar:<file:line>` (mẫu đúng trong code sống). **Chỉ-dựa-doc→tối đa WARN/MED**, gắn cờ "verify vs live code" — vì một số convention docs đã **stale** (xem checklist §Staleness). Finding D1 PHẢI trích dẫn **trang/mục cụ thể** trong `specs/Tài liệu Nội trú.md`, không chỉ nói "đúng spec".
 
 ## 7. Vòng học (giảm vòng dần theo module — sau khi đóng)
 

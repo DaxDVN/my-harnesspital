@@ -1,0 +1,66 @@
+[
+  {
+    "id": "simple-fe-label-fix",
+    "task_class": "T0",
+    "prompt": "fix trivial label typo local",
+    "expected_workflow": "mh-fix",
+    "expected_risk_tier": "T1",
+    "quality_gates": ["ponytail", "targeted-validation"]
+  },
+  {
+    "id": "fe-visible-form-fix",
+    "task_class": "FE_VISIBLE",
+    "prompt": "fix visible inpatient form sheet bug with existing component reuse",
+    "expected_workflow": "mh-fix",
+    "expected_risk_tier": "T1",
+    "quality_gates": ["reuse-evidence", "definition-of-done"]
+  },
+  {
+    "id": "be-service-bug",
+    "task_class": "BE_SERVICE",
+    "prompt": "investigate bug in admission service permission and hospital scope",
+    "expected_workflow": "bug-fix",
+    "expected_risk_tier": "T2",
+    "quality_gates": ["fix-plan", "regression-map", "targeted-validation"]
+  },
+  {
+    "id": "fe-be-contract-change",
+    "task_class": "FE_BE_CONTRACT",
+    "prompt": "implement admission API DTO change",
+    "expected_workflow": "mh-implement",
+    "expected_risk_tier": "T2",
+    "quality_gates": ["regression-map", "dto-regen", "definition-of-done"]
+  },
+  {
+    "id": "dev-from-owner-handoff",
+    "task_class": "HANDOFF_DEV",
+    "prompt": "dev from handoff owner docs for admission module",
+    "expected_workflow": "dev-from-handoff",
+    "expected_risk_tier": "T3",
+    "quality_gates": ["handoff-intake", "owner-plan-approval", "reuse-evidence", "definition-of-done"]
+  },
+  {
+    "id": "deep-review-before-merge",
+    "task_class": "REVIEW",
+    "prompt": "run deep review before merge",
+    "expected_workflow": "deep-review",
+    "expected_risk_tier": "T3",
+    "quality_gates": ["aggressive-multipass", "adjudication", "coverage-ledger"]
+  },
+  {
+    "id": "robust-test-sweep",
+    "task_class": "ROBUST_TEST",
+    "prompt": "super-test inpatient module",
+    "expected_workflow": "robust-test",
+    "expected_risk_tier": "T3",
+    "quality_gates": ["bug-dossier", "false-positive-triage", "review-ready-bundle"]
+  },
+  {
+    "id": "harness-maintenance-token-quality",
+    "task_class": "HARNESS_MAINTENANCE",
+    "prompt": "tối ưu harness hiện tại để giảm đốt token nhưng quality không giảm",
+    "expected_workflow": "harness-maintenance",
+    "expected_risk_tier": "T2",
+    "quality_gates": ["owner-confirmation", "ponytail", "quality-gates", "harness-doctor", "router-eval"]
+  }
+]

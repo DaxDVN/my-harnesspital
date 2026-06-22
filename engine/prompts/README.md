@@ -1,18 +1,72 @@
-# engine/prompts — reusable system prompts (copy-paste, hand to an agent)
+# engine/prompts — reusable system prompts
 
-Standalone **system prompts** the owner hands to an external/fresh agent (a high-capability audit agent, or
-an Opus xhigh fixer). Not skills, not auto-invoked — durable copy-paste templates so the owner re-runs the
-same audit→fix loop continuously without rewriting the prompt each time. Tool-neutral (any agent reads them
-by path).
+Standalone **system prompts** the owner can hand to a fresh/external agent. These are not skills and are not
+auto-invoked. They are durable copy-paste templates for recurring real-world harness situations.
 
-## Files
+## How to use
 
-| File | Hand to | Purpose |
-|---|---|---|
-| `deep-audit-orchestrator.md` | a high-capability **audit** agent | **Self-contained.** Hand it + just a **slug/tên module** → it resolves the preset from its built-in **§11 MODULE REGISTRY** and starts immediately. Read-only-on-code deep audit; static **+ dynamic** (build/test/scanner/e2e) for max bug recall in **1 round**. Emits one **fix-ready** findings `.md` (every BLOCK/HIGH carries a FIX PACKET) into `docs/audit/<today>/`. |
-| `bugfix-from-report.md` | an **Opus xhigh** fixer | Reads a findings `.md` path, investigates each bug on LIVE code, fixes via existing harness procedures (`/bug-fix` · `mh-rca` · `/mh-fix` · `/impact-analysis`) in a worktree, verifies. No scope-creep, no invented business rules. |
+Give an agent one file path plus the concrete task input:
 
-## The loop
+```text
+Đọc engine/prompts/<prompt-file>.md làm system prompt.
+<Task-specific input...>
+Bắt đầu.
+```
+
+Unless a prompt says otherwise:
+
+- Agent-facing prompt/report language may be English for cross-agent handoff.
+- Chat response to owner should be Vietnamese.
+- Harness hard blocks still apply.
+- The prompt does not override `AGENTS.md`, `CLAUDE.md`, or local workflow rules.
+
+## Router Integration
+
+Workflow manifests expose these files through `recommended_prompt_file`. The router returns that value as
+`prompt_file_recommended`, but does **not** put it in `files_to_load` by default.
+
+Use this distinction:
+
+- Daily work: let router load lightweight skill/workflow docs.
+- Fresh/external agent: hand it the recommended prompt file as the session runbook.
+- Wrapper automation: inject the prompt file only when the workflow explicitly selects an external executor.
+
+## Fast Picker
+
+| Situation | Prompt |
+|---|---|
+| Deep module/worktree audit before merge | `deep-audit-orchestrator.md` |
+| Fix from an audit/findings report | `bugfix-from-report.md` |
+| Read-only harness architecture audit | `architecture-audit-readonly.md` |
+| Evaluate quality-vs-cost adaptive harness argument | `adaptive-harness-evaluation.md` |
+| Implement a named harness governance phase | `harness-governance-phase-runner.md` |
+| Run all approved optimization phases in order | `harness-full-optimization-runner.md` |
+| Check if optimized harness is ready to trial | `harness-readiness-check.md` |
+| Classify a user prompt without executing workflow | `router-dry-run-classifier.md` |
+| Owner-gated robust targeted/sweep testing | `robust-test.md` |
+| Module-wide E2E bug harvest | `robust-test.md` |
+| One failing E2E flow reproduction/retest | `robust-test.md` |
+| One bug RCA/fix/verify | `bugfix-rca-single.md` |
+| Small approved finding patch | `mh-fix-approved-finding.md` |
+| Implement a scoped feature/module | `mh-implement-feature.md` |
+| Preflight blast-radius/risk analysis | `impact-analysis-preflight.md` |
+| Review a scoped diff without full deep audit | `scope-aware-review.md` |
+| Generate/refine UI spec from docs/mockups | `ui-spec-from-docs-mockups.md` |
+| Technical/API/schema design | `technical-api-design.md` |
+| Slice a design into implementation tasks | `task-slicing.md` |
+| Give a subagent one bounded implementation slice | `incremental-impl-worker.md` |
+| Design/review high-quality clinical UI | `clinical-ui-design.md` |
+| Capture durable learning safely | `learning-capture.md` |
+| Repair harness doctor/drift issues | `doctor-drift-repair.md` |
+| Browser smoke/E2E evidence run | `browser-e2e-smoke.md` |
+| Locate source and impact with CodeGraph-first | `codegraph-source-discovery.md` |
+| Review external executor wrapper boundary | `external-executor-wrapper.md` |
+| Harden envelope/runtime compatibility | `envelope-runtime-hardening.md` |
+| Govern eval-backed lifecycle promotion | `eval-lifecycle-governance.md` |
+| Consolidate/deprecate workflows with evidence | `workflow-consolidation-deprecation.md` |
+| Recover worktree/slot/dev environment | `worktree-environment-recovery.md` |
+
+## Audit/Fix Loop
 
 ```
 deep-audit-orchestrator.md + <slug>  ──▶  docs/audit/<YYYY-MM-DD>/full-audit-<scope>.md   ──▶  bugfix-from-report.md + report-path(.md)
@@ -57,3 +111,19 @@ The shared 90% (non-negotiables, harness workflows, dynamic floor, D1–D10, bug
 guardrails, DoD) + all per-module presets live **inside `deep-audit-orchestrator.md`** — one file, no external
 instance files. Edit it once → every future audit inherits the upgrade. Output always lands in a
 per-day folder (`docs/audit/<YYYY-MM-DD>/`), matching the workspace artifact convention.
+
+## Prompt Design Convention
+
+New prompts in this directory should include:
+
+- Role.
+- Inputs.
+- Non-negotiables.
+- Required reads or discovery.
+- Process.
+- Validation/reporting.
+- Output format.
+- Clear stop conditions when relevant.
+
+Avoid adding prompts that are just prose duplicates of an existing workflow. Prefer a reusable prompt only when
+the owner commonly hands a whole runbook to a fresh agent.

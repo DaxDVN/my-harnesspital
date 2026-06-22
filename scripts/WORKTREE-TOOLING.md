@@ -47,7 +47,7 @@ Use `--dry-run` before risky commands. `sync-db`, `cleanup`, and `sync-main` hav
 - Light/no DB sync requests: add `--skip-db-sync --skip-db-init --skip-fe-install` (touches no Docker/SQL).
 - Preview requests: add `--skip-db-sync --skip-fe-install --dry-run`.
 - `repair`, `fix port`, `config sai`, `BE đọc nhầm DB/port`: run `python scripts/worktree.py repair-config --slug <slug>` or `--all`.
-- `join`, `mở lại`, `attach`, `vào worktree đang có`: join existing; do not create. Run `python scripts/worktree.py list`, use the printed slot/ports, check the folder, then open Zellij sessions.
+- `join`, `mở lại`, `attach`, `vào worktree đang có`: join existing; do not create. Run `python scripts/worktree.py list`, use the printed slot/ports, and check the folders. Terminal/session orchestration is owner-manual.
 - `cleanup`, `xóa`, `dọn worktree`: confirm because this is destructive, then run cleanup.
 - `sync`: run `sync-main` or `sync-db` depending on whether the user asked about branches or database.
 
@@ -55,36 +55,9 @@ Use `--dry-run` before risky commands. `sync-db`, `cleanup`, and `sync-main` hav
 the slot-aware `.env` values into the BE launch profile. That includes CORS, Redis, JWT/Firebase,
 ServiceStack/license prerequisites, FE login URL, BE port, and SQL slot connection strings.
 
-## Zellij Sessions
+## Sessions
 
-1 worktree = 2 sessions: orchestrator + implementer.
-
-Defaults when the user does not specify tools:
-
-- orchestrator: `claude`
-- implementer: `opencode`
-
-Helpers live in `scripts/fish/myhospital-zellij.fish` (source once; see
-`engine/rules/worktree-workflow.md` for the full intent→command map):
-
-```fish
-zorch <slug> <orchestrator_tool>
-zimpl <slug> <implementer_tool>
-```
-
-Fallback:
-
-```fish
-cd /home/dax/Documents/arabica/roast/worktrees/<slug>
-zellij attach mh-<slug>-orch-<orchestrator_tool> 2>/dev/null; or zellij --session mh-<slug>-orch-<orchestrator_tool> --layout myhospital-orch
-```
-
-```fish
-cd /home/dax/Documents/arabica/roast/worktrees/<slug>
-zellij attach mh-<slug>-impl-<implementer_tool> 2>/dev/null; or zellij --session mh-<slug>-impl-<implementer_tool> --layout myhospital-impl
-```
-
-Zellij helpers do not replace `scripts/worktree.py create`; they run after a worktree exists.
+The harness stops at worktree lifecycle and runtime config. Terminal/session management is owner-manual.
 
 ## Run A Worktree
 

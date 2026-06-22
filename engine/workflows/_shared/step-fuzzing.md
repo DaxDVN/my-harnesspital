@@ -1,6 +1,6 @@
 # Step-level behavioral fuzzing — non-determinism WITHIN a step, determinism IN the flow
 
-The contract for how agent-browser tests (super-test harvest, progressive-test) vary behavior. Real users do
+The contract for how browser/manual tests vary in-step behavior. Real users do
 NOT replay one fixed procedure; a single top-to-bottom fill misses order-dependent bugs. Add controlled
 randomness **inside a step**, while the **flow stays fixed**.
 
@@ -28,13 +28,11 @@ For a form / multi-input step:
    each scenario = a valid fill ORDER (independent fields shuffled; a dependent field always after its
    prerequisite) + a VALUE choice. Keep values valid for a happy-path scenario; an edge/invalid-value scenario
    is a SEPARATE, clearly-labeled scenario — never silently mix invalid values into a "should-pass" run.
-3. **Submit after each scenario** and observe. super-test: log any bug + WHICH scenario surfaced it.
-   progressive-test: pass/fail per scenario.
+3. **Submit after each scenario** and observe. In robust-test, log any bug + WHICH scenario surfaced it.
 
 ## Cross-round no-repeat (bounded randomness, not amnesia)
 Record every tried scenario (the exact order + values) in the step's **fuzz ledger**
-(super-test: `<run-dir>/fuzz-ledger.md`; progressive-test: `engine/workflows/progressive-test/.agentflow/fuzz-ledger.md`
-— a CROSS-round file, since each round targets one bug). Before choosing,
+(`robust-test` run: `<run-dir>/fuzz-ledger.md`). Before choosing,
 read the ledger (incl. prior runs/rounds) and pick scenarios **NOT yet tried** — cover new combinations first.
 Only when the legal space is exhausted, fall back to a prior scenario (prefer the one that last FAILED / is most
 informative). So a later round ≠ an earlier round unless nothing new remains.

@@ -80,18 +80,6 @@ wt-cleanup slug *ARGS:
 worktree-help:
     python scripts/worktree.py --help
 
-# --- Zellij ---------------------------------------------------------------
-
-# List MyHospital (mh-*) Zellij sessions.
-z-sessions:
-    zellij list-sessions 2>/dev/null | grep -F 'mh-' || echo "(no mh-* worktree sessions)"
-
-# Install the repo Zellij layout templates into ~/.config/zellij/layouts/.
-z-install-layouts:
-    mkdir -p ~/.config/zellij/layouts
-    cp scripts/zellij/myhospital-orch.kdl scripts/zellij/myhospital-impl.kdl ~/.config/zellij/layouts/
-    @echo "Installed myhospital-orch / myhospital-impl layouts."
-
 # --- CodeGraph (source-code index) ----------------------------------------
 # Source code is explored with CodeGraph, indexed per code repo (never at root).
 # Policy + command table: engine/rules/source-discovery.md

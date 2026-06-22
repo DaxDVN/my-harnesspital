@@ -8,12 +8,13 @@ each reinvent gates, receipts, or state. One source → no drift.
 |---|---|---|
 | `envelope.schema.json` | the ONE receipt schema (A1) | all workflows that emit a round receipt |
 | `validate-envelope.py` | validate a receipt + detect payload drift (`--payload`) | all (CI + skill close-out) |
+| `runtime-boundary.md` | wrapper/validator/allowlist contract for external executors | all workflows that call external tools |
 | `gate-check.py` | deterministic SDD precondition gate (B) | technical-design · task-slicing · incremental-impl |
 | `module-state.py` | per-module SDLC state on `00-module-state.md` (C9) | technical-design · task-slicing · incremental-impl |
-| `allowlist-check.py` | writer-boundary check on the actual git diff | super-test · fix/impl workflows |
+| `allowlist-check.py` | writer-boundary check on the actual git diff | fix/impl workflows |
 | `run-init.py` | create an isolated `rounds/run-NNN/` + `00-run-meta` + `logs/` | all SDLC workflows |
 | `run-memory.md` | run-isolation + 3 data-class contract (IO · logs · report) | ALL — read before adding a workflow |
-| `step-fuzzing.md` | in-step behavioral fuzzing (flow fixed, step random) | super-test · progressive-test |
+| `step-fuzzing.md` | in-step behavioral fuzzing (flow fixed, step random) | robust-test/browser scenarios |
 
 Each script self-tests: `python engine/workflows/_shared/<script>.py --self-test` (run by `harness_doctor`).
 
@@ -27,8 +28,19 @@ fields + enums live in `envelope.schema.json`. Validate (and bind-check):
 python engine/workflows/_shared/validate-envelope.py <round>/x.envelope.json --payload <round>/x.md
 ```
 
-`progressive-test`'s own `.agentflow` envelope predates this and keeps its own validator; it is the **same
-shape** — new workflows use this shared schema so there is one contract going forward.
+New workflows use `envelope.schema.json`. Legacy progressive/super-test compatibility was removed with the
+deprecated runtimes; do not add a second receipt dialect without owner approval and eval evidence.
+
+## 1.1 Runtime boundary — wrappers over prompt-only enforcement
+External executor calls should cross a thin runtime boundary: wrapper config, logs, state transition,
+schema/envelope validation, and allowlist/diff validation before repair writes are accepted. The shared
+policy lives in:
+
+```text
+engine/workflows/_shared/runtime-boundary.md
+```
+
+P3 is observability-first: doctor self-tests shared validators and warns on runtime-boundary drift.
 
 ## 2. Gate-check — gates that are code, not prose (B)
 The "Gate FIRST" line used to be a sentence the orchestrator was trusted to honor. Now it is runnable:
@@ -66,8 +78,7 @@ A genuinely trivial + local change skips the heavy chain:
 - trivial **feature change** → `/mh-implement` directly (skip technical-design → task-slicing).
 - trivial change → **no** `/impact-analysis`.
 "Trivial" = no API/schema/contract/business-rule/state-machine/billing/insurance/permission impact, no
-multi-module blast, obvious root cause. Anything else takes the full pipeline. (Same split
-`progressive-test`'s `classify` makes deterministically.)
+multi-module blast, obvious root cause. Anything else takes the full pipeline.
 
 ## 5. Learning loop (C10) — convention, not a script
 Each workflow closes by asking "did this surface a recurring gap?" If yes, capture it in `second-brain/`

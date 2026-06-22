@@ -28,7 +28,7 @@ covers intent. A determined caller could create the marker — that is out of th
 
 | Tool | Mechanism | Coverage | Status |
 |---|---|---|---|
-| **Claude Code** | `.claude/settings.json` → `PreToolUse` (`Bash\|Write\|Edit\|MultiEdit`) runs the guard. | Bash + file writes. | ✅ wired |
+| **Claude Code** | `.claude/settings.json` → `PreToolUse` (`Bash\|Write\|Edit\|MultiEdit`) runs the guard; `UserPromptSubmit` nudges learning recall and natural-language preflight confirmation. | Bash + file writes; prompt-time preflight reminder. | ✅ wired |
 | **Codex CLI** | `.codex/hooks.json` → `PreToolUse` `matcher: Bash` — hook **walks up from cwd** to find `engine/hooks/myhospital_guard.py`, works from root or `worktrees/<slug>/fe|be`. Exit 0 if not found (fail-open). | Bash calls only. Does **not** cover `apply_patch` file edits — those are instruction-only. | ✅ wired (walk-up) |
 | **opencode** | Global plugin `~/.config/opencode/plugin/myhospital-guard.js` + project graphify plugin. Guard also walks up from cwd (10 levels) or uses `MYHOSPITAL_GUARD` env var. | Bash calls only. Subagent tool calls NOT intercepted (known opencode bug). | ✅ guard installed globally; graphify plugin local |
 | **mimocode** | opencode fork — auto-loads `AGENTS.md` from cwd as the instruction canon (Forbidden Actions in scope). Same global guard plugin applies. | AGENTS.md instruction + guard bash calls. | by instruction + inherited guard |
@@ -54,6 +54,12 @@ timeout = 10
 `apply_patch` file edits. Consequently the generated-file / migration BLOCK rules are enforced by
 instruction (AGENTS.md) for `apply_patch`, not by this hook. After an implementation session a quick
 `git diff` + `just mh-scan` is still advised to catch any drift.
+
+For natural-language route confirmation, use the cooperative wrapper before edits/workflows:
+
+```bash
+python scripts/codex_preflight.py "<user prompt>"
+```
 
 ### opencode (install the plugin)
 ```fish

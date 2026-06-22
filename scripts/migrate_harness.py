@@ -214,7 +214,7 @@ CONTENTS
 RESTORE ON TARGET (fresh CachyOS) — confidential content stays off all remotes
 ------------------------------------------------------------------------------
 0. Install tools (CachyOS / Arch):
-     sudo pacman -S --needed git python just ripgrep fd bat ripgrep-all zellij \\
+     sudo pacman -S --needed git python just ripgrep fd bat ripgrep-all \\
                             nodejs npm rsync zstd
      # dotnet SDK for BE, plus claude-code / opencode / codex / codegraph per their installers
 
@@ -250,7 +250,6 @@ FIXUP_FILES = [
     ".claude/settings.local.json",
     "engine/rules/worktree-workflow.md",
     "docs/graphify-agent-guide.md",
-    "scripts/fish/myhospital-zellij.fish",
     "scripts/README.md",
     "scripts/WORKTREE-TOOLING.md",
 ]

@@ -5,7 +5,7 @@ Entry skill: `/incremental-impl`. The ONLY code-editing SDLC workflow. Thin wrap
 ## Reuses (does NOT rebuild)
 - **`/mh-implement`** skill (+ `mh-implementer` subagent) — already does worktree + convention preflight +
   reuse discovery + allowlist-bounded edits + validation + self-review-diff. W9 just feeds it ONE task + captures an envelope.
-- **`progressive-test`** / **`/bug-fix`** for FE verify + any bug found. **`/impact-analysis`** for high-risk tasks.
+- **`robust-test targeted`** / **`/bug-fix`** for FE verify + any bug found. **`/impact-analysis`** for high-risk tasks.
 
 ## Inputs → Outputs
 IN: ONE approved task from `specs/<module>/10-plan.md`. OUT: `rounds/<id>/{01-task-implementation,02-validation,03-e2e?,04-completion}` + envelope.

@@ -22,6 +22,34 @@ repo (`myhospital-be/`, `myhospital-fe/`, and an active `worktrees/<slug>/{be,fe
 root. After creating a worktree, `just codegraph-init-worktree <slug>`; check with
 `just codegraph-status`. Full policy + command table: `engine/rules/source-discovery.md`.
 
+## Harness Preflight And Governance
+
+```fish
+python scripts/harness_preflight.py "sửa bug sheet nội trú trong worktree fix-bug-noi-tru"
+python scripts/codex_preflight.py "sửa bug sheet nội trú trong worktree fix-bug-noi-tru"
+python scripts/harness_scanner_promotion.py scan
+python scripts/harness_lifecycle_eval.py scan
+python scripts/main_brain_promotion_candidates.py scan
+python scripts/harness_ready.py
+```
+
+These commands are read-only except `main_brain_promotion_candidates.py write-report` and
+`harness_lifecycle_eval.py new-template`, which write review/eval artifacts under `docs/harness/`.
+
+## Optional AI Quality Tooling
+
+Root `package.json` installs opt-in local tools for harness quality checks. They are not part of session boot.
+
+```fish
+npm run tooling:doctor
+npm run promptfoo:router
+npx ast-grep -p 'print($A)' -l py scripts/harness_router.py
+npx ctx7 library react "hooks" --json
+npx ctx7 docs /reactjs/react.dev "useEffect cleanup"
+```
+
+Details: `docs/harness/tooling/ai-quality-tools.md`.
+
 ## List Worktrees
 
 ```fish
@@ -92,7 +120,7 @@ This rewrites FE `.env`, BE `.env`, BE appsettings/launchSettings/reporting conf
 from the worktree slot. BE local config patches are marked `skip-worktree` so script-managed local
 runtime changes do not make a new task branch dirty.
 
-## Multi-Agent Zellij Sessions
+## After Creating A Worktree
 
 After successful creation, validate:
 
@@ -102,52 +130,17 @@ test -d worktrees/<slug>/be; and echo "OK be"
 test -d worktrees/<slug>/fe; and echo "OK fe"
 ```
 
-Then open two sessions. 1 worktree = 2 sessions: orchestrator + implementer.
-
-Default tools:
-
-- orchestrator: `claude`
-- implementer: `opencode`
-
-Helpers (`zorch`/`zimpl`/`zls`/`zkillwt`/`wtlist`/`wtcreate`/`wtjoin`) live in
-`scripts/fish/myhospital-zellij.fish` — source it once (see
-`engine/rules/worktree-workflow.md`), then:
-
-```fish
-zorch <slug> <orchestrator_tool>
-zimpl <slug> <implementer_tool>
-```
-
-Fallback without helpers:
-
-```fish
-cd /home/dax/Documents/arabica/roast/worktrees/<slug>
-zellij attach mh-<slug>-orch-<orchestrator_tool> 2>/dev/null; or zellij --session mh-<slug>-orch-<orchestrator_tool> --layout myhospital-orch
-```
-
-```fish
-cd /home/dax/Documents/arabica/roast/worktrees/<slug>
-zellij attach mh-<slug>-impl-<implementer_tool> 2>/dev/null; or zellij --session mh-<slug>-impl-<implementer_tool> --layout myhospital-impl
-```
-
-`zorch` and `zimpl` only open sessions. They do not replace `python scripts/worktree.py create`.
+Terminal/session orchestration is owner-manual and intentionally outside the harness.
 
 ## Join Existing Worktree
 
-For join existing requests such as `join lại worktree bed`, do not create a new worktree. List/check and open sessions:
+For join existing requests such as `join lại worktree bed`, do not create a new worktree. List/check only:
 
 ```fish
 python scripts/worktree.py list
-zorch bed claude
-zimpl bed opencode
 ```
 
-For a targeted implementer request:
-
-```fish
-python scripts/worktree.py list
-zimpl bed composer
-```
+Then stop. The owner controls terminal/session placement manually.
 
 ## Run Backend
 

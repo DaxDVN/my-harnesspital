@@ -7,8 +7,23 @@
 ## Cách dùng
 
 - Reviewer mỗi chiều: chỉ nạp **Sources** của chiều mình + lát scope → giữ token bounded.
-- **Tier** = model khuyến nghị (Haiku/Sonnet/Opus) theo độ cần suy luận. Orchestrator override khi cần.
+- **Tier** = model khuyến nghị cho adjudication/final confidence. For aggressive review, weak models may run
+  repeated candidate-finding passes first; stronger models adjudicate BLOCK/HIGH or contested candidates.
 - **Applies-to** quyết định chiều có chạy trên scope không (FE/BE/both + glob). Không áp dụng → đánh `N/A` trong ledger.
+
+## Aggressive Pass Variants
+
+For weak-model review, run these pass variants per applicable dimension:
+
+| pass | focus |
+|---|---|
+| P1 | direct rule/convention violations from that dimension |
+| P2 | regression/caller/cross-file breakage |
+| P3 | reuse/edge-case/null/state gaps the first pass may miss |
+| P4 optional | business/spec contradiction for D1/D4/D7 |
+| P5 optional | UI semantic reuse matrix for D3/D10 |
+
+Union findings across passes. A finding seen by one pass is kept as a candidate until adjudicated.
 
 ## ⚠️ Staleness — đọc trước khi tin Sources
 
@@ -18,9 +33,9 @@ Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-
 
 ## D1 — business-logic · Tier: **Opus**
 - **Applies-to:** both (mọi thay đổi chạm luồng nghiệp vụ).
-- **Sources:** `specs/<module>/02-requirements.md` (Confirmed), `06-decision-log.md`, `04-traceability.md`, `03-ui.md`.
-- **Check:** mỗi Confirmed requirement có implement đúng & đủ? Acceptance criteria thỏa? Logic BHYT/BHTM, admission/inpatient, bed-day, quyết toán, rounding/retry đúng decision đã chốt? Edge nghiệp vụ (chuyển khoa, hủy, trùng) xử lý? Mâu thuẫn spec↔code → finding (không tự quyết nghiệp vụ — route open-question).
-- **Known bug-classes:** requirement Confirmed bị implement thiếu nhánh; mockup-implied rule không có trong DOCX (phải thành open-question); tính sai bed-day ranh giới ngày; thiếu idempotency cho create/update quyết toán.
+- **Sources:** **Tài liệu BA** (`specs/Tài liệu Nội trú.md` hoặc `.docx`) — đây là **nguồn sự thật duy nhất** cho nghiệp vụ. `specs/<module>/` chỉ dùng cho MVP dev (schema, API, UI), KHÔNG dùng làm nguồn rule nghiệp vụ.
+- **Check:** mỗi logic nghiệp vụ trong code có đúng mô tả trong Tài liệu BA không? Logic BHYT/BHTM, admission/inpatient, bed-day, quyết toán, rounding/retry đúng tài liệu? Edge nghiệp vụ (chuyển khoa, hủy, trùng) xử lý đúng tài liệu? Mâu thuẫn code↔Tài liệu BA → finding (không tự quyết nghiệp vụ — route open-question).
+- **Known bug-classes:** logic code không khớp Tài liệu BA; mockup-implied rule không có trong Tài liệu BA (phải thành open-question); tính sai bed-day ranh giới ngày; thiếu idempotency cho create/update quyết toán; code/fix-plan trích dẫn decision ID (`DL-*`, `DL-FIX-*`, ...) không tồn tại trong `docs/` hoặc `specs/` để hợp thức hóa rule nghiệp vụ.
 
 ## D2 — be-conventions · Tier: **Sonnet**
 - **Applies-to:** BE (`*.cs`, `worktrees/*/be/**`).
@@ -56,7 +71,7 @@ Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-
 - **Applies-to:** both (ranh giới FE↔BE).
 - **Sources:** `08-api.md`, generated files list (guard hook), `myhospital-fe/CLAUDE.md`.
 - **Check:** **không sửa tay** file generated (`generated-dtos.ts`, `generated-api-client.ts`, `Constants.ts`, EF migrations) — phải regen (`npm run dtos:update`/`client:generate`); FE client khớp BE DTO sau đổi contract; shape request/response khớp `08-api`; breaking change có cập nhật cả 2 phía.
-- **Known bug-classes:** hand-edit generated DTO (guard chặn nhưng vẫn kiểm); đổi BE DTO mà quên regen FE; FE gọi field BE đã đổi tên; dùng `Dictionary<string, object>` trong DTO/request/response thay typed property — phá contract type-safety `[scanner:contract_dict]` (SettingApi.cs:50, PortalPublishResult.cs:17); codegen file bị sửa tay dù không phải generated path `[scanner:manual_codegen]`; import path chết `@/lib/dtos/dtos` (đúng: `@/lib/dtos/generated-dtos`, vỡ build) `[scanner:mh-dead-dtos-import]` (FE-V1, HIGH, examination-context.tsx:4).
+- **Known bug-classes:** hand-edit generated DTO (guard chặn nhưng vẫn kiểm); đổi BE DTO mà quên regen FE; FE gọi field BE đã đổi tên; dùng `Dictionary<string, object>` trong DTO/request/response thay typed property — phá contract type-safety `[scanner:contract_dict]` (SettingApi.cs:50, PortalPublishResult.cs:17); codegen file bị sửa tay dù không phải generated path `[scanner:manual_codegen]`; import path chết `@/lib/dtos/dtos` (đúng: `@/lib/dtos/generated-dtos`, vỡ build) `[scanner:mh-dead-dtos-import]` (FE-V1, HIGH, examination-context.tsx:4); decision ID (`DL-*`, `DL-FIX-*`, ...) được dùng để justify API/DTO/contract change nhưng không tồn tại trong `docs/` hoặc `specs/`.
 
 ## D8 — tests-traceability · Tier: **Sonnet**
 - **Applies-to:** both.

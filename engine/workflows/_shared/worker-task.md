@@ -1,7 +1,7 @@
 # Worker Task Contract (H11) — cross-tool multi-agent
 
 Defines the **prompt fields** a worker receives and the **result format** it must return.
-Deep-review, super-test, and any other harness that fans out parallel subagents use this
+Deep-review and any other owner-approved harness that fans out parallel subagents use this
 contract so a coordinating agent can parse results identically regardless of the tool
 (Claude Agent, Codex worker, opencode/mimocode run).
 
@@ -90,11 +90,11 @@ Each review dimension (D1–D10) maps to one worker:
 - `done_check` = "attests: read N files, found M findings, none missed" (per checklist coverage rule)
 - Worker emits findings in `docs/audit/<module>-review-v<round>-<date>.md`
 
-## Integration with super-test
+## Integration with robust-test/browser testing
 
-Each test-batch or page-flow maps to one worker:
+If the owner explicitly approves external/browser worker fan-out, each test-batch or page-flow maps to one worker:
 - `scope` = flow name (e.g. "admission-form-happy-path")
 - `allowlist` = the page files + test fixture files
 - `inputs` = bug catalog from prior sweep, spec test-cases from `specs/<m>/09-test-cases.md`
 - `done_check` = "playwright run <flow> exits 0" or equivalent
-- Worker appends findings to the shared bug-catalog artifact
+- Worker appends findings to the robust-test per-bug dossier artifact

@@ -58,16 +58,16 @@ def is_stale(fm: dict) -> bool:
 
 def load_entries(sb: Path) -> list[dict]:
     entries = []
-    for md in sorted(sb.glob("*.md")):
-        if md.name in SKIP_FILES:
-            continue
+    root_entries = [md for md in sb.glob("*.md") if md.name not in SKIP_FILES]
+    grouped_entries = list((sb / "grouped").glob("[0-9][0-9]-*.md"))
+    for md in sorted(root_entries + grouped_entries):
         text = md.read_text(encoding="utf-8")
         fm = parse_frontmatter(text)
         if fm is None:
             continue
         if fm.get("status", "").strip() != "provisional":
             continue
-        fm["_file"] = md.name
+        fm["_file"] = md.relative_to(sb).as_posix()
         fm["_stale"] = is_stale(fm)
         fm["_recurrence"] = text.count("## Seen again")
         entries.append(fm)

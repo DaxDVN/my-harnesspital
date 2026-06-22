@@ -8,6 +8,14 @@ context by default, so size here is fine (unlike `main-brain/`, which must stay 
 `~/.claude/.../memory/` (Claude-only, session-scoped, ephemeral). Knowledge that must **survive and be
 shared across tools and fresh sessions** lives HERE, versioned in the repo.
 
+## Grouped View
+
+Use `grouped/` first for management/review/recall. It compresses related raw notes into generalized rule gates,
+for example freshness-before-diagnosis and canonical-reuse gates.
+
+Raw `YYYY-MM-DD-*.md` notes that have already been compressed live in `_archive/`. Open them only when a grouped
+rule needs verification or promotion detail. This keeps second-brain manageable without losing provenance.
+
 ## Rules
 - **OPEN.** Any agent may APPEND a new entry freely (no gate) when the owner says "nhớ cái này / để ý cái
   này", or when a durable cross-cutting fact is discovered worth keeping. One file per learning.
@@ -21,11 +29,14 @@ shared across tools and fresh sessions** lives HERE, versioned in the repo.
 - `INDEX.md` — the **applicability MAP**: a table `slug · scope · applies-when (tasks·keywords) · conf · target`.
   Read THIS to know what's here + WHEN each note may apply; promoted entries become tombstones. Regenerate from
   entry frontmatter with `python scripts/learning_recall.py --rebuild-map` (canonical — no drift).
-- `YYYY-MM-DD-<slug>.md` — one learning: frontmatter (`title`, `date`, `status: provisional`, `source`,
+- `grouped/*.md` — compressed provisional memory, grouped by related rule families. Read this before archive.
+- `_archive/YYYY-MM-DD-<slug>.md` — raw evidence already compressed into grouped files; open only for provenance.
+- `YYYY-MM-DD-<slug>.md` — new, uncompressed learning: frontmatter (`title`, `date`, `status: provisional`, `source`,
   `scope`, `confidence`, `owner_confirmed`, `proposed_target`, `tags`, **`applies_tasks`**, **`applies_globs`**,
   **`applies_keywords`**, `expires`) + **What** / **Evidence** / **Why** / **How To Apply** / **Boundaries** /
   **Promotion Recommendation**. Create via `scripts/learning_capture.py` (enforces enums; recurrence appends
-  "Seen again" to the existing provisional entry, any date).
+  "Seen again" to the existing provisional entry, any date). Periodically compress these into `grouped/`, then
+  move the raw source to `_archive/`.
 
 ## Recall — how a note gets USED (not just written)
 second-brain is on-demand (NOT auto-loaded — saves tokens). To stop notes rotting unread, each note declares

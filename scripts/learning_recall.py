@@ -43,7 +43,8 @@ TASK_HINTS = {
 }
 SCOPE_HINTS = {"backend": "backend", "be": "backend", "frontend": "frontend", "fe": "frontend"}
 _STOP = {"the", "a", "an", "and", "or", "to", "in", "of", "for", "on", "is", "this", "that",
-         "please", "with", "into", "from", "do", "my", "it", "be", "fe"}
+         "please", "with", "into", "from", "do", "my", "it", "be", "fe", "harness", "grouped",
+         "maintenance", "optimize", "quality", "cost", "token", "tokens"}
 
 
 # ---------------------------------------------------------------------------
@@ -93,9 +94,9 @@ def parse_entry(p: Path) -> dict | None:
 
 def load_entries() -> list[dict]:
     out = []
-    for p in sorted(SECOND_BRAIN.glob("*.md")):
-        if p.name in SKIP_FILES:
-            continue
+    root_entries = [p for p in SECOND_BRAIN.glob("*.md") if p.name not in SKIP_FILES]
+    grouped_entries = list((SECOND_BRAIN / "grouped").glob("[0-9][0-9]-*.md"))
+    for p in sorted(root_entries + grouped_entries):
         e = parse_entry(p)
         if e:
             out.append(e)
@@ -135,7 +136,7 @@ def score(e: dict, scope: str | None, task: str | None,
     return s, why
 
 
-def recall(scope=None, task=None, keywords=None, paths=None, limit=8):
+def recall(scope=None, task=None, keywords=None, paths=None, limit=3):
     keywords = [k.lower() for k in (keywords or []) if k]
     paths = paths or []
     scored = []
@@ -143,6 +144,11 @@ def recall(scope=None, task=None, keywords=None, paths=None, limit=8):
         r = score(e, scope, task, keywords, paths)
         if r is not None:
             scored.append((r[0], r[1], e))
+    if any(any(w.startswith(("kw:", "path:")) for w in why) for _, why, _ in scored):
+        scored = [
+            item for item in scored
+            if any(w.startswith(("kw:", "path:")) for w in item[1])
+        ]
     # keyword/glob hits first, then by score
     scored.sort(key=lambda t: (any(w.startswith(("kw:", "path:")) for w in t[1]), t[0]), reverse=True)
     return scored[:limit]
@@ -167,6 +173,18 @@ MAP_HEADER = (
     "second-brain. To pull only the notes that fit your task:\n"
     "`python scripts/learning_recall.py --context \"<your task>\"`. A match MAY apply (or not, or several) —\n"
     "apply if it fits, but **verify** (second-brain is provisional). Promote a proven note with `/promote`.\n\n"
+    "## Grouped management view\n\n"
+    "Prefer `grouped/` when reviewing or promoting batches of related notes:\n\n"
+    "- [`grouped/README.md`](grouped/README.md) — group policy and file list.\n"
+    "- [`grouped/INDEX.md`](grouped/INDEX.md) — coverage map from all raw notes to grouped files.\n"
+    "- [`grouped/01-freshness-before-diagnosis.md`](grouped/01-freshness-before-diagnosis.md) — generated/runtime/env freshness before diagnosis.\n"
+    "- [`grouped/02-canonical-reuse-gate.md`](grouped/02-canonical-reuse-gate.md) — reuse canonical project patterns before new code.\n"
+    "- [`grouped/03-correct-boundary-data-integrity.md`](grouped/03-correct-boundary-data-integrity.md) — correct boundary and real data contracts.\n"
+    "- [`grouped/04-evidence-verification-gate.md`](grouped/04-evidence-verification-gate.md) — proof required before verified/safe claims.\n"
+    "- [`grouped/05-automation-orchestration-triage.md`](grouped/05-automation-orchestration-triage.md) — automation signal, batching, owner gates.\n"
+    "- [`grouped/06-design-spec-decision-gate.md`](grouped/06-design-spec-decision-gate.md) — clinical design genre and module spec decisions.\n\n"
+    "Rows below are grouped notes or new uncompressed live notes. Archived raw notes live in `_archive/` and are\n"
+    "opened only as provenance for a grouped rule.\n\n"
     "| slug | scope | applies when (tasks · keywords) | conf | → target |\n"
     "|---|---|---|---|---|\n"
 )
@@ -182,7 +200,8 @@ def rebuild_map() -> int:
     rows = []
     for e in entries:
         when = (",".join(e["tasks"]) or "any") + " · " + (",".join(e["keywords"][:5]) or "—")
-        rows.append(f"| [{e['slug']}]({e['path'].name}) | {e['scope']} | {when} | {e['conf']} | {e['target']} |")
+        href = e["path"].relative_to(SECOND_BRAIN).as_posix()
+        rows.append(f"| [{e['slug']}]({href}) | {e['scope']} | {when} | {e['conf']} | {e['target']} |")
     body = MAP_HEADER + ("\n".join(rows) if rows else "| _(none yet)_ | | | | |") + "\n"
     if tombstones:
         body += "\n## Tombstones (never re-learn)\n" + "\n".join(tombstones) + "\n"
@@ -247,6 +266,7 @@ def _self_test() -> int:
             r = recall(scope="backend", task="fix", keywords=["listing"])
             assert r and r[0][2]["slug"] == "be-listing-rule", f"backend note not top: {r}"
             assert any(w.startswith("kw:") for w in r[0][1]), "keyword reason missing"
+            assert {e["slug"] for _, _, e in r} == {"be-listing-rule"}, "keyword hit should suppress broad-only notes"
 
             # frontend scope → backend note filtered OUT, broad note stays
             r2 = recall(scope="frontend", task="fix")
@@ -285,7 +305,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--touch", help="comma-separated file paths/globs you will change")
     ap.add_argument("--all", action="store_true", help="print the whole map (INDEX.md)")
     ap.add_argument("--rebuild-map", action="store_true", help="regenerate INDEX.md from entry frontmatter")
-    ap.add_argument("--limit", type=int, default=8)
+    ap.add_argument("--limit", type=int, default=3)
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args(argv)
 

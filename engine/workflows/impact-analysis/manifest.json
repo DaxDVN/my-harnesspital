@@ -1,12 +1,29 @@
 {
   "name": "impact-analysis",
   "description": "Preflight blast-radius analysis BEFORE a non-trivial change/fix/slice. Wraps CodeGraph impact/affected + layers BE/FE/API/business/test dimensions -> risk-assessment + preflight verdict. Read-only. Cross-cutting (callable by bug-fix, technical-design, task-slicing, deep-review).",
-  "kind": "orchestrated-codegraph",
+  "kind": "advisory",
+  "implementation_kind": "orchestrated-codegraph",
   "maturity": "scaffolded",
+  "public_entry": true,
+  "auto_route_allowed": false,
+  "lifecycle_status": "DRAFT",
   "entry_skill": "impact-analysis",
+  "recommended_prompt_file": "engine/prompts/impact-analysis-preflight.md",
+  "required_inputs": ["change hypothesis or symbol/question to analyze", "target source scope"],
+  "allowed_writes": ["engine/workflows/impact-analysis/rounds/**", "docs/session-notes/**"],
+  "validators": ["python engine/workflows/_shared/validate-envelope.py <envelope>"],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "eval_summary": {
+    "last_real_run": "",
+    "artifact_path": "",
+    "verdict": ""
+  },
   "agents": [],
   "external_agents": ["codegraph"],
   "skills_used": [],
   "rules": ["backend", "frontend"],
-  "uses_shared": ["envelope.schema.json", "validate-envelope.py"]
+  "uses_shared": ["envelope.schema.json", "validate-envelope.py", "runtime-boundary.md"]
 }

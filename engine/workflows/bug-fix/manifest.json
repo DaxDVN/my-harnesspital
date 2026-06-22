@@ -1,12 +1,29 @@
 {
   "name": "bug-fix",
-  "description": "General bug investigation -> RCA -> fix -> verify, from ANY source (QA/lead/user/log/build/review/E2E). intake -> reproduce -> RCA(mh-rca) -> fix-plan -> optional Codex gate -> fix(/mh-fix) -> verify, over envelopes + a state machine. progressive-test calls this for its E2E bugs.",
-  "kind": "orchestrated-subsystem",
+  "description": "General bug investigation -> RCA -> fix -> verify, from ANY source (QA/lead/user/log/build/review/E2E). intake -> reproduce -> RCA(mh-rca) -> fix-plan -> optional review gate -> fix(/mh-fix) -> verify, over envelopes + a state machine. robust-test may route confirmed E2E bugs here after owner approval.",
+  "kind": "workflow",
+  "implementation_kind": "orchestrated-subsystem",
   "maturity": "scaffolded",
+  "public_entry": true,
+  "auto_route_allowed": false,
+  "lifecycle_status": "DRAFT",
   "entry_skill": "bug-fix",
+  "recommended_prompt_file": "engine/prompts/bugfix-rca-single.md",
+  "required_inputs": ["bug report, finding path, or failing validation artifact", "target worktree before any source edit"],
+  "allowed_writes": ["engine/workflows/bug-fix/rounds/**", "docs/session-notes/**", "worktrees/<slug>/fe/**", "worktrees/<slug>/be/**"],
+  "validators": ["python scripts/harness_doctor.py", "python engine/workflows/_shared/validate-envelope.py <envelope>"],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "eval_summary": {
+    "last_real_run": "",
+    "artifact_path": "",
+    "verdict": ""
+  },
   "agents": ["mh-rca"],
   "external_agents": ["codex-reviewer"],
   "skills_used": ["mh-fix"],
-  "rules": ["backend", "frontend"],
-  "uses_shared": ["envelope.schema.json", "validate-envelope.py"]
+  "rules": ["backend", "frontend", "ponytail", "quality-gates"],
+  "uses_shared": ["envelope.schema.json", "validate-envelope.py", "runtime-boundary.md"]
 }
