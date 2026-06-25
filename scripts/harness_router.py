@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,7 @@ PONYTAIL_DEFAULT_WORKFLOWS = {
     "bug-fix",
     "deep-review",
     "robust-test",
+    "espresso-test",
     "technical-design",
     "task-slicing",
     "ui-spec",
@@ -55,6 +57,7 @@ QUALITY_GATE_DEFAULT_WORKFLOWS = {
     "bug-fix",
     "deep-review",
     "robust-test",
+    "espresso-test",
     "technical-design",
     "task-slicing",
     "ui-spec",
@@ -170,6 +173,7 @@ INTENT_RULES: list[tuple[str, tuple[str, ...], str, str]] = [
     ("harness-maintenance", ("harness", "harness maintenance", "harness optimize", "optimize harness", "workflow eval", "workflow routing", "router eval", "promptfoo", "context7", "codegraph maintenance", "source index", "graphify", "scanner promotion", "memory promotion", "main brain", "main-brain", "doctor", "readiness", "readiness check", "tối ưu harness", "đánh giá harness", "nâng cấp harness", "cài tooling", "tooling harness", "đốt token", "token tiêu hao", "quality không giảm"), "T2", "harness maintenance/optimization intent"),
     ("dev-from-handoff", ("dev-from-handoff", "dev from handoff", "implement from handoff", "build from handoff", "owner handoff", "handoff docs", "handoff document", "dev từ handoff", "từ tài liệu handoff", "tài liệu handoff", "tài liệu bàn giao", "triển khai từ handoff", "triển khai từ tài liệu bàn giao", "bắt đầu dev từ tài liệu", "bàn giao dev"), "T2", "owner-supplied handoff development intent"),
     ("robust-test", ("robust-test", "super-test", "progressive-test", "agentflow", "harvest", "bug harvest", "e2e harvest", "e2e test", "kiểm thử module", "test chắc", "sweep bugs"), "T3", "owner-gated robust targeted/sweep test intent"),
+    ("espresso-test", ("espresso-test", "espresso test", "review-fix loop", "review fix loop", "lặp review fix", "tự fix tới sạch", "review tới sạch", "loop review fix"), "T3", "owner-gated review→fix→re-review convergence loop intent"),
     ("deep-review", ("mh-review", "deep-review", "review", "audit", "kiểm toán", "đánh giá code"), "T3", "explicit review/audit intent"),
     ("ui-spec", ("ui spec", "ui-spec", "03-ui", "mockup", "docx", "reuse audit"), "T2", "UI spec/design-source intent"),
     ("technical-design", ("technical-design", "api contract", "design api", "08-api", "thiết kế api"), "T2", "API contract design intent"),
@@ -364,6 +368,24 @@ def build_decision(prompt: str) -> dict[str, Any]:
         "AGENTS.md",
         "engine/router/README.md",
     ]
+    DEV_SIGNALS = {
+        "fix", "implement", "sửa", "thêm", "tạo", "refactor", "scaffold", "dev", "code",
+        "review", "audit", "điều tra", "khảo sát", "component", "module", "page", "api",
+        "endpoint", "dto", "form", "hook", "adapter", "ui", "view", "controller", "service",
+        "fe", "be", "frontend", "backend", "test", "kiểm thử", "lỗi", "bug", "hàm", "class",
+        "function", "database", "db", "sql", "migration", "màn"
+    }
+    prompt_lower = prompt.lower()
+    has_dev_signal = (
+        (workflow and workflow != "harness-maintenance")
+        or any(re.search(r"\b" + re.escape(sig) + r"\b", prompt_lower) for sig in DEV_SIGNALS)
+    )
+    if has_dev_signal:
+        files_to_load.extend([
+            "engine/rules/frontend.md",
+            "engine/rules/backend.md",
+        ])
+
     manifest_path = route.get("manifest_path")
     if manifest_path:
         files_to_load.append(manifest_path)

@@ -1,6 +1,6 @@
 {
   "name": "deep-review",
-  "description": "Aggressive <=3-round partitioned code review (D1-D10): repeated weak-model passes per dimension, candidate union, stronger adjudication, bounded completeness.",
+  "description": "Maximum-recall <=3-round partitioned code review (D1-D7): multi-pass convergence per dimension, exemplar anchors, self-adversarial pre-filter, adversarial verify, bounded completeness.",
   "kind": "workflow",
   "implementation_kind": "workflow-tool-js",
   "maturity": "smoke-tested",

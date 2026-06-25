@@ -2,6 +2,9 @@
 
 @AGENTS.md
 @main-brain/knowledge.md
+@engine/rules/ponytail.md
+@engine/rules/quality-gates.md
+
 
 This file is Claude-specific and intentionally thin. Global rules live in `AGENTS.md`; detailed workflow/rule docs are lazy-loaded through the router and the AGENTS lazy-load index.
 
@@ -15,8 +18,9 @@ This file is Claude-specific and intentionally thin. Global rules live in `AGENT
 
 ## Package Scope
 
-- FE work: load `myhospital-fe/CLAUDE.md`, then run `python scripts/rule_card.py fe "<task>"` and open the returned quick/topic cards. Open full `engine/rules/frontend.md` only for uncovered/high-risk cases.
-- BE work: run `python scripts/rule_card.py be "<task>"` and open the returned quick/topic cards. Open full `engine/rules/backend.md` only for uncovered/high-risk cases; `myhospital-be/CONVENTIONS.md` is legacy/advisory.
+- **Before any source-edit work:** run BOTH `python scripts/rule_card.py fe "<task>"` AND `python scripts/rule_card.py be "<task>"` and open ALL returned cards — both sides, always. Do not skip one side because the task appears FE-only or BE-only. Missing either side is BLOCK.
+- FE work: additionally load `myhospital-fe/CLAUDE.md`. Open full `engine/rules/frontend.md` only for uncovered/high-risk cases.
+- BE work: `myhospital-be/CONVENTIONS.md` is legacy/advisory; open full `engine/rules/backend.md` only for uncovered/high-risk cases.
 - Cross-package work: BE contract first, DTO/client regen second, FE validation after.
 
 ## Source Discovery
@@ -33,7 +37,7 @@ Spawn subagents only for bounded, disjoint work. The parent owns architecture, i
 
 ## Memory
 
-`main-brain/knowledge.md` is loaded above because it is mandatory standing memory. Keep it lean. Use `scripts/learning_recall.py` for provisional `second-brain/` notes and open only matched notes per `engine/rules/memory-policy.md`. Never write `main-brain/` directly.
+`main-brain/knowledge.md` is loaded above because it is mandatory standing memory. Keep it lean. Use `scripts/learning_recall.py` for provisional `second-brain/` notes and open only matched notes per `engine/rules/memory-policy.md`. Never write `main-brain/` directly. Follow `engine/rules/memory-policy.md`: second-brain only for lessons (ask before writing); use `docs/audit/` for bug investigations and audit results.
 
 ## Graphify
 

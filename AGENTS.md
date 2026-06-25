@@ -68,14 +68,16 @@ Never simplify away validation, security, accessibility, clinical/business corre
 ## 6. Source, Rules, Memory
 
 - Source discovery: CodeGraph first → bounded exact search → narrowed reads.
-- FE work: load `myhospital-fe/CLAUDE.md`, then run `python scripts/rule_card.py fe "<task>"` and open the returned quick/topic cards. Open full `engine/rules/frontend.md` only when the cards do not cover the task or risk is high.
-- BE work: run `python scripts/rule_card.py be "<task>"` and open the returned quick/topic cards. Open full `engine/rules/backend.md` only when the cards do not cover the task or risk is high; `myhospital-be/CONVENTIONS.md` is advisory only.
+- **Before any source-edit work (fix/implement/scaffold/review/design):** run BOTH `python scripts/rule_card.py fe "<task>"` AND `python scripts/rule_card.py be "<task>"` and open ALL returned cards — both sides, always, regardless of which package is in scope. Do not skip one side because the task appears FE-only or BE-only. This applies to every agent, subagent, and tool (Claude Code, OpenCode, or other). Missing either side's rules is BLOCK.
+- FE work: additionally load `myhospital-fe/CLAUDE.md`. Open full `engine/rules/frontend.md` only when the cards do not cover the task or risk is high.
+- BE work: additionally confirm `myhospital-be/CONVENTIONS.md` is advisory only; open full `engine/rules/backend.md` only when the cards do not cover the task or risk is high.
 - FE+BE work: BE contract first, regenerate FE DTO/client second, validate both sides.
 - `main-brain/knowledge.md` is mandatory standing memory. If the tool did not preload it, read it once before substantive work.
 - Before fix/review/implement/design/scaffold: `python scripts/learning_recall.py --context "<task>"`; open matched notes only.
 - Before fix/implement/review/test: apply `engine/rules/quality-gates.md` when the routed task triggers reuse evidence, fix-plan, regression-map, adjudication, robust-test triage, or validation gates.
 - Before executing a natural-language workflow route: apply `engine/rules/preflight-confirmation.md`.
-- Never write `main-brain/` directly; capture reusable provisional lessons in `second-brain/`.
+- Never write `main-brain/` directly.
+- `second-brain/` is only for distilled lessons/patterns (ask owner first before writing anything new). Raw bug findings, audit results, and investigation reports belong in `docs/audit/`.
 
 ## 7. Validation And Artifacts
 

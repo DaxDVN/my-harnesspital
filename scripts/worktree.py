@@ -31,6 +31,19 @@ DEFAULT_INTERNAL_TOKEN_SECRET = os.environ.get(
 )
 DEFAULT_BFF_BRIDGE_URL = os.environ.get("MYHOSPITAL_BFF_BRIDGE_URL", "http://localhost:5000")
 DEFAULT_BFF_BRIDGE_SECRET = os.environ.get("MYHOSPITAL_BFF_BRIDGE_SECRET", "dev-only-dummy")
+
+# === Source DB (main server - private) ===
+# Chỉ cái này mới cần export vì là server thật.
+SOURCE_DB_SERVER = os.environ.get("MYHOSPITAL_SOURCE_DB_SERVER", os.environ.get("MYHOSPITAL_MAIN_DB_SERVER", "localhost"))
+SOURCE_DB_PORT = int(os.environ.get("MYHOSPITAL_SOURCE_DB_PORT", os.environ.get("MYHOSPITAL_MAIN_DB_PORT", "1433")))
+SOURCE_DB_NAME = os.environ.get("MYHOSPITAL_SOURCE_DB_NAME", os.environ.get("MYHOSPITAL_MAIN_DB_NAME", "MyHospital"))
+SOURCE_DB_USER = os.environ.get("MYHOSPITAL_SOURCE_DB_USER", os.environ.get("MYHOSPITAL_MAIN_DB_USER", "sa"))
+SOURCE_DB_PASSWORD = os.environ.get("MYHOSPITAL_SOURCE_DB_PASSWORD", os.environ.get("MYHOSPITAL_MAIN_DB_PASSWORD", DEFAULT_SQL_PASSWORD))
+
+# === Target slot DB (local trong container) ===
+# Local config giống nhau hết + không public network → để default trong code luôn.
+# Chỉ set MYHOSPITAL_TARGET_DB_PASSWORD nếu bạn muốn override.
+TARGET_DB_PASSWORD = os.environ.get("MYHOSPITAL_TARGET_DB_PASSWORD", DEFAULT_SQL_PASSWORD)
 WORKTREE_META_FILE = ".myhospital-worktree.json"
 
 
@@ -869,7 +882,7 @@ def repair_worktree_config(args: argparse.Namespace) -> None:
             be_worktree,
             cfg,
             be_template,
-            sql_password=args.sql_password,
+            sql_password=TARGET_DB_PASSWORD,
             dry_run=args.dry_run,
         )
         write_worktree_metadata(
@@ -1317,7 +1330,7 @@ def create_worktree(args: argparse.Namespace) -> None:
             be_worktree,
             cfg,
             be_repo / ".env",
-            sql_password=args.sql_password,
+            sql_password=TARGET_DB_PASSWORD,
             dry_run=args.dry_run,
         )
         write_worktree_metadata(
@@ -1359,29 +1372,53 @@ def create_worktree(args: argparse.Namespace) -> None:
 
         if not args.skip_db_sync and args.db_setup == "migrate-data":
             print()
-            print("Running BE migrate-data for the slot DB...")
+            print("Running BE migrate-data for the slot DB (recreate schema)...")
             init_db_slots(
                 argparse.Namespace(
                     slots=[args.slot],
                     image=args.image,
-                    sa_password=args.sql_password,
+                    sa_password=TARGET_DB_PASSWORD,
                     pull=False,
                     dry_run=args.dry_run,
                 )
             )
             run(["make", "migrate-data", "CONFIRM=yes"], cwd=be_worktree, dry_run=args.dry_run)
+
+            # Sau make migrate-data (recreate schema), tự sync data từ source (main server)
+            # dùng SOURCE_* env. Target thì để default local.
+            print()
+            print("Auto-syncing data from main DB server (SOURCE_* env)...")
+            migration_be_path = str(Path(args.migration_be_path).resolve()) if args.migration_be_path else str(be_worktree)
+            sync_args = argparse.Namespace(
+                slot=args.slot,
+                be_path=str(be_worktree),
+                migration_be_path=migration_be_path,
+                source_server=SOURCE_DB_SERVER,
+                source_port=SOURCE_DB_PORT,
+                source_database=SOURCE_DB_NAME,
+                target_database="MyHospital",
+                sql_user=SOURCE_DB_USER,
+                sql_password=SOURCE_DB_PASSWORD or TARGET_DB_PASSWORD,
+                python="python",
+                backup_dir=None,
+                yes=True,
+                dry_run=args.dry_run,
+                scan_worktrees=args.scan_worktrees,
+            )
+            sync_db(sync_args)
+
         elif not args.skip_db_sync and args.db_setup == "sync-db":
             migration_be_path = str(Path(args.migration_be_path).resolve()) if args.migration_be_path else str(be_worktree)
             sync_args = argparse.Namespace(
                 slot=args.slot,
                 be_path=str(be_worktree),
                 migration_be_path=migration_be_path,
-                source_server="localhost",
-                source_port=1433,
-                source_database="MyHospital",
+                source_server=SOURCE_DB_SERVER,
+                source_port=SOURCE_DB_PORT,
+                source_database=SOURCE_DB_NAME,
                 target_database="MyHospital",
-                sql_user="sa",
-                sql_password=args.sql_password,
+                sql_user=SOURCE_DB_USER,
+                sql_password=SOURCE_DB_PASSWORD or TARGET_DB_PASSWORD,
                 python="python",
                 backup_dir=None,
                 yes=True,
@@ -1394,7 +1431,7 @@ def create_worktree(args: argparse.Namespace) -> None:
                 argparse.Namespace(
                     slots=[args.slot],
                     image=args.image,
-                    sa_password=args.sql_password,
+                    sa_password=TARGET_DB_PASSWORD,
                     pull=False,
                     dry_run=args.dry_run,
                 )
@@ -1944,16 +1981,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fe-branch")
     p.add_argument("--be-branch")
     p.add_argument("--migration-be-path")
-    p.add_argument("--sql-password", default=DEFAULT_SQL_PASSWORD)
+    p.add_argument("--sql-password", default=DEFAULT_SQL_PASSWORD,
+                   help="Override target slot password (local). Thường thì để default trong code vì local config giống nhau.")
     p.add_argument("--image", default="mcr.microsoft.com/mssql/server:2022-latest")
     p.add_argument(
         "--db-setup",
         choices=["migrate-data", "sync-db"],
         default="migrate-data",
         help=(
-            "Slot DB setup mode. Default: run `make migrate-data CONFIRM=yes` "
-            "inside the BE worktree so migrations are regenerated from the current model. "
-            "`sync-db` keeps the older committed-migration copy-from-main flow."
+            "Default 'migrate-data': chạy make migrate-data (recreate schema) "
+            "rồi tự sync data từ SOURCE_* (main server) vào slot. "
+            "Chỉ cần export MYHOSPITAL_SOURCE_* cho main DB. "
+            "Local slot target để default trong code."
         ),
     )
     p.add_argument("--skip-db-sync", action="store_true", help="Skip DB data/migration setup; still ensures the slot SQL container exists.")
@@ -1976,12 +2015,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--slot", type=int, required=True, choices=[1, 2, 3, 4])
     p.add_argument("--be-path", required=True)
     p.add_argument("--migration-be-path")
-    p.add_argument("--source-server", default="localhost")
-    p.add_argument("--source-port", type=int, default=1433)
-    p.add_argument("--source-database", default="MyHospital")
+    p.add_argument("--source-server", default=SOURCE_DB_SERVER)
+    p.add_argument("--source-port", type=int, default=SOURCE_DB_PORT)
+    p.add_argument("--source-database", default=SOURCE_DB_NAME)
     p.add_argument("--target-database", default="MyHospital")
-    p.add_argument("--sql-user", default="sa")
-    p.add_argument("--sql-password", default=DEFAULT_SQL_PASSWORD)
+    p.add_argument("--sql-user", default=SOURCE_DB_USER)
+    p.add_argument("--sql-password", default=SOURCE_DB_PASSWORD or TARGET_DB_PASSWORD)
     p.add_argument("--python", default="python")
     p.add_argument("--backup-dir")
     p.add_argument("--yes", action="store_true")

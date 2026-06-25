@@ -107,7 +107,7 @@ Opus → trích OPEN findings theo severity+cluster → re-verify gốc LIVE →
 
 ## Why this shape
 
-The shared 90% (non-negotiables, harness workflows, dynamic floor, D1–D10, bug-classes, finding schema,
+The shared 90% (non-negotiables, harness workflows, dynamic floor, D1–D7, bug-classes, finding schema,
 guardrails, DoD) + all per-module presets live **inside `deep-audit-orchestrator.md`** — one file, no external
 instance files. Edit it once → every future audit inherits the upgrade. Output always lands in a
 per-day folder (`docs/audit/<YYYY-MM-DD>/`), matching the workspace artifact convention.

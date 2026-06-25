@@ -32,3 +32,4 @@ opened only as provenance for a grouped rule.
 | [rename-task-scope](_archive/2026-06-22-rename-task-scope-only-rename-what-task-says.md) | workspace | fix,implement,rename,refactor · rename,refactor,class,entity,property,table,file | high | engine/rules/ponytail |
 | [revert-git-diff-head-first](_archive/2026-06-22-revert-read-git-diff-head-all-files-first.md) | workspace | fix,revert,implement · revert,undo,back,prescription,lead | high | engine/rules/quality-gates |
 | [no-audit-claim-without-manual-crosscheck](_archive/2026-06-22-no-audit-claim-without-manual-crosscheck.md) | workspace | fix,implement,review,rename,audit · audit,all,every,matches,correct,consistent,done,complete | high | engine/rules/quality-gates + 04-evidence-verification-gate |
+| [test-data-done-rule](test-data-done-rule.md) | workspace | fix,implement,test,browser,e2e · test-data,seed,done,complete,data,view | high | seed data trước khi báo done; append-only; ưu tiên UI/luồng trước SQL |

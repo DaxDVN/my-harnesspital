@@ -83,11 +83,11 @@ The scanner pack catches (non-exhaustive): raw `Exception` catch/throw (V12), li
 
 **A fix that introduces a new scanner hit is not done.** Resolve the hit or explain why it is a false positive before proceeding.
 
-Then re-check the **relevant checklist dimension(s)** (`engine/workflows/deep-review/checklist.md` D1–D10) on the diff only — not the whole scope. Confirm:
+Then re-check the **relevant checklist dimension(s)** (`engine/workflows/deep-review/checklist.md` D1–D7) on the diff only — not the whole scope. Confirm:
 
 - No new bug in the same dimension the finding lived in.
-- No cross-dimension regression (especially: D2/D5 for BE data-access, D3/D10 for FE state/reuse, D6 for auth).
-- For FE visible UI, the final diff still matches the scoped reuse matrix. A D3/D10 claim is not clean if the
+- No cross-dimension regression (especially: D2/D5 for BE data-access, D3/D7 for FE state/reuse, D6 for auth).
+- For FE visible UI, the final diff still matches the scoped reuse matrix. A D3/D7 claim is not clean if the
   changed UI element/surface/action lacks a cited live exemplar or a documented CREATE-NEW rationale.
 
 If the self-review uncovers a new issue, open a new finding in the findings file (F-00N+1, `status: OPEN`, `round_found: current`) and fix it in the same session if severity >= HIGH, or log it for the next round otherwise.
@@ -146,7 +146,7 @@ After closing findings, for each bug-class that is **new** or **recurring** acro
 
 1. **Deterministic?** → propose a guard-hook rule (`.claude/hooks/myhospital_guard.py`) or ESLint rule — catches it free forever. Name the exact pattern to match.
 2. **Convention gap?** → propose an addition to `engine/rules/backend.md` or `engine/rules/frontend.md` — shifts the error left to implementers.
-3. **New dimension pattern?** → propose a "Known bug-class" line in `engine/workflows/deep-review/checklist.md` under the correct D1–D10 dimension (with `file:line` exemplar if available) — raises Round-1 recall for future modules.
+3. **New dimension pattern?** → propose a "Known bug-class" line in `engine/workflows/deep-review/checklist.md` under the correct D1–D7 dimension (with `file:line` exemplar if available) — raises Round-1 recall for future modules.
 4. **Agent mistake pattern?** → propose an auto-memory entry (`type: feedback`).
 
 Report suggestions as a numbered list; do not apply them unless the user confirms. Promotion decisions belong to the user.

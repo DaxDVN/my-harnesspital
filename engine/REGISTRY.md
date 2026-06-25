@@ -8,7 +8,7 @@ check_registry` validates that every manifest reference resolves to a real pool 
 ## Agents (`engine/agents/<name>.md`)
 | agent | role | rules it works against | used by workflow(s) |
 |---|---|---|---|
-| `mh-reviewer` | single-dimension code reviewer (D1–D10) | backend-/frontend-rules, deep-review/checklist | `deep-review` |
+| `mh-reviewer` | single-dimension code reviewer (D1–D7) | backend-/frontend-rules, deep-review/checklist | `deep-review` |
 | `mh-implementer` | bounded convention-safe implementer | backend-/frontend-rules | (skill `mh-implement`) |
 | `mh-rule-auditor` | read-only BLOCK/WARN rule auditor | backend-/frontend-rules | (ad-hoc) |
 | `mh-rca` | read-only root-cause investigator — follows the **bug-trace playbook** (`docs/harness/plans/bug-trace-workflow-research-2026-06-16.md`) | backend-/frontend-rules | `bug-fix` |
@@ -23,6 +23,7 @@ check_registry` validates that every manifest reference resolves to a real pool 
 | `promote` | second-brain → main-brain (owner-gated) | — |
 | `ponytail` | minimal-correct-diff/YAGNI discipline; prevents over-building | — |
 | `robust-test` | owner-gated targeted/sweep testing; one folder per bug; final review-ready bundle | `robust-test` |
+| `espresso-test` | owner-gated review→fix→re-review loop until 0 BLOCK/HIGH; blind coordinator routes paths only | `espresso-test` |
 | `impact-analysis` | preflight blast-radius (CodeGraph) | `impact-analysis` |
 | `bug-fix` | investigate→RCA→fix→verify (any source) | `bug-fix` |
 | `ui-spec` | DOCX+mockups → detailed `03-ui.md` reuse-map (FE keystone) | `ui-spec` |
@@ -77,22 +78,38 @@ Manifest `kind` is the P0 governance class (`workflow` · `internal` · `advisor
 | `impact-analysis` | advisory | orchestrated-codegraph (preflight blast-radius) | `impact-analysis` | — | codegraph | backend-, frontend- |
 | `bug-fix` | workflow | orchestrated-subsystem (investigate→RCA→fix→verify, any source) | `bug-fix` | `mh-rca` | codex-reviewer | backend-, frontend-, ponytail, quality-gates |
 | `robust-test` | workflow | manual-owner-gated-test-protocol (targeted/sweep; one folder per bug; no source edits) | `robust-test` | — | — | backend-, frontend-, source-discovery, ponytail, quality-gates |
+| `espresso-test` | workflow | agent-orchestrated-loop (review→fix→re-review until clean; blind coordinator; reuses `deep-review` + `mh-rca`/`mh-fix`/`mh-implementer`) | `espresso-test` | `mh-rca`, `mh-implementer` | — | backend-, frontend-, source-discovery, ponytail, quality-gates |
 | `ui-spec` | workflow | orchestrated-sdd-fe (DOCX+mockups → specs/03-ui reuse-map) | `ui-spec` | — | codegraph | frontend-, ponytail, quality-gates |
 | `technical-design` | workflow | orchestrated-sdd — **API-contract only** (→ specs/08,06,04; schema=owner, UI=`ui-spec`) | `technical-design` | `mh-rule-auditor` | codex-reviewer | backend-, frontend-, ponytail, quality-gates |
 | `task-slicing` | workflow | orchestrated-sdd (→ specs/10,04, vertical slices; large modules) | `task-slicing` | — | — | backend-, frontend-, ponytail, quality-gates |
 | `incremental-impl` | internal | orchestrated-wrapper — **internal per-task executor** (called BY `mh-implement`) | `incremental-impl` | `mh-implementer` | — | backend-, frontend-, ponytail, quality-gates |
 | `dev-from-handoff` | workflow | manual-handoff-dev (owner docs → plan approval → bounded slices → receipt; no BA discovery) | `dev-from-handoff` | — | — | backend-, frontend-, source-discovery, artifact-policy, spec-driven-development, ponytail, quality-gates |
 
-**Reuse note:** `bug-fix` reuses `mh-rca` (follows the bug-trace playbook) + `/mh-fix`; `incremental-impl` is the **internal per-task executor** of `mh-implement`; `impact-analysis` wraps CodeGraph.
+**Reuse note:** `bug-fix` reuses `mh-rca` (follows the bug-trace playbook) + `/mh-fix`; `incremental-impl` is the **internal per-task executor** of `mh-implement`; `impact-analysis` wraps CodeGraph; `espresso-test` reuses `deep-review` (review engine) + the same `mh-rca`/`/mh-fix`/`mh-implementer` fix path as `bug-fix` — it is the self-driving loop over `mh-review`'s ≤3-round cycle, adding no new engine.
 `dev-from-handoff` reuses `/mh-implement`, `/impact-analysis`, and targeted `robust-test` only after owner approval; it does not replace SDD requirement discovery.
 
-**FE pipeline (owner decision 2026-06-16) — by OWNERSHIP, not phase:** the **owner** authors `02-requirements` + `07-schema` (agents NEVER author schema). **`/ui-spec`** turns DOCX + PNG mockups into a detailed `03-ui.md` reuse-map (multimodal + deep FE reuse-audit). **`/mh-implement` FE-mode** (`engine/skills/mh-implement/fe-flow.md`) CONSUMES that `03-ui.md` to build, folding `incremental-impl` in per task. `technical-design` is narrowed to the **API contract** (`08`, draft→owner-approves); `task-slicing` is for LARGE/cross-cutting modules (a normal FE feature slices internally from `03-ui`). These SDLC workflows are owner-gated/manual-only. The SDD workflows share `_shared/` (gate-check + module-state + envelope). Skills: capability (`mh-scaffold` `mh-implement` `mh-fix` `promote` `ponytail`) + orchestrator/entry (`mh-review` `robust-test` `impact-analysis` `bug-fix` `ui-spec` `technical-design` `task-slicing`); `incremental-impl` is an internal executor (not a standalone owner entry).
+**FE pipeline (owner decision 2026-06-16) — by OWNERSHIP, not phase:** the **owner** authors `02-requirements` + `07-schema` (agents NEVER author schema). **`/ui-spec`** turns DOCX + PNG mockups into a detailed `03-ui.md` reuse-map (multimodal + deep FE reuse-audit). **`/mh-implement` FE-mode** (`engine/skills/mh-implement/fe-flow.md`) CONSUMES that `03-ui.md` to build, folding `incremental-impl` in per task. `technical-design` is narrowed to the **API contract** (`08`, draft→owner-approves); `task-slicing` is for LARGE/cross-cutting modules (a normal FE feature slices internally from `03-ui`). These SDLC workflows are owner-gated/manual-only. The SDD workflows share `_shared/` (gate-check + module-state + envelope). Skills: capability (`mh-scaffold` `mh-implement` `mh-fix` `promote` `ponytail`) + orchestrator/entry (`mh-review` `robust-test` `espresso-test` `impact-analysis` `bug-fix` `ui-spec` `technical-design` `task-slicing`); `incremental-impl` is an internal executor (not a standalone owner entry).
 
 **Robust-Test (owner-gated):** `engine/workflows/robust-test/` replaces the removed `progressive-test` and `super-test`.
 It has `targeted` and `sweep` modes, writes one `bugs/BUG-NNN/` folder per captured bug candidate, triages
 false positives, records RCA/fix-plan/retest notes, and produces `04-review-ready-bundle.md` for a later
 high-reasoning review pass. It never self-launches other agents/executors and never edits source code. Legacy
 runtime folders and alias skills are removed from active harness paths; old names are router aliases only.
+
+**Espresso-Test (owner-gated, DRAFT):** `engine/workflows/espresso-test/` is the self-driving loop over
+`mh-review`'s ≤3-round cycle. A **blind coordinator** (thin tier) spawns a reviewer (`review_tier`, runs
+`deep-review`), then routes the findings file PATH to a stronger fixer (`fix_tier`, RCA + `/mh-fix` + fanned-out
+`mh-implementer`), then re-reviews — looping until a round returns `verdict: ĐÓNG` (0 BLOCK/HIGH OPEN) or the
+round cap (default 3) is hit. The coordinator reads NO output md, loads NO rules, and edits NO source; it only
+routes paths + compact status and decides stop. Model tiers are passed at invoke — never baked into the
+workflow. Where `robust-test` stops at a human-handoff bundle, `espresso-test` closes the audit→fix→audit loop
+itself. **Autonomy:** the only owner-blocking moment is the round-0 pre-sweep question batch at invoke
+(`ask_window: gate-only`); after that it is fire-and-forget. A business ambiguity becomes a `PROVISIONAL-FIXED`
+decision with cited provenance (`DL-PROV-<n>` in `specs/<module>/06-decision-log.md`, mirrored to
+`05-open-questions.md`) so the owner can confirm/correct later, OR — if closing it needs an irreversible-data/
+migration op — a `PARKED-NEEDS-OWNER` finding while the loop continues on the rest. No mid-run questions, no
+DEFERRED-Q deadlock, no rule invention without evidence. Never run yet (`eval_summary` empty); promote past
+`DRAFT` only after a real run.
 
 ## How to add a workflow
 1. Create `engine/workflows/<name>/` with its machinery (`.js` and/or `bin/lib/schemas`) + a `manifest.json`

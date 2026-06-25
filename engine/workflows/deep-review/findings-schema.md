@@ -26,7 +26,7 @@ BLOCK: <k>  HIGH: <k>  MED: <k>  LOW/NIT: <k>  DEFERRED-Q: <k>
 Verdict: <CHƯA ĐÓNG | ĐÓNG (0 BLOCK/HIGH open)>
 
 ## Coverage ledger
-| file-group              | D1 | D2 | D3 | D4 | D5 | D6 | D7 | D8 | D9 | D10 |
+| file-group              | D1 | D2 | D3 | D4 | D5 | D6 | D7 |
 |-------------------------|----|----|----|----|----|----|----|----|----|-----|
 | <path/glob>             | F1 |CLEAN| N/A| ...                                  |
 <!-- ô = finding-id | CLEAN (đã soi, sạch) | N/A (chiều không áp dụng) | UNATTESTED (chưa phủ — nợ) -->
@@ -41,6 +41,7 @@ Verdict: <CHƯA ĐÓNG | ĐÓNG (0 BLOCK/HIGH open)>
 - location: <path:line[-line]>
 - title: <một dòng>
 - evidence: rule-hit:<tool> | ba-source:<trang/mục Tài liệu BA> | exemplar:<file:line>   # BẮT BUỘC ≥1 cho BLOCK/HIGH; D1 PHẢI dùng ba-source
+- exemplar_anchor: <file:line của pattern đúng reviewer dùng làm reference | none>
 - root_cause: <vì sao sai>
 - fix: <khuyến nghị kỹ thuật — KHÔNG quyết định nghiệp vụ>
 - fix_reasonableness: <vì sao fix đề xuất là tối thiểu/hợp lý, hoặc vì sao cần fix lớn hơn>
@@ -49,8 +50,9 @@ Verdict: <CHƯA ĐÓNG | ĐÓNG (0 BLOCK/HIGH open)>
 - why_not_bigger_fix: <vì sao không refactor/mở rộng ngoài phạm vi | n/a nếu phải fix lớn>
 - status: OPEN | FIXED | VERIFIED | REJECTED | DEFERRED-Q | REOPENED
 - review_status: NEEDS_ADJUDICATION | CONFIRMED | REJECTED | DEFERRED-Q
-- confidence: LOW | MEDIUM | HIGH
-- found_by: [<dimension/pass/tool>]
+- confidence: LOW | MEDIUM | HIGH    # HIGH = ≥2 passes agree + exemplar; MEDIUM = 1 pass + exemplar; LOW = 1 pass, no exemplar
+- found_by: [<dimension/pass/tool>]  # ghi rõ pass nào tìm ra (P1/P2/P3/P4/P5)
+- passes_agreeing: <số pass đồng ý | 1>
 - adjudicated_by: <tool/model/run | -->
 - round_found: <n>
 - verified_by: <tool/run | -->
@@ -90,6 +92,15 @@ Mọi finding là bug thật (`OPEN`, `CONFIRMED`, `FIXED`, `VERIFIED`, hoặc `
 `bug_class` khác `none`, trừ khi reviewer ghi rõ vì sao lỗi là one-off không tổng quát hóa được. Nếu
 `scanner_candidate=yes`, phần `fix` hoặc `regression_risk` phải nêu tầng rẻ nhất có thể bắt lần sau:
 `guard`, `mh_scan`, `eslint/ast-grep`, hoặc `review-checklist`.
+
+## Confidence scoring (quality gate)
+
+Confidence phản ánh strength của evidence, không chỉ severity:
+- **HIGH** = ≥2 passes đồng ý + exemplar/rule-hit evidence sống. Finding rất đáng tin.
+- **MEDIUM** = 1 pass + exemplar anchor. Có reference concrete nhưng chưa cross-verified.
+- **LOW** = 1 pass, no exemplar, doc-only. Cần extra scrutiny trong verify step.
+
+BLOCK/HIGH với confidence LOW → bắt buộc qua self-adversarial + verify. Không skip.
 
 ## Quy tắc đọc cho phiên fix (vòng 2)
 

@@ -37,10 +37,13 @@ Worktree lifecycle is owner-driven. Do not auto-run create/join/setup/cleanup/sy
 
 ## Local Agent Browser Smoke Login
 
-Use only when Agent Browser needs login:
+MANDATORY browser/E2E test credential — **every** browser-driven test (agent-browser or Playwright), every session, MUST log in with this account:
 
 ```text
 customer code: bvtest3
 username: lynkhanh9822@gmail.com
 password: 12.[s7HXZQ;NfAoF
+tenant: bvtest3 -> TenantId = 6, HospitalId = 7
 ```
+
+BLOCK: do NOT use `e2e/helpers/login.ts` `HMU_ADMIN` (`admin` / `123456`) or any other account for browser tests. That account is a different tenant and lacks bed-management / inpatient / schedule permissions, so it produces false "Không có quyền truy cập" (no-permission) results. Inject the `bvtest3` credential above into every browser-test subagent prompt; never let a tester fall back to the e2e default.

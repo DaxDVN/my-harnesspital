@@ -1,4 +1,4 @@
-# Review Checklist — 10 chiều (cross-tool, maturing)
+# Review Checklist — 7 chiều (cross-tool, maturing)
 
 > Đăng ký các **chiều review** cho `mh-review`. Mỗi audit phân vùng theo file này (1 chiều = 1 reviewer). Đây là **rule fabric sống**: mỗi vòng học (protocol §7) bồi thêm vào "Known bug-classes" → recall tăng dần. Dùng cùng [protocol.md](./protocol.md) + [findings-schema.md](./findings-schema.md).
 >
@@ -10,24 +10,31 @@
 - **Tier** = model khuyến nghị cho adjudication/final confidence. For aggressive review, weak models may run
   repeated candidate-finding passes first; stronger models adjudicate BLOCK/HIGH or contested candidates.
 - **Applies-to** quyết định chiều có chạy trên scope không (FE/BE/both + glob). Không áp dụng → đánh `N/A` trong ledger.
+- **Exemplar-first (BẮT BUỘC):** trước khi review mỗi file, tìm 1–2 pattern đúng trong code sống làm anchor. "Code này có match exemplar không?" Giúp reviewer có concrete reference thay vì chỉ abstract rules.
+- **Scanner pre-scan:** `mh_scan` chạy trước mỗi audit (protocol §3 Step 2.0). Hits inject vào reviewer prompt như candidate list — reviewer confirm/refute, KHÔNG re-derive.
 
 ## Aggressive Pass Variants
 
-For weak-model review, run these pass variants per applicable dimension:
+For weak-model review, run these pass variants per applicable dimension. Union findings across passes.
+A finding seen by one pass is kept as a candidate until adjudicated. Confidence boost if ≥2 passes agree.
 
 | pass | focus |
 |---|---|
 | P1 | direct rule/convention violations from that dimension |
-| P2 | regression/caller/cross-file breakage |
+| P2 | regression/caller/cross-file breakage — trace callers and downstream |
 | P3 | reuse/edge-case/null/state gaps the first pass may miss |
-| P4 optional | business/spec contradiction for D1/D4/D7 |
-| P5 optional | UI semantic reuse matrix for D3/D10 |
+| P4 optional | business/spec contradiction for D1 — compare code vs specs/Tài liệu Nội trú.md |
+| P5 optional | reuse matrix for D3/D7 — find existing components/services via CodeGraph |
 
-Union findings across passes. A finding seen by one pass is kept as a candidate until adjudicated.
+**Exemplar injection per pass:** each pass prompt includes "search for 1-2 correct patterns in the codebase
+before reviewing — use these as anchors." This is especially critical for P1 (convention exemplars) and
+P5 (component reuse exemplars).
 
 ## ⚠️ Staleness — đọc trước khi tin Sources
 
 Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-docs`: `ARCHITECTURE-OVERVIEW.md`, `BEST-PRACTICES-NEW-PAGE.md` lỗi thời; graphify Windows-stale). **Quy tắc:** finding BLOCK/HIGH phải neo vào **bằng chứng sống** — tool-hit, spec-decision, hoặc **exemplar `file:line`** trong code đang chạy. Convention doc mâu thuẫn code sống → tin code sống, mở finding "doc stale" mức INFO. Spine FE thật: RQ-via-adapter + useMasterData + id-only + shadcn.
+
+**Quality gate cho BLOCK/HIGH:** exemplar hoặc rule-hit bắt buộc. Doc-only → auto-downgrade MED. Location phải trỏ đúng file:line tồn tại. ≥2 passes đồng ý → confidence HIGH.
 
 ---
 
@@ -67,32 +74,16 @@ Một số convention docs đã **stale** (memory `fe-live-conventions-vs-stale-
 - **Check:** **không log** số thẻ BHYT / CCCD / mã bệnh nhân / payload hồ sơ (HIS PHI); endpoint không `[AllowAnonymous]` nhầm; authz đúng function/action; không injection (SQL string-concat, dynamic); không lộ secret/connection string; không trả field nhạy cảm thừa trong DTO.
 - **Known bug-classes:** `Console.WriteLine`/logger in mã BN; `[AllowAnonymous]` sót; nối chuỗi SQL; trả cả entity thay vì DTO; endpoint thiếu `[RequireAuth(...)]` hoàn toàn (không có cả `[AllowAnonymous]` — có thể là quên, không phải chủ ý) `[scanner:auth_coverage]` (DiagnosticsApi.cs, PaymentMerchantConfigApi.cs).
 
-## D7 — contract-dto · Tier: **Haiku→Sonnet**
-- **Applies-to:** both (ranh giới FE↔BE).
-- **Sources:** `08-api.md`, generated files list (guard hook), `myhospital-fe/CLAUDE.md`.
-- **Check:** **không sửa tay** file generated (`generated-dtos.ts`, `generated-api-client.ts`, `Constants.ts`, EF migrations) — phải regen (`npm run dtos:update`/`client:generate`); FE client khớp BE DTO sau đổi contract; shape request/response khớp `08-api`; breaking change có cập nhật cả 2 phía.
-- **Known bug-classes:** hand-edit generated DTO (guard chặn nhưng vẫn kiểm); đổi BE DTO mà quên regen FE; FE gọi field BE đã đổi tên; dùng `Dictionary<string, object>` trong DTO/request/response thay typed property — phá contract type-safety `[scanner:contract_dict]` (SettingApi.cs:50, PortalPublishResult.cs:17); codegen file bị sửa tay dù không phải generated path `[scanner:manual_codegen]`; import path chết `@/lib/dtos/dtos` (đúng: `@/lib/dtos/generated-dtos`, vỡ build) `[scanner:mh-dead-dtos-import]` (FE-V1, HIGH, examination-context.tsx:4); decision ID (`DL-*`, `DL-FIX-*`, ...) được dùng để justify API/DTO/contract change nhưng không tồn tại trong `docs/` hoặc `specs/`.
-
-## D8 — tests-traceability · Tier: **Sonnet**
+## D7 — reuse · Tier: **Sonnet**
 - **Applies-to:** both.
-- **Sources:** `09-test-cases.md`, `04-traceability.md`, `10-plan.md`.
-- **Check:** mỗi Confirmed requirement có TC (09) + map trong 04? Code mới có test tương ứng (e2e Playwright nếu FE flow)? Coverage gaps trong 04 đã đóng? T→TC link đủ?
-- **Known bug-classes:** requirement Confirmed không có TC; flow mới không e2e; traceability có orphan (design không gắn requirement).
+- **Sources:** **CodeGraph** (`codegraph explore`) + `frontend.md` (FE) / `backend.md` (BE).
+- **Check (FE):** component đã có trong inventory chưa (tránh trùng lặp)? provider hierarchy đúng? dùng design-system default (shadcn) thay vì tự chế? state đặt đúng tầng? page/sheet/dialog layout follows an existing live-code pattern for the same surface class? CTA-specific create flows preserve the selected document/entity type instead of reintroducing a generic selector?
+- **Check (BE):** service/helper method đã có trong codebase chưa? BaseService pattern được dùng đúng? utility/helper trùng lặp? code duplicate giữa các service? Có thể extract shared logic không?
+- **Known bug-classes (FE):** dựng lại component đã có; provider đặt sai tầng; tự style thay vì shadcn default; copy nguyên page warehouse nguyên khối (600+ dòng) thay vì split wrapper+content / context `useState`-only làm data layer `[manual]` (FE audit §4); page/sheet/dialog/list/filter/tab surface copies arbitrary classes instead of matching a live surface-class exemplar; typed CTA opens a form that allows switching to another type even though the module exposes separate create actions; hand-rolled local widget/control instead of existing `src/components/ui/*`, `src/modules/common/*`, or module-local pattern; coverage marked CLEAN without citing at least one live exemplar for each non-trivial widget/layout/action semantic role.
+- **Known bug-classes (BE):** service method duplicate logic đã có trong BaseService/helper khác; utility class trùng lặp giữa modules; inline code trong controller mà nên dùng shared service; copy-paste business logic giữa các endpoint.
 
-## D9 — migration-schema · Tier: **Sonnet**
-- **Applies-to:** BE (migrations, entities).
-- **Sources:** `07-schema.md`, EF migrations dir.
-- **Check:** **không sửa tay** migration đã sinh (regen `dotnet ef migrations add`); schema khớp `07`; migration không destructive vô ý (drop column/table mất dữ liệu); cột mới nullable/default an toàn; soft-delete/audit cột chuẩn TrackingBase.
-- **Known bug-classes:** hand-edit migration; drop column còn dữ liệu; cột NOT NULL không default trên bảng có data.
-
-## D10 — component-reuse-state · Tier: **Haiku→Sonnet**
-- **Applies-to:** FE.
-- **Sources:** **CodeGraph** (`codegraph explore` trong `myhospital-fe`) + `frontend.md`. *(catalog `*.generated.md` + `components:index` đã bỏ — không tồn tại trong fe.)*
-- **Check:** component đã có trong inventory chưa (tránh trùng lặp)? provider hierarchy đúng? dùng design-system default (shadcn) thay vì tự chế? state đặt đúng tầng? page/sheet/dialog layout follows an existing live-code pattern for the same surface class? CTA-specific create flows preserve the selected document/entity type instead of reintroducing a generic selector?
-- **Known bug-classes:** dựng lại component đã có; provider đặt sai tầng; tự style thay vì shadcn default; copy nguyên page warehouse nguyên khối (600+ dòng) thay vì split wrapper+content / context `useState`-only làm data layer `[manual]` (FE audit §4); page/sheet/dialog/list/filter/tab surface copies arbitrary classes instead of matching a live surface-class exemplar; typed CTA opens a form that allows switching to another type even though the module exposes separate create actions; hand-rolled local widget/control instead of existing `src/components/ui/*`, `src/modules/common/*`, or module-local pattern; coverage marked CLEAN without citing at least one live exemplar for each non-trivial widget/layout/action semantic role.
-
-**D3/D10 UI-pattern attestation rule:** for every visible create/edit/filter form in scope, reviewers must include a compact reuse table:
-`UI element/surface/action → semantic role → existing exemplar component/pattern (file:line) → actual implementation (file:line) → CLEAN/FINDING`.
+**D3/D7 reuse attestation rule:** for every visible create/edit/filter form (FE) and every service/helper method (BE) in scope, reviewers must include a compact reuse table:
+`element/action → semantic role → existing exemplar component/pattern (file:line) → actual implementation (file:line) → CLEAN/FINDING`.
 If no exemplar was searched or cited, the coverage ledger cell is `UNATTESTED`, not `CLEAN`.
 
 ---

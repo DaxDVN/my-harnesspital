@@ -27,7 +27,7 @@ decision: reuse | extend | create-new
 why: <one short reason>
 ```
 
-No evidence means no new pattern. For visible FE UI, D3/D10 must include the semantic reuse matrix from
+No evidence means no new pattern. For visible FE UI, D3/D7 must include the semantic reuse matrix from
 `engine/workflows/deep-review/checklist.md`.
 
 ## Fix Plan Gate

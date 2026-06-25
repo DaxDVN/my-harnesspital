@@ -155,7 +155,7 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
 
 ## F8 — Self-review-diff + E2E  *(== B5; shared spine)*
 - **Input:** the diff.
-- **Do:** self-review **only the diff** (explicit file set = changed files) against the relevant D3/D7/D10
+- **Do:** self-review **only the diff** (explicit file set = changed files) against the relevant D3/D7
   checklist items, deterministic scanner output, and the F2 reuse matrix. Do **not** invoke the full partitioned
   `mh-review` workflow here unless the owner explicitly asks for review/audit or the router selected a review
   workflow. Every visible element/surface/action either uses the selected exemplar/pattern or has an updated,
@@ -176,7 +176,7 @@ allowlist. `incremental-impl` is the internal executor invoked *by* this flow; y
 - **`incremental-impl`** mechanics — the per-task allowlist + validation + `PLAN_MISMATCH`→STOP envelope.
 - **`mh-implementer`** subagent — bounded disjoint-file workers inside the worktree for F3–F6.
 - **`mh_scan`** + `scripts/sgconfig/rules/` — the F4/F7 deterministic floor (FE-V1/V2/V3).
-- **`engine/workflows/deep-review`** D3/D7/D10 — the F8 self-review dimensions (this flow *prevents* what they *detect*).
+- **`engine/workflows/deep-review`** D3/D7 — the F8 self-review dimensions (this flow *prevents* what they *detect*).
 - **`engine/workflows/robust-test`** targeted mode + browser/manual scenario — the F8 E2E step.
 
 ## ⚠ Owner-decision — ONE residual that touches `myhospital-fe`

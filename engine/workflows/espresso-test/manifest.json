@@ -1,0 +1,78 @@
+{
+  "name": "espresso-test",
+  "description": "Owner-gated agent-orchestrated review->fix->re-review loop. A thin coordinator agent spawns a review subagent (runs deep-review), then hands the findings file to a stronger fixer subagent (RCA + mh-fix, fanning out mh-implementer), then re-reviews -- looping until a round reports 0 BLOCK/HIGH OPEN or the round cap is hit. The coordinator never reads output md, never loads rules; it only routes paths + compact status and decides stop.",
+  "kind": "workflow",
+  "implementation_kind": "agent-orchestrated-loop (review->fix->re-review until clean)",
+  "maturity": "scaffolded",
+  "public_entry": true,
+  "manual_only": true,
+  "owner_invocation_required": true,
+  "auto_route_allowed": false,
+  "lifecycle_status": "DRAFT",
+  "entry_skill": "espresso-test",
+  "recommended_prompt_file": "engine/prompts/espresso-test.md",
+  "required_inputs": [
+    "target module, diff, or worktree changeset to converge",
+    "review base (branch/sha) for deep-review scope freeze",
+    "active worktree slug + slot (fixes edit worktrees/<slug>/{fe,be} ONLY)",
+    "model tiers: coordinator_tier (thin), review_tier, fix_tier (stronger) -- passed at invoke, NEVER baked into the workflow",
+    "round cap (default 3 per review protocol) + fix_floor (default BLOCK+HIGH) + stop policy",
+    "decision_mode (default provisional) + ask_window (default gate-only) + auto_decide_floor (default: irreversible-data/migration PARKS, everything else may go provisional)"
+  ],
+  "allowed_writes": [
+    "engine/workflows/espresso-test/runs/**",
+    "docs/audit/**",
+    "worktrees/**",
+    "specs/**/05-open-questions.md",
+    "specs/**/06-decision-log.md"
+  ],
+  "validators": [
+    "python scripts/audit_path.py <base>   # review md path discipline (delegated to deep-review)",
+    "python scripts/worktree.py list       # confirm fix worktree exists before any fix round"
+  ],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "loop": {
+    "unit": "1 round = review -> (fix if open BLOCK/HIGH at/above fix_floor) -> re-review",
+    "stop_converged": "reviewer blob open_block_high == 0 (COUNT-based, not verdict string); may carry N flagged PROVISIONAL decisions",
+    "stop_converged_with_parked": "everything shippable closed, but M findings PARKED (irreversible-data/migration business ambiguity) -> route to owner; loop never stalls on these, it parks and continues",
+    "stop_cap": "round > round_cap (default 3) with fixable BLOCK/HIGH still open -> honest residual per deep-review protocol sec.8 (split module / new change)",
+    "round_cap_default": 3,
+    "fix_floor_default": "BLOCK+HIGH (MED/LOW/NIT = backlog, do not spend a round)",
+    "warm_start": "coordinator passes prior_findings_path to the NEXT reviewer; the reviewer (not the coordinator) reads it to suppress re-raising REJECTED/PROVISIONAL findings. deep-review JS does NOT read prior rounds itself -- without this carry, REJECTED false positives churn every round"
+  },
+  "autonomy": {
+    "decision_mode_default": "provisional",
+    "ask_window_default": "gate-only -- the ONLY blocking owner question is the round-0 pre-sweep batch, presented at invoke while the owner is present; after that the run is fire-and-forget and NEVER blocks to ask",
+    "provisional_protocol": "a business ambiguity not answered by the gate pre-seed is NOT a stop: the fixer makes a best-effort decision grounded in specs/Tai lieu Noi tru.md (cite page/section) OR a safe reversible default OR a live exemplar, IMPLEMENTS it, logs DL-PROV-<n> in specs/<module>/06-decision-log.md (real id -> passes fabricated-authority gate) + mirrors the detailed question to 05-open-questions.md, and marks the finding PROVISIONAL-FIXED. Final report surfaces ALL provisionals as one confirm/correct batch, clinical/billing/permission sorted to the top by risk-if-wrong.",
+    "auto_decide_floor": "irreversible-data/migration ONLY -- when closing an ambiguous business finding would require a hard-delete / non-backfilled migration / table reshape (data loss not undoable), the fixer PARKS it (status PARKED-NEEDS-OWNER, logged BLOCKING) instead of guessing, and the loop continues on the other findings. Clinical/billing/permission decisions MAY be provisional because the fix lands in a worktree diff the owner reviews before merge (reversible).",
+    "never_invent_without_evidence": "every provisional decision MUST cite BA-doc page/section, a safe-default rationale, or a live exemplar -- pure invention is still forbidden; provisional != unfounded"
+  },
+  "finding_statuses_added": ["PROVISIONAL-FIXED", "PARKED-NEEDS-OWNER"],
+  "roles": {
+    "coordinator": "thin; NO md read, NO rule load, NO source read/edit; spawns subagents, routes file PATHS + compact status, decides stop from COUNTS. It IS the owner-facing voice: at round 0 it relays the pre-sweep question batch (a list of questions in a blob, not md bodies) to the owner and feeds the answers down as decision_preseed. After that it never asks. tier=coordinator_tier",
+    "pre-sweep": "round-0 read-only agent: reads specs/Tai lieu Noi tru.md + the changeset scope, returns the list of every foreseeable business/owner decision as questions (blob) for the coordinator to batch-ask the owner once at invoke; tier=review_tier",
+    "reviewer": "reads prior_findings_path (warm-start / FP-suppression) then runs deep-review (nested fan-out); writes findings md to docs/audit/; returns {findings_path, counts, open_block_high, verdict}; tier=review_tier",
+    "fixer": "input = findings_path + fix_floor + decision_preseed + decision_mode + auto_decide_floor; RCA (mh-rca) + mh-fix discipline; fans out mh-implementer per cluster; for unanswered business ambiguity applies the provisional protocol (or PARKS if irreversible-data/migration); writes DL-PROV entries to specs/<module>/06-decision-log.md + 05-open-questions.md; validates (scanner + build/typecheck); returns compact {fixed_ids, provisional_ids, parked_ids, residual_fixable_open, validation_summary, fix_refs, decision_log_path}; tier=fix_tier"
+  },
+  "eval_summary": {
+    "last_real_run": "",
+    "artifact_path": "",
+    "verdict": ""
+  },
+  "agents": ["mh-rca", "mh-implementer"],
+  "external_agents": [],
+  "skills_used": ["mh-review", "mh-fix", "bug-fix"],
+  "reuses_workflows": ["deep-review"],
+  "rules": ["backend", "frontend", "source-discovery", "ponytail", "quality-gates"],
+  "uses_shared": ["runtime-boundary.md"],
+  "artifact_contract": {
+    "coordinator_reads_output_md": false,
+    "run_folder_pattern": "engine/workflows/espresso-test/runs/<scope>/run-NNN/",
+    "state_file": "engine/workflows/espresso-test/runs/<scope>/run-NNN/00-espresso-state.md",
+    "review_md_owner": "deep-review -> docs/audit/<YYYY-MM-DD>/<base>.round-<N>.md",
+    "final_report": "engine/workflows/espresso-test/runs/<scope>/run-NNN/99-final-report.md"
+  }
+}

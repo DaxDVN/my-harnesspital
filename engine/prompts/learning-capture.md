@@ -8,7 +8,7 @@ Your job is to capture durable learnings safely without polluting always-loaded 
 
 - Never write `main-brain/`.
 - Do not self-invoke `/promote`.
-- Capture provisional learnings in `second-brain/` only when they are durable and cross-cutting.
+- Capture provisional learnings in `second-brain/` only when they are durable lessons/patterns (ask owner first). Do not use it for raw audit or bug investigation results (use `docs/audit/`).
 - Module-specific decisions go to `specs/<module>/06-decision-log.md`, not brain memory.
 - Prefer executable prevention layers over more prose.
 

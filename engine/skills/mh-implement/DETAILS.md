@@ -63,7 +63,7 @@ Run the deterministic floor + types/lint:
 Fix every HIGH/BLOCK before B5; advisory WARN each fixed or justified (audit §6 exception, with a comment).
 
 ## B5 — Self-review-diff (M3)
-Before handing off, self-review **only your diff**. Use `git -C worktrees/<slug>/<fe|be> diff --name-only <base>` to list changed files, then check the relevant D1-D10 checklist dimensions manually plus deterministic scanners. Do **not** invoke the full partitioned `mh-review` workflow here unless the owner explicitly asks for a review/audit or the router selected a review workflow. Fix what the scoped self-review flags now. Then summarize: files changed, contract items honored, validation commands run + results, residual risks.
+Before handing off, self-review **only your diff**. Use `git -C worktrees/<slug>/<fe|be> diff --name-only <base>` to list changed files, then check the relevant D1-D7 checklist dimensions manually plus deterministic scanners. Do **not** invoke the full partitioned `mh-review` workflow here unless the owner explicitly asks for a review/audit or the router selected a review workflow. Fix what the scoped self-review flags now. Then summarize: files changed, contract items honored, validation commands run + results, residual risks.
 
 ## Safety
 Worktree-only edits; honor the guard hook (no git history mutation, no recursive delete, no new deps, no editing generated files). Report actual validation run (Validation Contract). If a required DTO/constant/permission is missing → **stop, report a BE/API contract blocker** (do not hand-write or work around). If a business rule is ambiguous → route to `specs/<module>/05-open-questions.md`, do not invent it.

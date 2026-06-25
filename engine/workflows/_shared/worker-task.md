@@ -83,7 +83,7 @@ before starting the next round.
 
 ## Integration with deep-review
 
-Each review dimension (D1–D10) maps to one worker:
+Each review dimension (D1–D7) maps to one worker:
 - `scope` = dimension label (e.g. "D3 — BE data-layer conventions")
 - `allowlist` = the files the dimension covers (BE services, FE hooks, etc.)
 - `inputs` = `engine/workflows/deep-review/checklist.md` + the relevant source files
