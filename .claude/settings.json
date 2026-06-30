@@ -2,7 +2,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|Edit|MultiEdit",
+        "matcher": "Bash|Write|Edit|MultiEdit|Read|Grep|Glob",
         "hooks": [
           {
             "type": "command",
@@ -11,6 +11,45 @@
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/myhospital_guard.py"
             ],
             "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "^mcp__agent-browser__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/myhospital_guard.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/subagent_prompt_guard.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Write|Edit|MultiEdit|Read|Grep|Glob|Task|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/orchestrator_drift_guard.py"
+            ],
+            "timeout": 5
           }
         ]
       }
@@ -26,6 +65,35 @@
               "${CLAUDE_PROJECT_DIR}"
             ],
             "timeout": 20
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/adapt_trigger.py"
+            ],
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/adapt_fail_watch.py"
+            ],
+            "timeout": 10
           }
         ]
       }
@@ -46,6 +114,14 @@
             "command": "python",
             "args": [
               "${CLAUDE_PROJECT_DIR}/.claude/hooks/preflight_trigger.py"
+            ],
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "python",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/orchestrator_invariants.py"
             ],
             "timeout": 10
           }

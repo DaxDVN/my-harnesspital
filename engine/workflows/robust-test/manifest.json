@@ -3,12 +3,10 @@
   "description": "Owner-gated robust testing workflow for targeted E2E reproduction or module sweep. Produces per-bug folders, triage evidence, RCA notes, fix-plan review bundles, and retest reports. It never self-launches agent-to-agent handoffs or implementation.",
   "kind": "workflow",
   "implementation_kind": "manual-owner-gated-test-protocol",
-  "maturity": "scaffolded",
   "public_entry": true,
   "manual_only": true,
   "owner_invocation_required": true,
   "auto_route_allowed": false,
-  "lifecycle_status": "DRAFT",
   "entry_skill": "robust-test",
   "recommended_prompt_file": "engine/prompts/robust-test.md",
   "required_inputs": [
@@ -18,7 +16,9 @@
     "running FE/BE/browser environment when browser testing is required",
     "owner checkpoint policy for fix approval and final reasoning review"
   ],
-  "allowed_writes": ["engine/workflows/robust-test/runs/**"],
+  "allowed_writes": [
+    "engine/workflows/robust-test/runs/**"
+  ],
   "validators": [
     "python engine/workflows/_shared/validate-envelope.py <envelope> --payload <payload>"
   ],
@@ -26,20 +26,28 @@
     "max_context_files": 0,
     "max_payload_inline_chars": 0
   },
-  "eval_summary": {
-    "last_real_run": "",
-    "artifact_path": "",
-    "verdict": ""
-  },
   "agents": [],
   "external_agents": [],
   "skills_used": [],
-  "rules": ["backend", "frontend", "source-discovery", "ponytail", "quality-gates"],
-  "uses_shared": ["envelope.schema.json", "validate-envelope.py", "runtime-boundary.md"],
+  "rules": [
+    "backend",
+    "frontend",
+    "source-discovery",
+    "ponytail",
+    "quality-gates"
+  ],
+  "uses_shared": [
+    "envelope.schema.json",
+    "validate-envelope.py",
+    "runtime-boundary.md"
+  ],
   "artifact_contract": {
     "bug_dossier_required": true,
     "bug_folder_pattern": "engine/workflows/robust-test/runs/<scope>/run-NNN/bugs/BUG-NNN/",
     "final_review_bundle": "engine/workflows/robust-test/runs/<scope>/run-NNN/04-review-ready-bundle.md"
   },
-  "replaces_removed": ["progressive-test", "super-test"]
+  "replaces_removed": [
+    "progressive-test",
+    "super-test"
+  ]
 }

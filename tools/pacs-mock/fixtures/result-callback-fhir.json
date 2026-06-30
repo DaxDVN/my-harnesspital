@@ -1,0 +1,31 @@
+{
+  "id": "2460516", "resourceType": "Bundle", "type": "collection",
+  "timestamp": "2024-07-24T15:17:14+07:00",
+  "entry": [
+    { "fullUrl":"Patient/1900011089492","resource":{ "resourceType":"Patient", "id":"1900011089492",
+        "identifier":[{"system":"MA_BN","value":"1900011089492"},{"system":"BHYT","value":""}],
+        "name":[{"use":"official","text":"BÙI NHÃ HẠNH"}],"gender":"female","birthDate":"1996-05-05" }},
+    { "resource":{ "resourceType":"ServiceRequest","id":"66677141097","status":"completed","intent":"order",
+        "code":{"coding":[{"system":"local","code":"2424254"}],"text":"Chụp CLVT lồng ngực không tiêm thuốc cản quang"},
+        "note":[{"extension":[{"valueCodeableConcept":{"coding":[{"code":"SO_PHIEU"}],"text":"354365"}}]}] }},
+    { "resource":{ "resourceType":"ImagingStudy","id":"66677141097","status":"unknown","numberOfSeries":1,
+        "series":[{"uid":"2460516","modality":{"code":"CT"},"numberOfInstances":1,
+                   "performer":[{"function":{"coding":[{"system":".../v3-ParticipationType","code":"SPRF"}]},
+                                 "actor":{"display":"|Tài khoản test"}}]}] }},
+    { "resource":{ "resourceType":"Media","id":"2460516","status":"completed",
+        "subject":{"reference":"Patient/1900011089492"},
+        "deviceName":"https:\\\\pacs.vn/AutoSearch/AutoSearch?accessionno=",
+        "content":{"contentType":"application/pdf","data":"JVBERi0xLjQKMSAwIG9iago8PC9UeXBlL0NhdGFsb2cvUGFnZXMgMiAwIFI+PmVuZG9iagoyIDAgb2JqPDwvVHlwZS9QYWdlcy9LaWRzWzMgMCBSXS9Db3VudCAxPj5lbmRvYmoKMyAwIG9iago8PC9UeXBlL1BhZ2UvTWVkaWFCb3hbMCAwIDIwMCAyMDBdL1BhcmVudCAyIDAgUj4+ZW5kb2JqCnRyYWlsZXI8PC9Sb290IDEgMCBSPj4KJSVFT0YK"} }},
+    { "resource":{ "resourceType":"DiagnosticReport","status":"final","identifier":{"value":"354365"},
+        "subject":{"reference":"Patient/1900011089492"},"issued":"2024-07-24T15:16:20+07:00","effectiveDateTime":"2024-07-24T15:16:20+07:00",
+        "performer":[{"reference":"Practitioner/","identifier":{"system":"CCHN","value":"BS001"},"display":"BS001|Nguyễn Văn A"}],
+        "code":{"coding":[{"system":"","code":"GHP","display":"General Health Profile"}]},
+        "result":[{"display":"- Các quai ruột không giãn... (mô tả chi tiết kết quả đọc ảnh)"}],
+        "imagingStudy":[{"reference":"ImagingStudy/354365"}],
+        "conclusion":"Hiện tại không thấy hình ảnh bất thường trên phim chụp CLVT tiểu khung." }},
+    { "resource":{ "resourceType":"Device","identifier":[{"system":"value","value":""}],
+        "location":{"display":"Khoa CĐHA"},
+        "note":[{"text":"ExecutionTime","time":"2024-07-24T15:10:36+07:00"},
+                {"text":"Technicians","authorString":"KTV01|Trần Thị B"}] }}
+  ]
+}

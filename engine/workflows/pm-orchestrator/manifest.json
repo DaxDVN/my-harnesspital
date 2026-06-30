@@ -1,0 +1,409 @@
+{
+  "name": "pm-orchestrator",
+  "description": "Always-on PM orchestrator. A blind, stateless coordinator that runs ANY task through a pluggable phase-recipe. Per tick it re-reads the run-state ledger, checks the next phase's gate, dispatches ONE worker (Agent or Workflow, always launched from the main loop -- never fans-out into a worker that re-fans-out), records the worker's compact return blob + artifact path in the ledger, and decides done. It never reads worker output md / source / rules; it authors the ledger ONLY from compact blobs, and transfers memory to workers BY REFERENCE via a context-manifest. Gate-by-risk: auto-dispatch when risk_tier in {T0,T1} and the phase is read-only or reversible-worktree-bounded; HARD owner-confirm only when risk_tier in {T2,T3} and risk_class in {clinical,billing,permission,migration,irreversible-data}, or the phase invokes an owner-gated workflow. Stop enum {DONE, CAP_HIT, BLOCKED, PARKED}.",
+  "kind": "orchestrator",
+  "implementation_kind": "agent-orchestrated-pm (blind stateless coordinator over a pluggable phase-recipe; gate-by-risk dispatch; ledger + context-manifest)",
+  "public_entry": true,
+  "manual_only": true,
+  "owner_invocation_required": true,
+  "auto_route_allowed": false,
+  "entry_skill": "pm-orchestrator",
+  "recommended_prompt_file": "engine/prompts/pm-orchestrator.md",
+  "required_inputs": [
+    "task: one-line scope of the run (what to drive to done)",
+    "recipe: a preset name (review | espresso | bugfix | feature) OR a custom ordered phase list",
+    "review/scope base (branch/sha) for any review/scope-freeze phase",
+    "active worktree slug + slot when the recipe contains any phase that edits source (worktrees/<slug>/{fe,be} ONLY)",
+    "tier_policy: (model,effort) per phase derived from risk_tier via scripts/tier_policy.json -- passed at dispatch, NEVER baked into the workflow",
+    "risk_tier + risk_class per phase (drives the gate-by-risk dispatch rule) -- supplied by scripts/harness_router.py / rule_card",
+    "phase/round cap + stop policy"
+  ],
+  "allowed_writes": [
+    "engine/workflows/pm-orchestrator/runs/**",
+    "docs/audit/**",
+    "worktrees/**",
+    "specs/**/02-requirements.md",
+    "specs/**/05-open-questions.md",
+    "specs/**/06-decision-log.md",
+    ".claude/.pm-run-active"
+  ],
+  "validators": [
+    "python scripts/worktree.py list       # confirm fix worktree exists before any source-editing phase",
+    "python scripts/audit_path.py <base>   # review md path discipline (delegated to deep-review when the recipe includes review)",
+    "python scripts/harness_doctor.py      # check_registry must stay green (no dangling manifest refs)"
+  ],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "recipes": {
+    "_note": "Phase-recipe presets. Each phase = {name, dispatch (entry_skill|workflow), tier (from scripts/tier_policy.json keyed by risk_tier), gate (auto|owner-confirm, COMPUTED by gate_by_risk below), done_check}. The coordinator dispatches each phase from the MAIN LOOP. 'promote' is NEVER a dispatchable phase. Dispatch 'mh-implement', NEVER 'incremental-impl'.",
+    "review": {
+      "summary": "Read-only review. Freeze scope, run deep-review, scribe writes findings md.",
+      "read_only": true,
+      "phases": [
+        {
+          "name": "scope-freeze",
+          "dispatch": "pm-orchestrator",
+          "kind": "internal",
+          "tier": "coordinator",
+          "gate": "auto",
+          "done_check": "frozen file-set recorded in ledger"
+        },
+        {
+          "name": "review",
+          "dispatch": "deep-review",
+          "kind": "workflow",
+          "tier": "from-policy(args.tier_policy)",
+          "gate": "auto",
+          "done_check": "findings md written; counts blob returned"
+        },
+        {
+          "name": "scribe-findings",
+          "dispatch": "mh-reviewer",
+          "kind": "agent",
+          "tier": "from-policy",
+          "gate": "auto",
+          "done_check": "docs/audit/<date>/<base>.md exists per findings-schema"
+        }
+      ]
+    },
+    "espresso": {
+      "summary": "The existing review->fix->re-review convergence loop, expressed as a recipe. CANONICAL loop lives in engine/workflows/espresso-test/ -- this preset REUSES it, it does NOT reimplement or modify espresso's files.",
+      "read_only": false,
+      "reference": "engine/workflows/espresso-test/README.md",
+      "phases": [
+        {
+          "name": "pre-sweep",
+          "dispatch": "espresso-test",
+          "kind": "workflow",
+          "tier": "review",
+          "gate": "owner-confirm",
+          "done_check": "round-0 question batch answered -> decision_preseed"
+        },
+        {
+          "name": "loop",
+          "dispatch": "espresso-test",
+          "kind": "workflow",
+          "tier": "per-role (coordinator/review/fix)",
+          "gate": "computed-per-inner-phase",
+          "done_check": "open_block_high == 0 OR round > round_cap",
+          "inner": [
+            "review",
+            "fix",
+            "re-review"
+          ]
+        }
+      ]
+    },
+    "bugfix": {
+      "summary": "RCA -> fix -> review for a single bug. mh-rca (read-only RCA) -> mh-fix (worktree-bounded fix) -> deep-review (verify no regression).",
+      "read_only": false,
+      "phases": [
+        {
+          "name": "rca",
+          "dispatch": "mh-rca",
+          "kind": "agent",
+          "tier": "from-policy",
+          "gate": "auto",
+          "done_check": "RCA verdict + fix-plan returned"
+        },
+        {
+          "name": "fix",
+          "dispatch": "mh-fix",
+          "kind": "skill",
+          "tier": "from-policy",
+          "gate": "computed-by-gate_by_risk",
+          "done_check": "fix landed in worktree; scoped validation passed"
+        },
+        {
+          "name": "review",
+          "dispatch": "deep-review",
+          "kind": "workflow",
+          "tier": "from-policy",
+          "gate": "auto",
+          "done_check": "0 BLOCK/HIGH open on the fix diff"
+        }
+      ]
+    },
+    "feature": {
+      "summary": "Token-efficient module build from a BA doc: read the BA doc ONCE (distill) -> design (gated) -> slice (gated) -> fan-out implement PER SLICE by-reference at each slice's own (model,effort)/gate -> converge via the espresso loop. REUSES the SDD skills (ui-spec/technical-design/task-slicing) + mh-implementer + espresso-test VERBATIM -- it does NOT reimplement them. READ-BA-ONCE: the BA doc is read ONCE in 'distill' and is NEVER re-fed to any later worker; later phases ride only on the distilled/owner-authored specs (02-requirements -> 03-ui/08-api -> 10-plan). distill/spec/slice are HARD-GATED (owner-confirm); implement is computed gate-by-risk PER SLICE. Dispatch mh-implementer per slice from the MAIN LOOP (depth-1) -- NEVER mh-implement (re-fans-out -> depth-2, unsupported) NOR incremental-impl.",
+      "read_only": false,
+      "reference": "engine/workflows/espresso-test/README.md (converge phase) ; engine/rules/context-manifest.md (per-slice by-reference) ; engine/prompts/subagent-prompt-template.md (worker-prompt shape)",
+      "phases": [
+        {
+          "name": "distill",
+          "dispatch": "distiller",
+          "kind": "agent",
+          "tier": "from-policy",
+          "gate": "owner-confirm",
+          "ba_read_once": true,
+          "done_check": "specs/<m>/02-requirements.md written + a per-slice risk index (risk_tier+risk_class per prospective slice) emitted",
+          "note": "NEW phase -- fills a real GAP: no SDD skill distills the BA doc today (02-requirements was owner-authored). ONE general read+write worker reads the BA doc (e.g. specs/Tài liệu Nội trú.md) EXACTLY ONCE -> emits 02-requirements + the per-slice risk index. The BA doc path is placed in THIS worker's context-manifest only and is NEVER added to any later worker's manifest. Hard owner-confirm gate (the requirements baseline anchors every downstream phase)."
+        },
+        {
+          "name": "spec",
+          "dispatch": "ui-spec|technical-design",
+          "kind": "workflow",
+          "tier": "from-policy",
+          "gate": "owner-confirm",
+          "inputs": [
+            "specs/<m>/02-requirements.md",
+            "specs/<m>/07-schema.md (owner-authored)"
+          ],
+          "done_check": "specs/<m>/03-ui.md and/or 08-api.md drafted + owner-approved",
+          "note": "From distilled 02-requirements + owner-authored 07-schema only (NOT the BA doc). ui-spec -> 03-ui.md (UI reuse map); technical-design -> 08-api.md (API contract). Owner-gated workflows -> always owner-confirm per gate_by_risk."
+        },
+        {
+          "name": "slice",
+          "dispatch": "task-slicing",
+          "kind": "workflow",
+          "tier": "from-policy",
+          "gate": "owner-confirm",
+          "inputs": [
+            "specs/<m>/03-ui.md",
+            "specs/<m>/08-api.md",
+            "specs/<m>/07-schema.md"
+          ],
+          "done_check": "specs/<m>/10-plan.md written; EACH task carries normalized risk_tier(T0-T3)+risk_class(clinical|billing|permission|migration|other) ALONGSIDE the freeform risk (per engine/skills/task-slicing/DETAILS.md)",
+          "note": "From the design specs only (NOT the BA doc). Normalized risk_tier+risk_class per task is what lets the implement phase key tier_policy deterministically PER SLICE. Owner-gated -> owner-confirm."
+        },
+        {
+          "name": "implement",
+          "dispatch": "mh-implementer",
+          "kind": "agent",
+          "fan_out": "ONE mh-implementer agent PER DISJOINT SLICE, depth-1 from the MAIN LOOP, ordered by 10-plan dependency rounds",
+          "tier": "PER-SLICE = scripts/tier_policy.json -> tiers[slice.risk_tier], with risk_class_floor applied when slice.risk_class in {clinical,billing,permission,migration}",
+          "gate": "computed-by-gate_by_risk PER SLICE",
+          "done_check": "every slice implemented in its worktree; per-slice validation passed; 0 unresolved blockers",
+          "note": "The PM IS the orchestrator here: it fans out mh-implementer agents DIRECTLY from the main loop (depth-1). Each worker gets ONLY its slice BY REFERENCE per engine/rules/context-manifest.md via engine/prompts/subagent-prompt-template.md: specs/<m>/10-plan.md#task-NN + the specific 03-ui/08-api rows that task touches + rule_card(fe|be) -- NEVER the BA doc, NEVER the whole spec. Per-slice (model,effort) is keyed off that slice's risk_tier (+risk_class_floor). MUST NOT dispatch mh-implement (it re-fans-out -> depth-2, unsupported per README execution note) NOR incremental-impl."
+        },
+        {
+          "name": "converge",
+          "dispatch": "espresso-test",
+          "kind": "workflow",
+          "tier": "per-role (coordinator/review/fix)",
+          "gate": "computed-per-inner-phase",
+          "inner": [
+            "review",
+            "fix",
+            "re-review"
+          ],
+          "done_check": "open_block_high == 0 OR round > round_cap",
+          "note": "Replaces the old one-shot deep-review final phase with the espresso review->fix->re-review convergence loop, REUSED VERBATIM from recipes.espresso (engine/workflows/espresso-test/). The PM does NOT reimplement or modify any espresso file; it dispatches the espresso workflow as this one phase."
+        }
+      ]
+    },
+    "single-skill": {
+      "summary": "T1 small scope: ONE skill makes the change + does its OWN diff self-review. No separate review pass. Maps to router recipe 'single-skill'.",
+      "read_only": false,
+      "phases": [
+        {
+          "name": "implement-or-fix",
+          "dispatch": "mh-implement|mh-fix",
+          "kind": "skill",
+          "tier": "from-policy",
+          "gate": "computed-by-gate_by_risk",
+          "done_check": "change landed in worktree; scoped validation passed",
+          "note": "mh-implement for a small feature/extension; mh-fix for a single known bug. Dispatch the skill, NEVER incremental-impl."
+        },
+        {
+          "name": "self-review",
+          "dispatch": "mh-implement|mh-fix",
+          "kind": "skill",
+          "tier": "from-policy",
+          "gate": "auto",
+          "done_check": "the skill's built-in diff self-review attached; 0 self-flagged BLOCK/HIGH open",
+          "note": "REUSES the skill's own self-review (mh-implement/mh-fix self-review their own diff so review converges fast) -- this is NOT a separate deep-review phase."
+        }
+      ]
+    },
+    "implement+review": {
+      "summary": "T2 shared/API/DTO/permission/cross-file: implement the change, then a SEPARATE deep-review pass to catch regressions. Maps to router recipe 'implement+review'.",
+      "read_only": false,
+      "phases": [
+        {
+          "name": "implement",
+          "dispatch": "mh-implement",
+          "kind": "skill",
+          "tier": "from-policy",
+          "gate": "computed-by-gate_by_risk",
+          "done_check": "change landed in worktree; scoped validation passed",
+          "note": "Dispatch mh-implement, NEVER incremental-impl. Single bounded scope -> the mh-implement skill runs directly from the main loop."
+        },
+        {
+          "name": "review",
+          "dispatch": "deep-review",
+          "kind": "workflow",
+          "tier": "from-policy",
+          "gate": "auto",
+          "done_check": "0 BLOCK/HIGH open on the change diff"
+        }
+      ]
+    },
+    "triage-only": {
+      "summary": "Verify a finding/bug list is REAL vs false-positive WITHOUT fixing. mh-rca confirms root cause + mh-reviewer re-checks each item's live evidence -> verdict report. Zero source edits. Maps to router recipe 'triage-only'.",
+      "read_only": true,
+      "phases": [
+        {
+          "name": "adjudicate",
+          "dispatch": "mh-rca",
+          "kind": "agent",
+          "tier": "from-policy",
+          "gate": "auto",
+          "done_check": "each finding marked real|false-positive|needs-evidence with cited live evidence; NO edits",
+          "note": "mh-rca confirms the real root cause read-only; mh-reviewer cross-checks the evidence in the report phase. Neither edits code."
+        },
+        {
+          "name": "report",
+          "dispatch": "mh-reviewer",
+          "kind": "agent",
+          "tier": "from-policy",
+          "gate": "auto",
+          "done_check": "triage verdict written (docs/audit/<date>/<scope>-triage.md); counts blob returned"
+        }
+      ]
+    },
+    "batch-bugfix": {
+      "summary": "A raw LIST of bugs/findings -> drive to fixed. MIRRORS recipes.feature's distiller pattern: the PM is BLIND -- it NEVER reads the input list / findings / source. analyze (analyst reads+adjudicates+dedupes, tags EACH confirmed bug complexity->ROLE per tier_policy.roles) -> fix (fan-out ONE worker per confirmed bug/cluster via oc_worker by role / mh-implementer for clinical floor, gate-by-risk + harness gate re-validates every fix) -> final-review (MANDATORY Opus 4.8 xhigh review of the fix diff -- ALWAYS, even after cheap-model self-review; non-skippable owner invariant) -> downstream (OPTIONAL E2E hand-off). Maps to router recipe 'batch-bugfix'.",
+      "read_only": false,
+      "reference": "main-brain/knowledge.md 'Batch Bugs By Dependency Phase' ; recipes.feature (distiller pattern, reused) ; engine/rules/context-manifest.md",
+      "phases": [
+        {
+          "name": "analyze",
+          "dispatch": "mh-rca",
+          "kind": "agent",
+          "tier": "from-policy",
+          "gate": "auto",
+          "pm_blind": true,
+          "done_check": "adjudicated md written (docs/audit/<date>/<scope>-adjudicated.md): real-vs-false-positive decided + deduped by shared root cause + EACH confirmed bug tagged complexity->tier (complex->kimi-k2.7-code | medium->deepseek-v4-pro or minimax-m3 | simple/mechanical->deepseek-v4-flash | doc/test/chore->mimo-v2.5 | clinical/billing/permission/migration->opus-xhigh (floor) | whole-module/dangerous->opus-max) + risk_class; SUMMARY blob + adjudicated-md path returned",
+          "note": "MIRRORS recipes.feature 'distill': the PM does NOT read the input bug/findings list -- it dispatches the analyst (mh-rca, or a bug-analyst worker) which reads the raw list + source EXACTLY ONCE, adjudicates real vs false-positive, dedupes by shared root cause, WRITES one clean adjudicated md (the REAL bugs to fix), and tags EACH confirmed bug with a complexity->tier (complex->kimi-k2.7-code | medium->deepseek-v4-pro or minimax-m3 | simple/mechanical->deepseek-v4-flash | doc/test/chore->mimo-v2.5 | clinical/billing/permission/migration->opus-xhigh (floor) | whole-module/dangerous->opus-max) keyed off scripts/tier_policy.json -> roles + agentic_ladder (NOT the old anthropic tiers), plus risk_class. Returns ONLY a compact SUMMARY blob + the adjudicated-md path. The raw-list path lives in THIS worker's context-manifest only and is NEVER added to any later worker's manifest."
+        },
+        {
+          "name": "fix",
+          "dispatch": "oc_worker (OpenCode role) | mh-implementer (Claude, clinical floor)",
+          "kind": "agent",
+          "fan_out": "ONE worker PER CONFIRMED BUG / disjoint cluster, depth-1 from the MAIN LOOP, ordered BE -> contract/DTO-regen -> FE per 'Batch Bugs By Dependency Phase'. Non-Anthropic role -> a Claude shim runs `python scripts/oc_worker.py --role <bug.role> --scope <worktree> --allow-edit --prompt-file <bug-manifest> --out <artifact>`; clinical_floor/danger_refactor -> mh-implementer (Claude) at opus xhigh/max.",
+          "tier": "PER-BUG = scripts/tier_policy.json -> roles[bug.complexity_role] via agentic_ladder (simple/mechanical->deepseek-v4-flash | medium->deepseek-v4-pro/minimax-m3 | complex->kimi-k2.7-code | doc/test->mimo-v2.5), with risk_class_floor -> clinical_floor (opus xhigh) when bug.risk_class in {clinical,billing,permission,migration}, and danger_refactor (opus max) for whole-module/irreversible",
+          "gate": "computed-by-gate_by_risk PER BUG; EVERY fix (whatever model wrote it) is re-validated by the harness gate (tsc/dotnet build/scanner) before accept; gate-fail twice -> escalate up agentic_ladder",
+          "done_check": "every confirmed bug fixed in its worktree; per-bug harness-gate validation passed; 0 unresolved blockers",
+          "note": "BY-REFERENCE: each worker's context-manifest carries ONLY its bug -- the adjudicated-md row(s) for that one bug + rule_card(fe|be). Per-bug model is the analyst-assigned complexity ROLE (tier_policy.roles), NOT a whole-prompt risk_tier; clinical/billing/permission/migration -> opus xhigh floor. Cheap OpenCode models implement to spare Claude quota but are UNTRUSTED -> the harness gate + the mandatory Opus-xhigh self-review (next phase) are the safety net. MUST NOT dispatch mh-implement (depth-2) NOR incremental-impl."
+        },
+        {
+          "name": "final-review",
+          "dispatch": "deep-review (+ mandatory Opus xhigh diff review)",
+          "kind": "workflow",
+          "tier": "mandatory_final_review = scripts/tier_policy.json -> Opus 4.8 xhigh (NON-SKIPPABLE)",
+          "gate": "auto",
+          "done_check": "0 BLOCK/HIGH open across the batched fix diff AND an Opus 4.8 xhigh review of the diff has run",
+          "note": "MANDATORY (owner invariant 2026-06-26, tier_policy.mandatory_final_review): every code-mutating batch MUST end with an Opus 4.8 xhigh review of the produced diff -- ALWAYS, even though cheap OpenCode models implemented and may have self-reviewed. Non-Anthropic review is ADDITIVE, never a substitute. FRESH-CONTEXT INDEPENDENT review (deep-review, whose surviving BLOCK/HIGH adjudicate at opus xhigh, or a dedicated opus-xhigh diff reviewer) -- NOT the implementer self-congratulating. Non-skippable."
+        },
+        {
+          "name": "downstream",
+          "dispatch": "robust-test",
+          "kind": "workflow",
+          "tier": "from-policy",
+          "gate": "owner-confirm",
+          "optional": true,
+          "done_check": "OPTIONAL -- only when the workflow calls for it (e.g. hand off to a tester / robust-test for E2E repro of the fixed bugs); SKIP entirely otherwise",
+          "note": "OPTIONAL, workflow-dependent downstream hand-off (e.g. notify a tester or robust-test for E2E). Owner-gated workflow -> owner-confirm per gate_by_risk. Omit the phase when no downstream step is needed."
+        }
+      ]
+    },
+    "design-only": {
+      "summary": "The FRONT of `feature` WITHOUT implement: distill the BA doc (gated) -> spec (ui-spec | technical-design, gated) -> STOP. Produces 02-requirements + 03-ui/08-api for owner approval; no slicing, no source edits. Maps to router recipe 'design-only'.",
+      "read_only": true,
+      "reference": "recipes.feature (distill + spec phases, reused VERBATIM)",
+      "phases": [
+        {
+          "name": "distill",
+          "dispatch": "distiller",
+          "kind": "agent",
+          "tier": "from-policy",
+          "gate": "owner-confirm",
+          "ba_read_once": true,
+          "done_check": "specs/<m>/02-requirements.md written + per-slice risk index (risk_tier+risk_class)",
+          "note": "Same distiller worker as recipes.feature: reads the BA doc EXACTLY ONCE -> 02-requirements + risk index. Hard owner-confirm gate."
+        },
+        {
+          "name": "spec",
+          "dispatch": "ui-spec|technical-design",
+          "kind": "workflow",
+          "tier": "from-policy",
+          "gate": "owner-confirm",
+          "inputs": [
+            "specs/<m>/02-requirements.md",
+            "specs/<m>/07-schema.md (owner-authored)"
+          ],
+          "done_check": "specs/<m>/03-ui.md and/or 08-api.md drafted + owner-approved",
+          "note": "From distilled 02-requirements + owner-authored 07-schema only (NOT the BA doc). Owner-gated SDD workflows -> always owner-confirm."
+        },
+        {
+          "name": "STOP",
+          "dispatch": "pm-orchestrator",
+          "kind": "internal",
+          "tier": "coordinator",
+          "gate": "auto",
+          "done_check": "run ends after spec; NO slice/implement phase (design-only stops before code)",
+          "note": "Terminal marker: design-only deliberately omits slice+implement+converge. To build, the owner re-runs with the `feature` recipe."
+        }
+      ]
+    }
+  },
+  "gate_by_risk": {
+    "policy_source": "docs/harness/plans/fugu-orchestrator-upgrade-plan-2026-06-25.md sec.6.B (LOCKED)",
+    "auto_dispatch_when": "phase is READ-ONLY (any tier -- read-only cannot damage) OR (risk_tier in {T0,T1} AND reversible-worktree-bounded). [Refined 2026-06-25 by the eval floor: a read-only review classified T3 by the router must still auto-dispatch; the tier cutoff applies to SOURCE-EDITING phases only.]",
+    "owner_confirm_when": "a SOURCE-EDITING phase where risk_tier in {T2,T3} AND risk_class in {clinical,billing,permission,migration,irreversible-data}, OR phase.dispatch in {technical-design, task-slicing, ui-spec, dev-from-handoff, robust-test}",
+    "never_dispatchable": [
+      "promote"
+    ],
+    "implement_alias": "dispatch 'mh-implement', NEVER 'incremental-impl'",
+    "mid_run_business_ambiguity": "espresso provisional-or-park protocol (PROVISIONAL-FIXED with cited basis + DL-PROV log, OR PARKED-NEEDS-OWNER for irreversible-data/migration) -- never silent invention, never mid-run blocking ask outside a gate"
+  },
+  "tier_policy_source": "scripts/tier_policy.json",
+  "stop_enum": [
+    "DONE",
+    "CAP_HIT",
+    "BLOCKED",
+    "PARKED"
+  ],
+  "run_marker": ".claude/.pm-run-active",
+  "roles": {
+    "coordinator": "thin/blind; NO md read, NO rule load, NO source read/edit; per tick re-reads the ledger, checks the next phase gate, dispatches ONE worker from the MAIN LOOP, records the compact blob + artifact path, decides done. Writes only its own 00-pm-state.md ledger + 99-final-report.md (from blobs) and the .claude/.pm-run-active marker. Transfers memory to workers BY REFERENCE via a context-manifest. tier=coordinator",
+    "worker": "the dispatched unit (deep-review / mh-rca / mh-fix / mh-implement / espresso-test / a scribe agent). Self-hydrates from the context-manifest (rule_card + recommended_prompt_file + recalled notes + ledger path), does its bounded work, returns ONLY a compact blob (counts/paths/flags). tier=from-policy by risk_tier"
+  },
+  "agents": [
+    "mh-rca",
+    "mh-implementer",
+    "mh-reviewer",
+    "distiller"
+  ],
+  "external_agents": [],
+  "skills_used": [
+    "mh-review",
+    "mh-fix",
+    "mh-implement",
+    "espresso-test"
+  ],
+  "reuses_workflows": [
+    "deep-review",
+    "espresso-test"
+  ],
+  "rules": [
+    "orchestrator-ledger",
+    "context-manifest",
+    "multi-agent-execution",
+    "quality-gates"
+  ],
+  "uses_shared": [
+    "runtime-boundary.md"
+  ],
+  "artifact_contract": {
+    "coordinator_reads_output_md": false,
+    "run_folder_pattern": "engine/workflows/pm-orchestrator/runs/<scope>/run-NNN/",
+    "state_file": "engine/workflows/pm-orchestrator/runs/<scope>/run-NNN/00-pm-state.md",
+    "review_md_owner": "deep-review -> docs/audit/<YYYY-MM-DD>/<base>.md",
+    "final_report": "engine/workflows/pm-orchestrator/runs/<scope>/run-NNN/99-final-report.md",
+    "run_marker": ".claude/.pm-run-active (contents = ledger path; created at run start, removed at run end)"
+  }
+}

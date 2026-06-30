@@ -22,6 +22,11 @@ Write/Edit/MultiEdit:
     AND inside `worktrees/<slug>/(fe|be)/...` (unambiguous, ~zero false positives)
   - heuristic FE/BE convention patterns — MAIN repos only (which are off-limits
     anyway), so legitimate worktree edits are never falsely blocked
+  - while a PM-orchestrator run is active (.claude/.pm-run-active marker), the
+    blind coordinator is also blocked from editing ANY product source (main repos
+    + worktrees) — it must dispatch a worker. The owner opens `.direct-mode` to
+    override. Closes the write-side drift door (the read/diff/browser sides are
+    already enforced).
 
 Run `python myhospital_guard.py --self-test` to validate the rules.
 """
@@ -33,6 +38,8 @@ import os
 import re
 import shlex
 import sys
+import tempfile
+from pathlib import Path
 from typing import Any
 
 # Path fragments. FE/BE match the main repo OR a worktree copy.
@@ -56,6 +63,66 @@ _MB_WRITERS = {"mv", "cp", "tee", "dd", "truncate", "touch", "ln", "install", "r
 def _main_brain_unlocked() -> bool:
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
     return os.path.exists(os.path.join(root, "main-brain", ".promote-unlock"))
+
+
+# --- Blind-PM boundary -------------------------------------------------------
+# The main interactive session IS the pm-orchestrator: a BLIND coordinator that
+# routes PATHs, never content (AGENTS.md §0). It must not read source/diff/worker
+# output or drive the browser itself — it dispatches a worker. This is enforced
+# ONLY for the main session (the hook payload's `agent_id` is empty); Claude
+# subagents (mh-reviewer/mh-rca/Explore/robust-test) carry a non-null `agent_id`
+# and read freely, and external agent_exec workers (grok/agy/opencode) run as
+# separate processes that never reach this hook at all. The owner opens an
+# explicit direct-work window (AGENTS.md §3) with a `.direct-mode` marker at the
+# repo root (same pattern as main-brain/.promote-unlock) or MH_DIRECT=1.
+SRC_TREE = r"(?:myhospital-fe|myhospital-be|worktrees/[^/]+/(?:fe|be))(?:/|$)"
+WORKER_OUT = r"(?:^|/)docs/audit/"
+_DIFF_PATH_SAFE = ("--stat", "--name-only", "--name-status", "--numstat", "--shortstat")
+
+
+def _direct_mode() -> bool:
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    return os.path.exists(os.path.join(root, ".direct-mode")) or os.environ.get("MH_DIRECT") == "1"
+
+
+def _pm_run_active() -> bool:
+    """True while a pm-orchestrator run is in progress (marker created by scripts/pm_run.py)."""
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd()
+    return os.path.exists(os.path.join(root, ".claude", ".pm-run-active"))
+
+
+def _is_subagent(event: dict[str, Any]) -> bool:
+    return bool(event.get("agent_id") or event.get("agent_type"))
+
+
+def blind_pm_rule(event: dict[str, Any], tool_lower: str, tool_input: dict[str, Any]) -> str | None:
+    # Only the blind PM (main session) is constrained; subagents/workers are exempt.
+    if _is_subagent(event) or _direct_mode():
+        return None
+    if tool_lower.startswith("mcp__agent-browser__"):
+        return "blind-PM-no-browser (dispatch a smoke/robust-test worker; PM must not drive the browser)"
+    # Write-side drift door: while a PM run is active, the blind coordinator must NOT edit
+    # product source itself — it dispatches a worker (mh-implementer/mh-fix). The owner can
+    # still open a direct-work window with .direct-mode (checked above) to override.
+    if tool_lower in {"write", "edit", "multiedit"} and _pm_run_active():
+        target = _norm(_file_path(tool_input))
+        if target and _imatch(target, SRC_TREE):
+            return ("blind-PM-no-source-write (dispatch a worker; PM must not edit product "
+                    "source while a run is active — use .direct-mode to override)")
+    if tool_lower in {"read", "grep", "glob"}:
+        target = _norm(tool_input.get("file_path") or tool_input.get("path") or "")
+        if target and (_imatch(target, SRC_TREE) or _imatch(target, WORKER_OUT)):
+            return "blind-PM-no-source-read (dispatch a worker; PM receives PATHs, not content)"
+    if tool_lower == "bash":
+        for seg in _segments(str(tool_input.get("command") or "")):
+            toks = _tokens(seg)
+            if _cmd0(toks) != "git":
+                continue
+            sub, rest = _git_sub(toks)
+            content_dump = sub in ("diff", "show") or (sub == "log" and "-p" in rest)
+            if content_dump and not any(a in _DIFF_PATH_SAFE for a in rest):
+                return "blind-PM-no-source-diff (dispatch a worker to read the diff; --stat/--name-only OK)"
+    return None
 
 
 def deny(rule: str) -> None:
@@ -120,7 +187,9 @@ def bash_rule(command: str) -> str | None:
                 return "main-brain-protected (source of truth — owner-gated; use /promote)"
         if name == "git":
             sub, rest = _git_sub(toks)
-            if sub in ("push", "commit"):
+            # git commit is owner-gated by behavior (AGENTS.md §4): allowed only when the
+            # owner explicitly asks; never self-initiated. Not hook-blocked. push stays blocked.
+            if sub == "push":
                 return f"git-history-operation (git {sub})"
             if sub == "reset" and "--hard" in rest:
                 return "git-history-operation (git reset --hard)"
@@ -221,6 +290,9 @@ def _file_path(tool_input: dict[str, Any]) -> str:
 
 def evaluate(event: dict[str, Any]) -> str | None:
     tool_lower, tool_input = _parse(event)
+    blind = blind_pm_rule(event, tool_lower, tool_input)
+    if blind:
+        return blind
     command = tool_input.get("command") or event.get("command") or ""
     if tool_lower == "bash" or (not tool_lower and command):
         return bash_rule(str(command))
@@ -279,10 +351,21 @@ def _self_test() -> int:
     def edit(path: str, new: str = "") -> dict[str, Any]:
         return {"tool_name": "Edit", "tool_input": {"file_path": path, "new_string": new}}
 
+    def read(path: str) -> dict[str, Any]:
+        return {"tool_name": "Read", "tool_input": {"file_path": path}}
+
+    def grep(path: str) -> dict[str, Any]:
+        return {"tool_name": "Grep", "tool_input": {"pattern": "x", "path": path}}
+
+    def mcpb(name: str) -> dict[str, Any]:
+        return {"tool_name": f"mcp__agent-browser__{name}", "tool_input": {}}
+
+    def sub(ev: dict[str, Any]) -> dict[str, Any]:
+        return {**ev, "agent_id": "sa_123", "agent_type": "mh-reviewer"}
+
     blocked = [
         bash("git push"),
         bash("git -C myhospital-fe push origin master"),
-        bash("cd x && git commit -m 'y'"),
         bash("git reset --hard HEAD"),
         bash("git clean -fdx"),
         bash("FOO=bar git push origin main"),
@@ -308,8 +391,27 @@ def _self_test() -> int:
         bash("cp note.md main-brain/knowledge.md"),
         bash("touch main-brain/.promote-unlock"),
         bash("echo hi > main-brain/knowledge.md"),
+        # blind-PM boundary — main session (no agent_id) must not read source / diff / browser
+        read("worktrees/bed/fe/src/modules/bed-management/pages/rooms/room-list-page.tsx"),
+        read("myhospital-be/Services/RoomService.cs"),
+        grep("worktrees/bed/fe/src/modules/bed-management"),
+        read("docs/audit/2026-06-29/grok-rooms-refactor.md"),
+        mcpb("agent_browser_open"),
+        mcpb("agent_browser_snapshot"),
+        bash("git -C worktrees/bed/fe diff src/modules/bed-management/x.tsx"),
+        bash("git show HEAD -- worktrees/bed/be/Services/RoomService.cs"),
     ]
     allowed = [
+        bash("cd x && git commit -m 'y'"),              # commit owner-gated by behavior, not hook-blocked
+        # blind-PM boundary — exemptions: subagent reads, marker/path-list reads
+        sub(read("worktrees/bed/fe/src/modules/bed-management/pages/rooms/room-list-page.tsx")),
+        sub(grep("worktrees/bed/fe/src")),
+        sub(mcpb("agent_browser_open")),
+        read("engine/rules/frontend/quick.md"),       # rules are not source — PM may read
+        read("AGENTS.md"),                              # harness docs — PM may read
+        grep("engine/workflows"),                       # ledger/engine — PM may read
+        bash("git diff --stat worktrees/bed/fe"),      # path list only — PM may see paths
+        bash("git -C worktrees/bed/fe diff --name-only"),
         bash("git status --short"),
         bash("git -C myhospital-be status --short"),
         bash("git add -A"),
@@ -364,6 +466,39 @@ def _self_test() -> int:
             failures += 1
             print(f"FAIL expected ADVISORY containing {want!r}: got {note!r}")
     total = len(blocked) + len(allowed) + 2 * len(advised)
+    # PM-active drift door: main session must not edit SRC_TREE while .pm-run-active exists.
+    # Run in an isolated temp root (env-patched) so the real session is untouched.
+    old_env = os.environ.get("CLAUDE_PROJECT_DIR")
+    with tempfile.TemporaryDirectory() as td:
+        os.environ["CLAUDE_PROJECT_DIR"] = td
+        (Path(td) / ".claude").mkdir()
+        (Path(td) / ".claude" / ".pm-run-active").write_text("ledger", encoding="utf-8")
+        pm_blocked = [
+            edit("worktrees/bed/be/Services/XService.cs", "x"),
+            edit("myhospital-fe/src/components/X.tsx", "x"),
+            edit("worktrees/ipd/fe/src/x.tsx", "x"),
+            edit("myhospital-be/Services/RoomService.cs", "x"),
+        ]
+        pm_allowed = [
+            edit("engine/workflows/pm-orchestrator/runs/x/00-pm-state.md", "blob"),  # ledger OK
+            edit("docs/audit/2026-06-30/y.md", "findings"),  # not SRC_TREE
+            edit("scripts/foo.py", "x"),  # harness, not product source
+            sub(edit("worktrees/bed/be/Services/XService.cs", "x")),  # subagent exempt
+        ]
+        for ev in pm_blocked:
+            if evaluate(ev) is None:
+                failures += 1
+                print(f"FAIL pm-active expected BLOCK: {ev['tool_input']}")
+        for ev in pm_allowed:
+            rule = evaluate(ev)
+            if rule is not None:
+                failures += 1
+                print(f"FAIL pm-active expected ALLOW: {ev['tool_input']} -> {rule}")
+        total += len(pm_blocked) + len(pm_allowed)
+    if old_env is None:
+        os.environ.pop("CLAUDE_PROJECT_DIR", None)
+    else:
+        os.environ["CLAUDE_PROJECT_DIR"] = old_env
     if failures:
         print(f"self-test: {failures}/{total} FAILED")
         return 1

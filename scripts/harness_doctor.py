@@ -12,6 +12,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import shutil
@@ -496,32 +497,6 @@ def check_learning() -> None:
                 "work prompt emits recall nudge" if ok else "work prompt did not emit recall nudge")
 
 
-def check_maturity() -> None:
-    """Workflow maturity (H12): every workflow manifest should declare a maturity; summarize them."""
-    wf = root() / "engine" / "workflows"
-    levels: dict[str, str] = {}
-    missing: list[str] = []
-    for m in sorted(wf.glob("*/manifest.json")):
-        try:
-            d = json.loads(m.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
-            continue
-        if d.get("lifecycle_status") == "DEPRECATED":
-            continue
-        (levels.__setitem__(m.parent.name, d["maturity"]) if d.get("maturity") else missing.append(m.parent.name))
-    if missing:
-        add(WARN, "maturity", f"workflow(s) with no maturity field: {', '.join(missing)}")
-    else:
-        add(OK, "maturity", f"{len(levels)} workflows declare maturity ("
-            + ", ".join(f"{k}={v}" for k, v in sorted(levels.items())) + ")")
-    # H2-07: surface UNPROVEN-e2e workflows separately so a green dashboard doesn't imply they're proven.
-    proven = {"smoke-tested", "real-run-proven", "production-default"}
-    unproven = sorted(k for k, v in levels.items() if v not in proven)
-    if unproven:
-        add(INFO, "maturity:unproven",
-            f"{len(unproven)} UNPROVEN e2e (scaffolded — owner-invoke only, first real run = gate): {', '.join(unproven)}")
-
-
 def check_codex_guard_wiring() -> None:
     """H4: the Codex guard must resolve via WALK-UP (works from a worktree cwd), not a bare relative .claude path."""
     h = root() / ".codex" / "hooks.json"
@@ -595,10 +570,7 @@ def check_eval_ledger() -> None:
 
 def check_workflow_governance() -> None:
     """P5 workflow taxonomy/deprecation governance: safe consolidation requires evidence and replacements."""
-    policy = root() / "engine" / "workflows" / "LIFECYCLE.md"
     script = root() / "scripts" / "harness_workflow_governance.py"
-    add(OK if policy.exists() else WARN, "workflow-governance:policy",
-        "engine/workflows/LIFECYCLE.md present" if policy.exists() else "engine/workflows/LIFECYCLE.md missing")
     if not script.exists():
         add(WARN, "workflow-governance:selftest", "scripts/harness_workflow_governance.py missing")
         return
@@ -637,9 +609,7 @@ def check_registry() -> None:
         return
     bad: list[str] = []
     governance: list[str] = []
-    lifecycle_levels: dict[str, str] = {}
-    allowed_kinds = {"workflow", "internal", "advisory"}
-    allowed_lifecycle = {"DRAFT", "LAB", "PROVEN", "DEFAULT", "DEPRECATED"}
+    allowed_kinds = {"workflow", "internal", "advisory", "orchestrator"}
     for m in manifests:
         try:
             d = json.loads(m.read_text(encoding="utf-8"))
@@ -647,41 +617,17 @@ def check_registry() -> None:
             bad.append(f"{m.parent.name}: invalid JSON ({exc})"); continue
         for field in ("name", "entry_skill", "agents", "rules"):
             if field not in d: bad.append(f"{m.parent.name}: missing '{field}'")
-        for field in ("kind", "public_entry", "auto_route_allowed", "lifecycle_status", "recommended_prompt_file", "budget", "eval_summary"):
+        for field in ("kind", "public_entry", "auto_route_allowed", "recommended_prompt_file", "budget"):
             if field not in d:
                 governance.append(f"{m.parent.name}: missing '{field}'")
         kind = d.get("kind")
         if kind is not None and kind not in allowed_kinds:
-            governance.append(f"{m.parent.name}: unknown kind '{kind}' (expected workflow|internal|advisory)")
-        lifecycle = d.get("lifecycle_status")
-        if lifecycle:
-            lifecycle_levels[m.parent.name] = str(lifecycle)
-        if lifecycle is not None and lifecycle not in allowed_lifecycle:
-            governance.append(f"{m.parent.name}: unknown lifecycle_status '{lifecycle}'")
-        if d.get("auto_route_allowed") is True and lifecycle in {"DRAFT", "LAB"}:
-            governance.append(f"{m.parent.name}: auto_route_allowed=true but lifecycle_status={lifecycle}")
+            governance.append(f"{m.parent.name}: unknown kind '{kind}' (expected workflow|internal|advisory|orchestrator)")
         if d.get("public_entry") is True and not d.get("entry_skill"):
             governance.append(f"{m.parent.name}: public_entry=true but entry_skill missing")
         budget = d.get("budget")
         if "budget" in d and not isinstance(budget, dict):
             governance.append(f"{m.parent.name}: budget is not an object")
-        eval_summary = d.get("eval_summary")
-        if "eval_summary" in d and not isinstance(eval_summary, dict):
-            governance.append(f"{m.parent.name}: eval_summary is not an object")
-        artifact = eval_summary.get("artifact_path") if isinstance(eval_summary, dict) else ""
-        if lifecycle in {"PROVEN", "DEFAULT"} and not artifact:
-            governance.append(f"{m.parent.name}: lifecycle_status={lifecycle} but eval_summary.artifact_path is empty")
-        if lifecycle in {"PROVEN", "DEFAULT"} and artifact:
-            artifact_path = r / artifact
-            if not artifact_path.exists():
-                governance.append(f"{m.parent.name}: eval_summary.artifact_path does not exist: {artifact}")
-            else:
-                code, out = _run([sys.executable, "scripts/harness_eval.py", "validate", str(artifact_path)])
-                if code != 0:
-                    detail = next((line for line in out.splitlines() if line.startswith("FAIL")), f"exit {code}")
-                    governance.append(f"{m.parent.name}: eval artifact invalid ({detail})")
-        if lifecycle == "DEFAULT" and d.get("auto_route_allowed") is not True:
-            governance.append(f"{m.parent.name}: lifecycle_status=DEFAULT but auto_route_allowed is not true")
         prompt_file = d.get("recommended_prompt_file")
         if "recommended_prompt_file" in d:
             if not isinstance(prompt_file, str):
@@ -697,14 +643,217 @@ def check_registry() -> None:
     add(FAIL if bad else OK, "registry:manifests",
         "; ".join(bad[:6]) if bad else f"{len(manifests)} workflow manifest(s); all entry_skill/agent/rule refs resolve")
     add(WARN if governance else OK, "registry:manifest-governance",
-        "; ".join(governance[:8]) if governance else "lifecycle/public/auto-route/prompt metadata present")
-    if lifecycle_levels:
-        add(OK, "registry:lifecycle",
-            ", ".join(f"{k}={v}" for k, v in sorted(lifecycle_levels.items())))
+        "; ".join(governance[:8]) if governance else "kind/public/auto-route/prompt metadata present")
 
 
-def main() -> int:
-    strict = "--strict" in sys.argv[1:]
+# --------------------------------------------------------------------------
+# explain — cause + suggested fix for each WARN/FAIL
+# --------------------------------------------------------------------------
+# Keyed by exact check name, then by namespace head (the part before ":").
+# Each value: (cause, fix_command). Keep commands copy-pasteable.
+FIX_MAP: dict[str, tuple[str, str]] = {
+    # tools
+    "tool:python": ("python interpreter not on PATH", "ensure python3.10+ is installed and on PATH"),
+    "tool:git": ("git not on PATH", "install git (e.g. `sudo apt install git`)"),
+    "tool:docker": ("docker not on PATH (recommended)", "install Docker Desktop or `sudo apt install docker.io`"),
+    "tool:dotnet": (".NET SDK not on PATH (recommended)", "install .NET 10 SDK from https://dotnet.microsoft.com/download"),
+    "tool:npm": ("npm not on PATH (recommended)", "install Node.js (includes npm) from https://nodejs.org/"),
+    "tool:just": ("just command runner not installed", "install: `cargo install just` or see https://just.systems/"),
+    "tool:graphify": ("graphify CLI not on PATH", "install graphify (see its install script / docs)"),
+    "tool:rg": ("ripgrep not on PATH (recommended)", "install: `sudo apt install ripgrep` or `cargo install ripgrep`"),
+    "tool:x": ("ServiceStack DTO CLI not on PATH", "npm install -g @servicestack/cli"),
+    "tool:dotnet-ef": ("dotnet-ef tool not installed", "dotnet tool install --global dotnet-ef"),
+    # root / vcs
+    "root-vcs": ("root is not a git repo (no version history)", "git init  (or see docs: just harness-backup)"),
+    # json
+    "json:.claude/settings.json": (".claude/settings.json is invalid JSON", "fix JSON syntax in .claude/settings.json"),
+    "json:.claude/settings.local.json": ("settings.local.json is invalid JSON", "fix JSON syntax in .claude/settings.local.json"),
+    "json:.codex/hooks.json": (".codex/hooks.json is invalid JSON", "fix JSON syntax in .codex/hooks.json"),
+    # pycompile
+    "py-compile": ("one or more hooks/scripts do not compile", "fix the Python syntax in the listed file(s)"),
+    # guard
+    "guard": ("myhospital_guard.py is missing", "restore .claude/hooks/myhospital_guard.py (symlink → engine/hooks)"),
+    "guard-selftest": ("guard self-test failed", "fix .claude/hooks/myhospital_guard.py --self-test"),
+    "guard-wired": ("guard NOT wired as a PreToolUse hook", "add myhospital_guard as a PreToolUse hook in .claude/settings.json"),
+    # worktree cli
+    "worktree-cli:help": ("scripts/worktree.py --help failed", "fix scripts/worktree.py"),
+    "worktree-cli:list": ("scripts/worktree.py list failed", "fix scripts/worktree.py"),
+    # graphify
+    "graphify-trust": ("graphify-out/graph.json built for a different machine/root", "rebuild on this Linux box: `graphify build` (or rm -rf graphify-out/ and rebuild)"),
+    "graph-secrets": ("graph.json still contains auth/cookie/har leakage", "fix .graphifyignore then rebuild: `graphify build`"),
+    "graphify-ignore": (".graphifyignore missing secret/legacy patterns", "add the missing patterns to .graphifyignore then rebuild the graph"),
+    # just
+    "just": ("just not installed OR recipes fail to load", "install just (`cargo install just`) and check justfile syntax"),
+    # routing
+    "routing:be": ("myhospital-be/CONVENTIONS.md is missing", "restore myhospital-be/CONVENTIONS.md (or run: python scripts/conventions_sync.py apply)"),
+    "routing:fe": ("myhospital-fe/CLAUDE.md is missing", "restore myhospital-fe/CLAUDE.md"),
+    "routing:claude-md": ("CLAUDE.md still routes BE to missing myhospital-be/CLAUDE.md", "update CLAUDE.md to route BE to engine/rules/backend.md"),
+    # legacy
+    "legacy-active-refs": (".ps1 still referenced in active justfile/worktree tooling", "remove the .ps1 references from the listed file(s)"),
+    # codegraph
+    "codegraph:bin": ("codegraph CLI not on PATH", "install: curl -fsSL https://raw.githubusercontent.com/colbymchenry/codegraph/main/install.sh | sh"),
+    "codegraph-root": (".codegraph/ exists at workspace ROOT (root should not be indexed)", "run `codegraph uninit` at the workspace root"),
+    "codegraph-policy": ("engine/rules/source-discovery.md missing", "restore engine/rules/source-discovery.md"),
+    "codegraph-doc:AGENTS.md": ("AGENTS.md missing CodeGraph / source-discovery reference", "add a CodeGraph + source-discovery.md note to AGENTS.md"),
+    "codegraph-doc:CLAUDE.md": ("CLAUDE.md missing CodeGraph / source-discovery reference", "add a CodeGraph + source-discovery.md note to CLAUDE.md"),
+    "codegraph-antipattern": ("AGENTS.md still leads code discovery with rg", "rewrite AGENTS.md to lead with CodeGraph (rg is fallback only)"),
+    "codegraph-fresh:myhospital-be": ("BE codegraph index older than last commit", "rebuild: just codegraph-sync-main"),
+    "codegraph-fresh:myhospital-fe": ("FE codegraph index older than last commit", "rebuild: just codegraph-sync-main"),
+    "codegraph-index:myhospital-be": ("BE repo has no .codegraph index", "run: just codegraph-init-main"),
+    "codegraph-index:myhospital-fe": ("FE repo has no .codegraph index", "run: just codegraph-init-main"),
+    # mh-scan
+    "mh-scan": ("scripts/mh_scan/ missing (deterministic convention floor)", "restore scripts/mh_scan/ (see engine/rules)"),
+    "mh-scan:selftest": ("mh_scan self-test failed", "fix scripts/mh_scan --self-test"),
+    # convention truth
+    "convention-truth": ("canon (engine/rules) drifted from code", "fix the engine/rules canon (run: python scripts/convention_truth.py)"),
+    # brains
+    "main-brain": ("main-brain/ missing or incomplete (gated source of truth)", "restore main-brain/README.md and main-brain/knowledge.md"),
+    "second-brain": ("second-brain/ missing or incomplete (learning buffer)", "restore second-brain/README.md"),
+    "promote-skill": ("/promote skill missing (owner-gated promotion)", "restore .claude/skills/promote/SKILL.md (symlink → engine/skills)"),
+    # symlinks
+    "link:.claude/skills": (".claude/skills not a symlink to engine/skills", "ln -snf ../../engine/skills .claude/skills"),
+    "link:.claude/agents": (".claude/agents not a symlink to engine/agents", "ln -snf ../../engine/agents .claude/agents"),
+    "link:.claude/hooks": (".claude/hooks not a symlink to engine/hooks", "ln -snf ../../engine/hooks .claude/hooks"),
+    "link:.claude/workflows": (".claude/workflows not a symlink to engine/workflows", "ln -snf ../../engine/workflows .claude/workflows"),
+    # workflow shared
+    "workflow-shared:schema": ("envelope.schema.json missing or invalid", "restore/fix engine/workflows/_shared/envelope.schema.json"),
+    "workflow-shared:runtime-boundary": ("runtime-boundary.md missing", "restore engine/workflows/_shared/runtime-boundary.md"),
+    "workflow-shared:validate-envelope": ("validate-envelope.py missing or self-test failed", "restore/fix engine/workflows/_shared/validate-envelope.py"),
+    "workflow-shared:gate-check": ("gate-check.py missing or self-test failed", "restore/fix engine/workflows/_shared/gate-check.py"),
+    "workflow-shared:module-state": ("module-state.py missing or self-test failed", "restore/fix engine/workflows/_shared/module-state.py"),
+    "workflow-shared:allowlist-check": ("allowlist-check.py missing or self-test failed", "restore/fix engine/workflows/_shared/allowlist-check.py"),
+    "workflow-shared:run-init": ("run-init.py missing or self-test failed", "restore/fix engine/workflows/_shared/run-init.py"),
+    "legacy-workflows-removed": ("deprecated workflow runtime paths still present", "remove the stale deprecated runtime paths listed"),
+    # learning
+    "learning:learning_capture": ("learning_capture.py missing or self-test failed", "restore/fix scripts/learning_capture.py"),
+    "learning:learning_check": ("learning_check.py missing or self-test failed", "restore/fix scripts/learning_check.py"),
+    "learning:learning_list": ("learning_list.py missing or self-test failed", "restore/fix scripts/learning_list.py"),
+    "learning:learning_recall": ("learning_recall.py missing or self-test failed", "restore/fix scripts/learning_recall.py"),
+    "learning:trigger-hook": ("learning_trigger.py missing (auto-capture nudge)", "restore engine/hooks/learning_trigger.py"),
+    "learning:trigger-wired": ("learning_trigger NOT wired as UserPromptSubmit", "wire learning_trigger as UserPromptSubmit in .claude/settings.json"),
+    "learning:map": ("second-brain/INDEX.md is stale", "python scripts/learning_recall.py --rebuild-map"),
+    "learning:trigger-recall": ("work prompt did not emit a recall nudge", "fix engine/hooks/learning_trigger.py recall path"),
+    "learning:second-brain": ("second-brain/ missing (provisional intake buffer)", "create second-brain/ (see engine/rules/memory-policy.md)"),
+    # codex guard
+    "codex-guard-wiring": ("codex guard uses a bare .claude path (fails open from a worktree)", "update .codex/hooks.json to walk-up to engine/hooks/myhospital_guard.py"),
+    # router
+    "router:readme": ("engine/router/README.md missing", "restore engine/router/README.md"),
+    "router:selftest": ("harness_router.py self-test failed", "fix scripts/harness_router.py --self-test"),
+    "preflight:selftest": ("harness_preflight.py self-test failed", "fix scripts/harness_preflight.py --self-test"),
+    "codex-preflight:selftest": ("codex_preflight.py self-test failed", "fix scripts/codex_preflight.py --self-test"),
+    # rule cards
+    "rule-card:selftest": ("rule_card.py self-test failed", "fix scripts/rule_card.py --self-test"),
+    # eval ledger
+    "eval-ledger:readme": ("docs/harness/evals/README.md missing", "restore docs/harness/evals/README.md"),
+    "eval-ledger:template": ("docs/harness/evals/_TEMPLATE.yaml missing", "restore docs/harness/evals/_TEMPLATE.yaml"),
+    "eval-ledger:selftest": ("harness_eval.py self-test failed", "fix scripts/harness_eval.py --self-test"),
+    "eval-ledger:scan": ("harness_eval.py scan failed", "fix scripts/harness_eval.py scan"),
+    # workflow governance / runtime contract
+    "workflow-governance:selftest": ("harness_workflow_governance.py self-test failed", "fix scripts/harness_workflow_governance.py --self-test"),
+    "workflow-governance:scan": ("harness_workflow_governance.py scan failed", "fix scripts/harness_workflow_governance.py scan"),
+    "runtime-contract:selftest": ("harness_runtime_contract.py self-test failed", "fix scripts/harness_runtime_contract.py --self-test"),
+    "runtime-contract:scan": ("harness_runtime_contract.py scan failed", "fix scripts/harness_runtime_contract.py scan"),
+    # registry
+    "registry": ("engine/REGISTRY.md missing", "restore engine/REGISTRY.md (inventory index)"),
+    "registry:manifests": ("a workflow manifest references a missing agent/skill/rule", "fix the manifest entry_skill/agent/rule refs listed"),
+    "registry:manifest-governance": ("workflow manifests missing governance fields", "add the missing kind/public_entry/auto_route/budget/prompt fields"),
+}
+
+
+def lookup_fix(name: str) -> tuple[str, str]:
+    if name in FIX_MAP:
+        return FIX_MAP[name]
+    head = name.split(":", 1)[0]
+    # fall back to any key sharing the same namespace head
+    for key, val in FIX_MAP.items():
+        if key.startswith(f"{head}:"):
+            return val
+    return ("see the check detail above", "manual investigation — see AGENTS.md §4 (Hard Safety Rules)")
+
+
+def explain_findings(results: list[tuple[str, str, str]]) -> None:
+    """Print cause + suggested fix for each WARN/FAIL in `results`."""
+    rows = [r for r in results if r[0] in (WARN, FAIL)]
+    if not rows:
+        print("\nExplain: no WARN/FAIL items — nothing to fix.")
+        return
+    print("\nExplain:")
+    for status, name, detail in rows:
+        cause, fix = lookup_fix(name)
+        print(f"  [{status:4}] {name}")
+        print(f"    Detail: {detail}")
+        print(f"    Cause:  {cause}")
+        print(f"    Fix:    {fix}")
+
+
+def _self_test() -> int:
+    """Verify explain mode does not crash on a synthetic result set + every fix key resolves."""
+    failures = 0
+
+    def check(cond: bool, msg: str) -> None:
+        nonlocal failures
+        if not cond:
+            failures += 1
+            print(f"FAIL: {msg}")
+
+    # 1. explain path runs without raising on a mixed synthetic set
+    synthetic = [
+        (OK, "tool:python", "on PATH"),
+        (WARN, "tool:dotnet-ef", "needed for worktree.py sync-db"),
+        (FAIL, "json:.claude/settings.json", "INVALID: ..."),
+        (WARN, "graphify-trust", "STALE/cross-machine"),
+        (WARN, "unknown-future-check", "detail"),
+    ]
+    try:
+        explain_findings(synthetic)
+        check(True, "")
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"explain_findings crashed on synthetic set: {exc}")
+
+    # 2. every check function used by main() must have a resolvable fix (no KeyError, no bare default for known checks)
+    known_checks = (
+        "tool:dotnet-ef", "graphify-trust", "graph-secrets", "guard-wired",
+        "codegraph-fresh:myhospital-be", "learning:map", "registry:manifest-governance",
+    )
+    for name in known_checks:
+        try:
+            cause, fix = lookup_fix(name)
+            check(bool(cause) and bool(fix), f"lookup_fix({name!r}) returned empty")
+        except Exception as exc:  # noqa: BLE001
+            check(False, f"lookup_fix({name!r}) raised: {exc}")
+
+    # 3. unknown check falls back gracefully (no crash, non-empty)
+    try:
+        cause, fix = lookup_fix("does-not-exist:xyz")
+        check(bool(cause) and bool(fix), "lookup_fix on unknown returned empty")
+    except Exception as exc:  # noqa: BLE001
+        check(False, f"lookup_fix on unknown raised: {exc}")
+
+    if failures:
+        print(f"harness_doctor self-test: {failures} FAILED")
+        return 1
+    print("harness_doctor self-test: OK (explain path + fix map)")
+    return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    ap = argparse.ArgumentParser(
+        prog="harness_doctor",
+        description="MyHospital harness doctor — read-only health check for the agent/dev harness.",
+    )
+    ap.add_argument("--strict", action="store_true",
+                    help="exit 1 if any check FAILED")
+    ap.add_argument("--self-test", action="store_true",
+                    help="verify the explain subcommand + fix map do not crash (no full scan)")
+    sub = ap.add_subparsers(dest="command")
+    sub.add_parser("explain", help="after scan, print cause + suggested fix for each WARN/FAIL")
+    args = ap.parse_args(argv)
+
+    if args.self_test:
+        return _self_test()
+
     print(f"MyHospital harness doctor — {root()}\n")
     for fn in (
         check_tools, check_root_versioning, check_json, check_pycompile,
@@ -713,7 +862,7 @@ def main() -> int:
         check_routing, check_legacy_isolation, check_codegraph, check_codegraph_freshness,
         check_convention_scan, check_convention_truth, check_opencode_guard,
         check_brains, check_symlinks, check_workflow_shared, check_removed_legacy_workflows,
-        check_learning, check_maturity, check_codex_guard_wiring, check_router, check_rule_cards,
+        check_learning, check_codex_guard_wiring, check_router, check_rule_cards,
         check_eval_ledger, check_workflow_governance, check_runtime_contract, check_registry,
     ):
         try:
@@ -729,7 +878,10 @@ def main() -> int:
     print(f"\nSummary: {counts[OK]} OK, {counts[WARN]} WARN, {counts[FAIL]} FAIL, {counts[INFO]} INFO")
     if counts[FAIL]:
         print("Action: resolve FAIL items above.")
-    return 1 if (strict and counts[FAIL]) else 0
+    if args.command == "explain":
+        explain_findings(_results)
+        return 0
+    return 1 if (args.strict and counts[FAIL]) else 0
 
 
 if __name__ == "__main__":

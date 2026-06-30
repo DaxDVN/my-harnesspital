@@ -195,6 +195,9 @@ def build_preflight(prompt: str) -> dict[str, Any]:
         "prompt": prompt,
         "predicted_workflow": candidate,
         "risk_tier": decision.get("risk_tier"),
+        "tier_policy": decision.get("tier_policy", {}),
+        "worker_routing": decision.get("worker_routing", {}),
+        "recipe_selection": decision.get("recipe_selection", {}),
         "confidence": decision.get("confidence"),
         "action": action,
         "needs_owner_confirmation": needs_confirmation,
@@ -223,11 +226,25 @@ def build_preflight(prompt: str) -> dict[str, Any]:
 
 
 def render_card(preflight: dict[str, Any]) -> str:
+    wr = preflight.get("worker_routing", {}) or {}
+    _disp = wr.get("model_id") or wr.get("model") or "?"
+    _eff = wr.get("variant") or wr.get("effort") or "?"
+    _ro = " · read-only" if wr.get("read_only") else ""
+    worker_line = f"- → Worker dispatch: {_disp} ({_eff}) [{wr.get('backend', '?')}] role={wr.get('role', '?')}{_ro}"
+    mfr = wr.get("mandatory_final_review")
+    review_line = (
+        f"- ⚠ BẮT BUỘC review cuối: {mfr.get('model', '?')}/{mfr.get('effort', '?')} (Opus xhigh; model TQ review KHÔNG thay thế)"
+        if mfr else "- (read-only / non-mutating — không cần review cuối)"
+    )
     lines = [
         "NL Preflight — chờ xác nhận" if preflight["needs_owner_confirmation"] else "NL Preflight",
         "",
         f"- Dự đoán workflow: {preflight['predicted_workflow'] or '(chưa rõ)'}",
         f"- Risk tier: {preflight['risk_tier']} · confidence: {preflight['confidence']}",
+        worker_line,
+        review_line,
+        f"- Floor (Anthropic-equiv baseline): {preflight['tier_policy'].get('model', '?')}/{preflight['tier_policy'].get('effort', '?')}",
+        f"- recipe: {preflight['recipe_selection'].get('recipe', '?')} ({preflight['recipe_selection'].get('why', '')})",
         f"- Skill: {preflight['entry_skill'] or '(none)'}",
         f"- Skills áp dụng: {_csv(preflight['skills_to_apply'])}",
         f"- Agents dự kiến: {_csv(preflight['candidate_agents'])}",
@@ -289,6 +306,8 @@ def self_test() -> int:
             ("run deep review before merge", "WAIT_OWNER_CONFIRMATION", "deep-review"),
             ("super-test inpatient module", "WAIT_OWNER_CONFIRMATION", "robust-test"),
             ("tối ưu harness hiện tại để giảm đốt token nhưng quality không giảm", "WAIT_OWNER_CONFIRMATION", "harness-maintenance"),
+            ("refactor the patient service", "WAIT_OWNER_CONFIRMATION", "mh-implement"),
+            ("thiết kế lại màn hình nhập viện", "WAIT_OWNER_CONFIRMATION", "clinical-ui-design"),
             ("nói chuyện bình thường", "CLARIFY", ""),
         ]
         for prompt, want_status, want_workflow in cases:
@@ -309,6 +328,41 @@ def self_test() -> int:
         if not sheet["worktree"]["selected"] or sheet["worktree"]["selected"]["slug"] != "fix-bug-noi-tru":
             print("FAIL worktree detection for fix-bug-noi-tru")
             return 1
+        # tier_policy passthrough assertions (additive). Derived from risk_tier.
+        tier_policy_cases = [
+            # trivial T0 (minimal/ponytail advisory) -> haiku/low baseline
+            ("minimal yagni tweak, đơn giản thôi", "haiku", "low"),
+            # clinical/billing -> opus/xhigh (owner-locked floor 2026-06-26)
+            ("change invoice billing calculation for clinical order", "opus", "xhigh"),
+        ]
+        for prompt, want_model, want_effort in tier_policy_cases:
+            pf = build_preflight(prompt)
+            tp = pf.get("tier_policy") or {}
+            if tp.get("model") != want_model or tp.get("effort") != want_effort:
+                print(f"FAIL {prompt!r}: tier_policy {tp.get('model')!r}/{tp.get('effort')!r} != {want_model!r}/{want_effort!r}")
+                return 1
+        # worker_routing passthrough (owner-locked): card surfaces the real worker.
+        wr_pf = build_preflight("fix these 5 bugs from the list")
+        wr = wr_pf.get("worker_routing") or {}
+        if wr.get("model") != "deepseek-v4-pro" or "mandatory_final_review" not in wr:
+            print(f"FAIL worker_routing passthrough: {wr.get('model')!r} / mfr={'mandatory_final_review' in wr}")
+            return 1
+        # recipe_selection passthrough assertions (additive). Shallowest-safe.
+        recipe_cases = [
+            ("fix a typo in a button label", {"none", "single-skill"}),
+            ("build the inpatient module from specs/Tài liệu Nội trú.md", {"full-SDD"}),
+            ("review module Y for bugs", {"review"}),
+            ("drive module X to 0 BLOCK/HIGH", {"espresso"}),
+            ("verify these findings, don't fix", {"triage-only"}),
+            ("fix these 5 bugs from the list", {"batch-bugfix"}),
+            ("design the api for billing only", {"design-only"}),
+        ]
+        for prompt, want_recipes in recipe_cases:
+            pf = build_preflight(prompt)
+            rs = pf.get("recipe_selection") or {}
+            if rs.get("recipe") not in want_recipes:
+                print(f"FAIL {prompt!r}: recipe {rs.get('recipe')!r} not in {sorted(want_recipes)!r}")
+                return 1
     finally:
         _load_worktrees = original_loader
     print("harness_preflight self-test: OK")

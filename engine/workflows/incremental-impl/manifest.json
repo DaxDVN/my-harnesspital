@@ -3,29 +3,50 @@
   "description": "Executes ONE approved task/slice from specs/<module>/10-plan.md by WRAPPING /mh-implement (worktree + allowlist + validation + self-review-diff). Captures an implementation envelope; on plan-mismatch STOPs and routes back to task-slicing/technical-design. The only code-editing workflow in the SDLC set.",
   "kind": "internal",
   "implementation_kind": "orchestrated-wrapper",
-  "maturity": "scaffolded",
   "public_entry": false,
   "manual_only": true,
   "owner_invocation_required": true,
   "auto_route_allowed": false,
-  "lifecycle_status": "DRAFT",
   "entry_skill": "incremental-impl",
   "recommended_prompt_file": "engine/prompts/incremental-impl-worker.md",
-  "required_inputs": ["approved task or slice from specs/<module>/10-plan.md", "worktree slug", "file allowlist"],
-  "allowed_writes": ["engine/workflows/incremental-impl/rounds/**", "worktrees/<slug>/fe/**", "worktrees/<slug>/be/**", "specs/<module>/04-traceability.md", "specs/<module>/10-plan.md"],
-  "validators": ["python engine/workflows/_shared/gate-check.py <module>", "python engine/workflows/_shared/allowlist-check.py <allowlist> <diff>"],
+  "required_inputs": [
+    "approved task or slice from specs/<module>/10-plan.md",
+    "worktree slug",
+    "file allowlist"
+  ],
+  "allowed_writes": [
+    "engine/workflows/incremental-impl/rounds/**",
+    "worktrees/<slug>/fe/**",
+    "worktrees/<slug>/be/**",
+    "specs/<module>/04-traceability.md",
+    "specs/<module>/10-plan.md"
+  ],
+  "validators": [
+    "python engine/workflows/_shared/gate-check.py <module>",
+    "python engine/workflows/_shared/allowlist-check.py <allowlist> <diff>"
+  ],
   "budget": {
     "max_context_files": 0,
     "max_payload_inline_chars": 0
   },
-  "eval_summary": {
-    "last_real_run": "",
-    "artifact_path": "",
-    "verdict": ""
-  },
-  "agents": ["mh-implementer"],
+  "agents": [
+    "mh-implementer"
+  ],
   "external_agents": [],
-  "skills_used": ["mh-implement"],
-  "rules": ["backend", "frontend", "ponytail", "quality-gates"],
-  "uses_shared": ["gate-check.py", "module-state.py", "envelope.schema.json", "validate-envelope.py", "runtime-boundary.md"]
+  "skills_used": [
+    "mh-implement"
+  ],
+  "rules": [
+    "backend",
+    "frontend",
+    "ponytail",
+    "quality-gates"
+  ],
+  "uses_shared": [
+    "gate-check.py",
+    "module-state.py",
+    "envelope.schema.json",
+    "validate-envelope.py",
+    "runtime-boundary.md"
+  ]
 }

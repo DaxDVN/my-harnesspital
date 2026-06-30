@@ -1,0 +1,20 @@
+1:M 25 Jun 2026 12:46:10.070 * 1 changes in 3600 seconds. Saving...
+1:M 25 Jun 2026 12:46:10.074 * Background saving started by pid 46
+46:C 25 Jun 2026 12:46:10.084 * DB saved on disk
+46:C 25 Jun 2026 12:46:10.085 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+1:M 25 Jun 2026 12:46:10.174 * Background saving terminated with success
+1:M 25 Jun 2026 14:34:32.721 * 1 changes in 3600 seconds. Saving...
+1:M 25 Jun 2026 14:34:32.721 * Background saving started by pid 47
+47:C 25 Jun 2026 14:34:32.728 * DB saved on disk
+47:C 25 Jun 2026 14:34:32.729 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+1:M 25 Jun 2026 14:34:32.822 * Background saving terminated with success
+1:M 25 Jun 2026 15:34:33.018 * 1 changes in 3600 seconds. Saving...
+1:M 25 Jun 2026 15:34:33.019 * Background saving started by pid 48
+48:C 25 Jun 2026 15:34:33.026 * DB saved on disk
+48:C 25 Jun 2026 15:34:33.027 * Fork CoW for RDB: current 0 MB, peak 0 MB, average 0 MB
+1:M 25 Jun 2026 15:34:33.119 * Background saving terminated with success
+1:signal-handler (1782439410) Received SIGTERM scheduling shutdown...
+1:M 26 Jun 2026 02:03:30.482 * User requested shutdown...
+1:M 26 Jun 2026 02:03:30.482 * Saving the final RDB snapshot before exiting.
+1:M 26 Jun 2026 02:03:30.484 * DB saved on disk
+1:M 26 Jun 2026 02:03:30.484 # Redis is now ready to exit, bye bye...

@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""graphify staleness / trust probe (SessionStart hook).
+"""graphify staleness / trust probe + session marker cleanup (SessionStart hook).
 
-Robust, dependency-free check that the knowledge graph in `graphify-out/` can be
-trusted on THIS machine. The previous version imported `graphify.detect`, which is
-not importable from the system Python (graphify ships as a standalone binary), so it
-silently did nothing. This version instead compares the recorded build root against
-the actual workspace root — which directly catches the real failure mode: a graph
-built on another machine/OS (e.g. Windows `D:\\arabica\\roast`) whose file citations
-do not exist here.
+Two jobs at session start:
+  1. Check that the knowledge graph in `graphify-out/` can be trusted on THIS machine.
+  2. Clean up stale per-session markers so every session starts fresh:
+     - .direct-mode   → removed (each session starts in blind-PM mode; the owner
+                        activates direct mode in-chat if needed — AGENTS.md §3).
+     - .pm-run-active → removed (a leftover from a crashed session would falsely
+                        activate the invariants / drift-guard hooks).
 
-Prints a short `[graphify] …` directive to stdout ONLY when the graph is
-untrustworthy or its provenance cannot be confirmed; stays silent and exits 0
-otherwise so it never blocks or slows session start.
+Prints a short notice ONLY when markers were cleaned or the graph is stale; stays
+silent otherwise so it never blocks session start.
 
 Usage: python graphify_stale_check.py <project_root>
 """
@@ -26,10 +25,35 @@ def _looks_windows(p: str) -> bool:
     return "\\" in p or (len(p) >= 2 and p[1] == ":")
 
 
+def _clean_markers(root: Path) -> list[str]:
+    """Remove per-session markers so every session starts fresh. Returns the list of cleaned names."""
+    cleaned: list[str] = []
+    for name in (".direct-mode", ".pm-run-active"):
+        marker = root / name
+        try:
+            if marker.exists():
+                marker.unlink()
+                cleaned.append(name)
+        except OSError:
+            pass
+    return cleaned
+
+
 def main() -> int:
+    if "--self-test" in sys.argv:
+        return _self_test()
     if len(sys.argv) < 2:
         return 0
     root = Path(sys.argv[1]).resolve()
+
+    # Clean stale per-session markers so every session starts fresh (AGENTS.md §3).
+    # .direct-mode lives at root; .pm-run-active lives in .claude/.
+    cleaned = _clean_markers(root)
+    if (root / ".claude").exists():
+        cleaned += _clean_markers(root / ".claude")
+    if cleaned:
+        print(f"[session-start] cleaned stale marker(s): {', '.join(cleaned)} — session starts fresh in blind-PM mode")
+
     out = root / "graphify-out"
     graph = out / "graph.json"
     root_marker = out / ".graphify_root"
@@ -72,5 +96,27 @@ def main() -> int:
     return 0
 
 
+def _self_test() -> int:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        # Create stale markers
+        (root / ".direct-mode").write_text("", encoding="utf-8")
+        (root / ".claude").mkdir()
+        (root / ".claude" / ".pm-run-active").write_text("ledger", encoding="utf-8")
+        # Clean
+        c1 = _clean_markers(root)
+        c2 = _clean_markers(root / ".claude")
+        all_cleaned = c1 + c2
+        assert not (root / ".direct-mode").exists(), ".direct-mode should be cleaned"
+        assert not (root / ".claude" / ".pm-run-active").exists(), ".pm-run-active should be cleaned"
+        assert ".direct-mode" in all_cleaned and ".pm-run-active" in all_cleaned, "both markers should be reported as cleaned"
+    print("graphify_stale_check self-test: OK")
+    return 0
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        sys.exit(_self_test())
     sys.exit(main())

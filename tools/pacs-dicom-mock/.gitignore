@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.db
+*.db-journal
+dicom_storage/
+studies.db
+.env
+*.log
+*.dcm
+studies.json

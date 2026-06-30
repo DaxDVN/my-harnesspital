@@ -131,8 +131,7 @@ roast/                                    ← harness root, orbit fe+be
 2. **`scripts/` giữ nguyên**: đã là 1 nhà gọn cho automation; move = sửa justfile + doctor self-check + migrate FIXUP + fish + README… rủi ro cao, lợi ích thấp.
 3. **Giữ CẢ `mh-scaffold` + `mh-implement`** (không gộp): scaffold = phát template rời; implement = orchestrate feature đầy đủ và *gọi* scaffold ở B3. Bổ trợ, không trùng lõi. Sẽ ghi rõ ranh giới ở đầu mỗi SKILL.md.
 4. **CONVENTIONS.md + FE CLAUDE.md → con trỏ mỏng** trỏ về `.claude/rules/` (hết drift vĩnh viễn) — NHƯNG cần PR (repo main), nên là **việc pending của bạn**, không phải tôi.
-5. **`.agents/` = plugin caveman** (chứa cavecrew/caveman skills), KHÔNG phải nhà harness → để yên.
-6. **Naming `mh_scan` snake giữ nguyên** (đúng chuẩn Python module); `mh-*` kebab cho skill/agent. Ghi chú trong `scripts/README.md`.
+5. **Naming `mh_scan` snake giữ nguyên** (đúng chuẩn Python module); `mh-*` kebab cho skill/agent. Ghi chú trong `scripts/README.md`.
 
 ---
 

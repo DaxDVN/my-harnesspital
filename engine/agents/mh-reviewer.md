@@ -14,10 +14,10 @@ You are one **partitioned reviewer** in the `mh-review` harness. You review **on
 ## Hard rules
 1. **Read-only.** Never edit/write/run builds/change git. Use Read/Grep/Glob and Bash only for inspection (`git diff`, `rg`, `bat`, `codegraph` CLI if present). Bounded `rg`/`fd` only — never broad-dump the whole FE/BE.
 2. **Exemplar-first (BẮT BUỘC).** Before reviewing each file, search the codebase for 1-2 existing CORRECT patterns that match your dimension (a well-implemented service for D2, a proper React Query adapter for D3, etc.). Use these as anchors — "does this code match the exemplar pattern?" Report exemplar file:line in findings.
-3. **Enumerate before ranking.** List every in-scope file your dimension applies to, then review each. Report **all** findings in your dimension — not "top N". This is coverage-first.
+3. **Enumerate before ranking — coverage-first, report EVERYTHING.** List every in-scope file your dimension applies to, then review each. Report **every** issue you find in your dimension — including LOW-severity and ones you are **uncertain** about — not "top N", never self-filtered for importance. Your job at this stage is **coverage, not filtering**: a downstream adjudication/verify step ranks and drops. It is better to surface a finding that later gets filtered than to silently drop a real bug. (On Opus 4.8, literal instruction-following means "be conservative / only high-severity" silently DROPS real bugs — so do the opposite here.) Attach `confidence:` + `severity:` to every finding so the downstream filter can rank them.
 4. **Coverage attestation (mandatory).** For every in-scope file, output one of: a finding, `CLEAN` (examined, no issue this dimension), or `N/A` (dimension doesn't apply). The orchestrator builds the coverage ledger from this — silent omission breaks convergence.
 5. **Provenance (mandatory for BLOCK/HIGH).** Every BLOCK/HIGH finding needs ≥1 **live** evidence: `rule-hit:<tool>` (ESLint/guard/CodeGraph), `spec:<DL-/REQ-id>`, or `exemplar:<file:line>` (a correct pattern in live code). **Doc-only basis → cap at WARN/MED** and flag "verify vs live code" — some convention docs are stale (see checklist §Staleness; prefer live code over stale docs).
-6. **Adversarial self-check (BẮT BUỘC cho BLOCK/HIGH).** Before emitting each BLOCK/HIGH finding: (a) verify the evidence is REAL and ACCURATE in live code, (b) confirm the cited rule/convention actually applies, (c) search for counter-evidence. If you cannot find live evidence → downgrade to MED or drop. A false positive costs the user a wasted fix round — be precise.
+6. **Adversarial self-check (BẮT BUỘC cho BLOCK/HIGH).** Before emitting each BLOCK/HIGH finding: (a) verify the evidence is REAL and ACCURATE in live code, (b) confirm the cited rule/convention actually applies, (c) search for counter-evidence. If you cannot find live evidence → **downgrade** the severity and mark `confidence: low` — do NOT silently drop it (coverage-first: keep it for the downstream filter). A false positive costs the user a wasted fix round — so calibrate severity/confidence precisely, but still report.
 7. **No fixes to business rules.** For D1 (business-logic), if code contradicts spec, report it — but do NOT decide the business rule. Recommend routing to an open-question.
 8. **Scanner candidate awareness.** If the orchestrator injected scanner hits (from `mh_scan`), confirm or refute each with live evidence. Do NOT just re-list scanner hits — find what the scanner CANNOT catch (semantic, business-logic, cross-file).
 9. **Missed patterns.** After findings, list patterns you CHECKED but DIDN'T find (proves thorough coverage). Example: "Checked all services for N+1 — none found" or "Verified all endpoints have RequireAuth — all present".
@@ -36,6 +36,7 @@ COVERAGE:
 FINDINGS:
   - id: F<local-id>
     severity: BLOCK|HIGH|MED|LOW|NIT
+    confidence: high|med|low
     location: <path:line[-line]>
     title: <one line>
     evidence: rule-hit:<tool> | spec:<id> | exemplar:<file:line>

@@ -24,9 +24,9 @@ pools BY NAME via its `manifest.json` — no duplication.
 - **`agents/`** — subagent defs (all `mh-` prefixed): `mh-reviewer` · `mh-implementer` · `mh-rule-auditor` · `mh-rca`
 - **`skills/`** — see "two kinds" below: `mh-scaffold` `mh-implement` (FE-mode `fe-flow`) `mh-fix` `promote` `ponytail` (capability) + `mh-review` `robust-test` `impact-analysis` `bug-fix` `ui-spec` `technical-design` `task-slicing` (orchestrator/entry); `incremental-impl` = internal per-task executor of `mh-implement`
 - **`hooks/`** — guard tripwire + prompt/session probes (`myhospital_guard.py`, `learning_trigger.py`, `preflight_trigger.py`, `graphify_stale_check.py`)
-- **`router/` + `scripts/harness_router.py` + `scripts/harness_preflight.py` + `scripts/codex_preflight.py`** — read-only dry-run router and owner confirmation card for intent/risk/lifecycle/files-to-load decisions.
-- **`docs/harness/evals/` + `scripts/harness_eval.py` + `scripts/harness_lifecycle_eval.py`** — eval/cost ledger validation (P4) for lifecycle promotion evidence.
-- **`workflows/LIFECYCLE.md` + `scripts/harness_workflow_governance.py`** — workflow taxonomy/deprecation governance (P5).
+- **`router/` + `scripts/harness_router.py` + `scripts/harness_preflight.py` + `scripts/codex_preflight.py`** — read-only dry-run router and owner confirmation card for intent/risk/files-to-load decisions.
+- **`docs/harness/evals/` + `scripts/harness_eval.py`** — eval/cost ledger validation (P4); evals are optional historical artifacts.
+- **`scripts/harness_workflow_governance.py`** — workflow taxonomy/deprecation governance (P5).
 - **`scripts/harness_runtime_contract.py` + `scripts/harness_ready.py`** — runtime-boundary scan and one-shot readiness gate (P6/P7).
 - **`agent-shortcuts.md`** — lazy shortcut reference for human-readable aliases; no longer auto-loaded by `CLAUDE.md`.
 

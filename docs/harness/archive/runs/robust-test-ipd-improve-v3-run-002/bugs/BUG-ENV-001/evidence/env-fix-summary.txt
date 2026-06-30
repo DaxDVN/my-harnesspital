@@ -1,0 +1,30 @@
+=== ENV FIX SUMMARY ===
+
+1. Redis container `redis-hospital` was Exited (0) 3 hours ago (SIGTERM, user-initiated).
+2. Started it:     docker start redis-hospital
+3. Set policy:     docker update --restart unless-stopped redis-hospital
+   (now restart policy is `unless-stopped` — auto-restart on host reboot or unexpected exit)
+4. Verified:       docker exec redis-hospital redis-cli ping → PONG
+5. BE auth retest: POST /json/reply/Authenticate → 200 SUCCESS (UserId 176, SessionId XOu46...)
+
+=== SECONDARY ISSUE FOUND ===
+
+The FE `.env.test` has:
+   VITE_BACKEND_URL=http://localhost:5005
+which is WRONG for slot 3 (BE is on :5003). This made every FE call go to empty
+port 5005 and masked the Redis failure.
+
+Workaround applied: started FE with env override
+   VITE_BACKEND_URL=http://localhost:5003 npm run dev:test
+No file edit; the `.env.test` itself is unchanged. Owner decision needed whether
+to:
+  (a) fix `.env.test` permanently to 5003 (per worktree slot table),
+  (b) keep env override at startup,
+  (c) re-run `python scripts/worktree.py` to regenerate the slot env files.
+
+=== POST-FIX LOGIN ===
+
+Browser at http://localhost:3003/home after login with bvtest3.
+App loaded: Khám chữa bệnh, Thu ngân, Nhà thuốc POS, Dược lâm sàng, Kho & Đấu thầu,
+Danh mục, Quản trị. Bệnh viện Đa Khoa Demo. Master data: Hospital, Department,
+EntityHospitalShare, etc — all 200.

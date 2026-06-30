@@ -1,0 +1,16 @@
+{
+  "name": "pacs-mock",
+  "version": "1.0.0",
+  "description": "Standalone mock PACS (VIETRAD/MINERVA) for HIS–PACS integration testing",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}

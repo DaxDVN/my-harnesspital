@@ -1,0 +1,40 @@
+{
+  "reported": {
+    "526cc4827bc4": {
+      "mode": "B",
+      "target": "code_duplication",
+      "sig": "scanner:code_duplication",
+      "first_seen": true
+    },
+    "b4faaeb740c7": {
+      "mode": "B",
+      "target": "generated-modified",
+      "sig": "scanner:generated-modified",
+      "first_seen": true
+    },
+    "3f8b6e28f319": {
+      "mode": "B",
+      "target": "missing-dto-validation-annotations",
+      "sig": "scanner:missing-dto-validation-annotations",
+      "first_seen": true
+    },
+    "45f7135c4ac0": {
+      "mode": "B",
+      "target": "missing_hospital_scope",
+      "sig": "scanner:missing_hospital_scope",
+      "first_seen": true
+    },
+    "586e010b4f5f": {
+      "mode": "B",
+      "target": "missing_scope",
+      "sig": "scanner:missing_scope",
+      "first_seen": true
+    },
+    "56f888ef119c": {
+      "mode": "B",
+      "target": "race_condition",
+      "sig": "scanner:race_condition",
+      "first_seen": true
+    }
+  }
+}

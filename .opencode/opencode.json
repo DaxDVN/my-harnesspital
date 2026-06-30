@@ -6,5 +6,25 @@
   ],
   "plugin": [
     ".opencode/plugins/graphify.js"
-  ]
+  ],
+  "permission": {
+    "*": "allow",
+    "external_directory": "allow",
+    "doom_loop": "allow",
+    "read": "allow",
+    "edit": "allow",
+    "bash": {
+      "*": "allow",
+      "rm *": "ask",
+      "rmdir *": "ask",
+      "unlink *": "ask",
+      "rm -rf /": "deny",
+      "rm -rf /*": "deny",
+      "mkfs*": "deny",
+      "dd *": "deny",
+      ":(){ :*": "deny",
+      "chmod -R * /": "deny",
+      "chown -R * /": "deny"
+    }
+  }
 }

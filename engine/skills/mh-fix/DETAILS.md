@@ -54,7 +54,7 @@ Use **CodeGraph** to locate the symbol/call-path (if indexed: `codegraph node <s
 
 Convention canon — highest authority first:
 
-1. `engine/rules/backend.md` (BE) or `engine/rules/frontend.md` (FE) — **these are the live convention spine**. Do NOT rely primarily on `myhospital-be/CONVENTIONS.md`; a prior audit found it wrong in places (audit record: `/home/dax/Documents/arabica/velvet/notes/myhospital-be-conventions-audit-2026-06-15.md`).
+1. `engine/rules/backend.md` (BE) or `engine/rules/frontend.md` (FE) — **these are the live convention spine**. Do NOT rely primarily on `myhospital-be/CONVENTIONS.md`; a prior audit found it wrong in places (audit record, historical/external example: `velvet/notes/myhospital-be-conventions-audit-2026-06-15.md`).
 2. `specs/Tài liệu Nội trú.md` — **nguồn sự thật duy nhất** cho rule nghiệp vụ (D1 business-logic). KHÔNG dùng `specs/<module>/02-requirements.md` làm nguồn rule nghiệp vụ.
 3. `specs/<module>/{07-schema,08-api,03-ui}.md` for contract/design truth (KHÔNG phải nguồn rule nghiệp vụ).
 4. Existing live code as exemplar — CodeGraph `callers`/`callees` to find the canonical pattern already in the codebase. Prefer reusing an existing helper or shape over inventing a new one. The `mh-scaffold` skill defines the right structural shape for new BE/FE artifacts when a new file is warranted.

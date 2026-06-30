@@ -214,7 +214,7 @@ Inherits the full `AGENTS.md` Forbidden Actions list, plus:
 
 ## Execution Notes (harness constraints — read before first run)
 
-This workflow is `DRAFT` / `scaffolded` (never run). Two real harness facts shape how the roles execute:
+This workflow is owner-gated (`auto_route_allowed: false`). Two real harness facts shape how the roles execute:
 
 1. **`deep-review` is a Workflow-tool JS script**, and the Workflow tool runs in the main loop. The cleanest
    realization of the review step is therefore: the coordinator launches the reviewer, and the reviewer (or
@@ -233,9 +233,7 @@ fixer subagent. That moves the *spawning layer* toward the deterministic variant
 still holds**: whoever runs review returns only the compact blob, and the entity that decides stop reads no
 finding body. Do **not** assume "coordinator spawns a reviewer subagent that itself runs a nested Workflow" is
 executable until the runtime is confirmed to allow subagent→Workflow / subagent→subagent. This is the single
-biggest unknown for this workflow — validate it on the first real run and record the result in `eval_summary`.
-
-Promote to `LAB`/`smoke-tested` only after a real run; record it in `eval_summary`.
+biggest unknown for this workflow — validate it on the first real run.
 
 ## Relationship To Existing Pieces
 

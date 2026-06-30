@@ -1,6 +1,6 @@
 ---
 name: dev-from-handoff
-description: Owner-invoked. Implements from owner-supplied business/design handoff docs: intake -> technical plan -> owner approval -> bounded dev slices -> validation/receipt. Manual-only DRAFT workflow.
+description: Owner-invoked. Implements from owner-supplied business/design handoff docs: intake -> technical plan -> owner approval -> bounded dev slices -> validation/receipt. Manual-only owner-gated workflow.
 ---
 
 # dev-from-handoff — full runbook
@@ -104,5 +104,4 @@ Validate workflow envelopes with `engine/workflows/_shared/validate-envelope.py`
 - Generated FE DTO/client, `Constants.ts`, and BE migrations follow existing generated-code discipline.
 
 ## Status
-Lifecycle `DRAFT`. First real run must remain owner-supervised and should produce eval evidence before any
-promotion discussion.
+Owner-gated (`auto_route_allowed: false`). Always available when the owner invokes it.

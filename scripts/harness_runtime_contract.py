@@ -55,7 +55,6 @@ def analyze(manifests: list[dict[str, Any]]) -> tuple[list[str], list[str], dict
     for manifest in manifests:
         name = str(manifest.get("name") or manifest.get("_folder"))
         kind = str(manifest.get("kind") or "")
-        lifecycle = str(manifest.get("lifecycle_status") or "")
         external = _items(manifest, "external_agents")
         allowed_writes = _items(manifest, "allowed_writes")
         validators = _items(manifest, "validators")
@@ -87,17 +86,8 @@ def analyze(manifests: list[dict[str, Any]]) -> tuple[list[str], list[str], dict
 
         if auto_route:
             summary["auto_route_checked"].append(name)
-            eval_summary = manifest.get("eval_summary") or {}
-            artifact = eval_summary.get("artifact_path") if isinstance(eval_summary, dict) else ""
-            if lifecycle not in {"PROVEN", "DEFAULT"}:
-                errors.append(f"{name}: auto_route_allowed=true but lifecycle_status={lifecycle}")
-            if not artifact:
-                errors.append(f"{name}: auto_route_allowed=true but eval_summary.artifact_path is empty")
             if not validators:
                 errors.append(f"{name}: auto_route_allowed=true but validators is empty")
-
-        if lifecycle == "DEPRECATED" and auto_route:
-            errors.append(f"{name}: DEPRECATED workflow must not auto-route")
 
     return errors, warnings, summary
 
@@ -142,7 +132,6 @@ def self_test() -> int:
             "kind": "workflow",
             "public_entry": True,
             "auto_route_allowed": False,
-            "lifecycle_status": "DRAFT",
             "external_agents": [],
             "allowed_writes": ["engine/workflows/robust-test/runs/**"],
             "validators": ["python engine/workflows/_shared/validate-envelope.py <envelope> --payload <payload>"],
@@ -153,7 +142,6 @@ def self_test() -> int:
             "kind": "advisory",
             "public_entry": True,
             "auto_route_allowed": False,
-            "lifecycle_status": "DRAFT",
             "external_agents": ["codegraph"],
             "allowed_writes": ["engine/workflows/impact-analysis/rounds/**"],
             "validators": ["python engine/workflows/_shared/validate-envelope.py <envelope>"],

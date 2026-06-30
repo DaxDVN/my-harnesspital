@@ -49,7 +49,6 @@ redundant orchestration.
 ## Archive Sources
 
 - [`agent-browser-sheet-portal`](../_archive/2026-06-17-agent-browser-sheet-portal-snapshots.md)
-- [`mimo-provider-400`](../_archive/2026-06-17-mimo-executor-retries-provider-400.md)
 - [`fix-list-batch-by-phase`](../_archive/2026-06-17-fix-một-list-bug-gộp-theo-phase-be-hết-buildregentest-1-lượt.md)
 - [`multi-round-batch-reporting`](../_archive/2026-06-17-multi-round-fixreview-harness-batch-reporting-per-phase-vali.md)
 - [`fe-quality-harness-not-model`](../_archive/2026-06-18-fe-ui-quality-harnessskill-quyết-định-chứ-không-phải-model-đ.md)

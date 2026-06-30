@@ -26,7 +26,6 @@ TEMPLATE = EVAL_DIR / "_TEMPLATE.yaml"
 
 REQUIRED_FIELDS = [
     "workflow",
-    "lifecycle_status",
     "risk_tier",
     "model",
     "executor",
@@ -51,7 +50,6 @@ REQUIRED_FIELDS = [
 LIST_FIELDS = {"input_artifacts", "output_artifacts", "validations_run", "lessons", "residual_risks"}
 RISK_TIERS = {"T0", "T1", "T2", "T3", "UNKNOWN", ""}
 VERDICTS = {"PASS", "PARTIAL", "FAIL", "UNKNOWN", ""}
-LIFECYCLE = {"DRAFT", "LAB", "PROVEN", "DEFAULT", "DEPRECATED", ""}
 
 
 def _strip_comment(line: str) -> str:
@@ -128,8 +126,6 @@ def validate_data(data: dict[str, Any], *, template_ok: bool = False) -> tuple[l
         errors.append(f"risk_tier must be one of {sorted(RISK_TIERS)}")
     if str(data.get("verdict", "")) not in VERDICTS:
         errors.append(f"verdict must be one of {sorted(VERDICTS)}")
-    if str(data.get("lifecycle_status", "")) not in LIFECYCLE:
-        errors.append(f"lifecycle_status must be one of {sorted(LIFECYCLE)}")
 
     if not template_ok:
         if not data.get("workflow"):
@@ -138,8 +134,6 @@ def validate_data(data: dict[str, Any], *, template_ok: bool = False) -> tuple[l
             warnings.append("verdict is terminal but output_artifacts is empty")
         if data.get("verdict") == "PASS" and not data.get("validations_run"):
             warnings.append("PASS eval has no validations_run evidence")
-        if data.get("risk_tier") == "UNKNOWN":
-            warnings.append("risk_tier is UNKNOWN; lifecycle promotion should not rely on this eval alone")
     return errors, warnings
 
 
@@ -248,7 +242,6 @@ def self_test() -> int:
         path.write_text(
             "\n".join([
                 "workflow: bug-fix",
-                "lifecycle_status: LAB",
                 "risk_tier: T1",
                 "model: gpt-test",
                 "executor: codex",

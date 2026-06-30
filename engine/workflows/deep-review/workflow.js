@@ -22,6 +22,45 @@ export const meta = {
   ],
 }
 
+// --- Tier policy (Fugu orchestrator) ---
+// Caller injects args.tier_policy; absent → DEFAULT_TP. This file runs in the Workflow JS
+// sandbox (no fs/require), so DEFAULT_TP is an inline mirror of scripts/tier_policy.json.
+// Owner-locked 2026-06-26 mirror: coordinator opus/low; adjudication + clinical floor opus/XHIGH.
+// NOTE: agent() can ONLY spawn Anthropic models, so the find-tier reviewers here stay Anthropic;
+// the cheap glm-5.2 read-only lane enters via the cross-model SHIM (Step 2b → oc_worker.py).
+const DEFAULT_TP = {
+  tiers: {
+    T0: { model: 'haiku', effort: 'low' },
+    T1: { model: 'sonnet', effort: 'medium' },
+    T2: { model: 'sonnet', effort: 'high' },
+    T3: { model: 'opus', effort: 'high' },
+  },
+  coordinator: { model: 'opus', effort: 'low' },
+  verifier: {
+    // find.model is only a fallback effort/anchor now — D2-D7 run on glm-5.2 (shim) and the
+    // filter passes on haiku; keep it Anthropic-cheap so no Sonnet leaks in the no-injection path.
+    find: { model: 'haiku', effort: 'high' },
+    adjudicate_block_high: { model: 'opus', effort: 'xhigh' },
+  },
+  escalation_ladder: [
+    ['sonnet', 'medium'],
+    ['sonnet', 'high'],
+    ['opus', 'high'],
+    ['opus', 'xhigh'],
+  ],
+  risk_class_floor: {
+    classes: ['clinical', 'billing', 'permission', 'migration'],
+    floor: { model: 'opus', effort: 'xhigh' },
+  },
+}
+// Workflow tool may deliver `args` as a JSON STRING; normalize to an object once.
+const A = (() => { try { return typeof args === 'string' ? (JSON.parse(args) || {}) : (args || {}) } catch (e) { return {} } })()
+const TP = A.tier_policy || DEFAULT_TP
+// agent() requires an Anthropic model. The injected tier_policy may name an OpenCode model
+// (e.g. verifier.find = glm-5.2) for the SHIM lane — coerce any non-Anthropic model to a safe
+// Anthropic fallback for direct agent() calls. The cheap model still runs, but via oc_worker.
+const anthropicModel = (m, fallback) => (['haiku', 'sonnet', 'opus'].includes(m) ? m : fallback)
+
 // --- Schemas ---
 const SCOPE_SCHEMA = { type: 'object', required: ['files'], properties: {
   module: { type: 'string' },
@@ -54,14 +93,16 @@ const CRITIC_SCHEMA = { type: 'object', required: ['refuted'], properties: {
 } }
 
 // 7 dimensions — see engine/workflows/deep-review/checklist.md
+// Owner 2026-06-26: D1 (business-logic vs clinical BA — highest judgment) stays Anthropic Opus;
+// D2-D7 find-tier reviewers run on glm-5.2 via the oc_worker shim (Sonnet dropped from dispatch).
 const DIMENSIONS = [
   { key: 'D1', name: 'business-logic', tier: 'opus' },
-  { key: 'D2', name: 'be-conventions', tier: 'sonnet' },
-  { key: 'D3', name: 'fe-conventions', tier: 'sonnet' },
-  { key: 'D4', name: 'correctness', tier: 'sonnet' },
-  { key: 'D5', name: 'data-access', tier: 'sonnet' },
-  { key: 'D6', name: 'security-pii', tier: 'sonnet' },
-  { key: 'D7', name: 'reuse', tier: 'sonnet' },
+  { key: 'D2', name: 'be-conventions', tier: 'glm' },
+  { key: 'D3', name: 'fe-conventions', tier: 'glm' },
+  { key: 'D4', name: 'correctness', tier: 'glm' },
+  { key: 'D5', name: 'data-access', tier: 'glm' },
+  { key: 'D6', name: 'security-pii', tier: 'glm' },
+  { key: 'D7', name: 'reuse', tier: 'glm' },
 ]
 
 // Multi-pass configuration per dimension
@@ -87,15 +128,15 @@ const fkey = (f) => `${f.location}|${f.severity}|${(f.title || '').slice(0, 40)}
 
 // --- Step 1: scope freeze ---
 phase('Scope')
-const base = (args && args.base) || 'main'
-let module = (args && args.module) || 'unknown'
-let scope = (args && args.scope) || []
+const base = A.base || 'main'
+let module = A.module || 'unknown'
+let scope = A.scope || []
 if (!scope.length) {
   const s = await agent(
     `Scope-freeze for mh-review (read-only). Base: ${base}. Module: ${module}.
 Run \`git -C <active repo/worktree> diff --name-only ${base}\`. If empty, list source files under specs/${module}/ or the module dir.
 Return the frozen file list (and module name if you can infer it).`,
-    { label: 'scope-freeze', phase: 'Scope', schema: SCOPE_SCHEMA },
+    { label: 'scope-freeze', phase: 'Scope', model: anthropicModel(TP.coordinator.model, 'opus'), effort: TP.coordinator.effort, schema: SCOPE_SCHEMA },
   )
   scope = (s && s.files) || []
   if (s && s.module) module = s.module
@@ -105,10 +146,9 @@ if (!scope.length) return { module, findings: [], ledger: [], note: 'Empty scope
 
 const fileList = scope.map((f) => ` - ${f}`).join('\n')
 
-// --- Step 2: multi-pass per-dimension audit (maximum recall) ---
+// --- Step 2: per-dimension audit — D1 Anthropic Opus multi-pass; D2-D7 glm-5.2 shims ---
 phase('Audit')
-const dimensionResults = await parallel(
-  DIMENSIONS.map((d) => async () => {
+const reviewAnthropic = async (d) => {
     const passes = PASSES[d.key] || ['P1', 'P2', 'P3']
     log(`Starting ${d.key} (${d.name}) with ${passes.length} passes`)
 
@@ -141,7 +181,8 @@ Output per engine/workflows/deep-review/findings-schema.md (minus status/review_
           label: `audit:${d.key}:${p}`,
           phase: 'Audit',
           agentType: 'mh-reviewer',
-          model: d.tier,
+          model: anthropicModel(d.tier, 'opus'),
+          effort: TP.verifier.find.effort,
           schema: REVIEW_SCHEMA,
         },
       )),
@@ -182,8 +223,60 @@ Output per engine/workflows/deep-review/findings-schema.md (minus status/review_
       notes: passResults.filter(Boolean).map((r) => r.notes).filter(Boolean).join('; '),
       missed_patterns: allMissed,
     }
-  }),
+}
+
+// D2-D7: glm-5.2 read-only auditor via the oc_worker shim — one comprehensive call per dimension.
+// The shim is a thin Anthropic wrapper (cheap) that ONLY runs oc_worker + structures the output.
+const reviewGlmShim = (d) => agent(
+  `Cross-model audit SHIM for dimension ${d.key} (${d.name}). You are a THIN WRAPPER — do NOT review the code yourself; delegate to the OpenCode glm-5.2 auditor and structure its output.
+STEPS (run from the HARNESS ROOT — the dir with scripts/oc_worker.py; oc_worker sets OPENCODE_CONFIG + the
+read-only mh-reviewer-oc agent itself, so do NOT pass --agent and do NOT reference harness-root paths inside
+the glm prompt — glm runs in the worktree and cannot see them):
+1. Build an injected context file (glm can't reach harness-root files): read the ${d.key} entry of
+   engine/workflows/deep-review/checklist.md, then run \`python scripts/rule_card.py be "${d.name}"\` and
+   \`python scripts/rule_card.py fe "${d.name}"\`; concatenate all into /tmp/cm-rc-${d.key}.md.
+2. Run (read-only; glm-5.2 — can take a few minutes):
+   python scripts/oc_worker.py --role audit --scope <worktree dir containing the files> --rule-card /tmp/cm-rc-${d.key}.md --out /tmp/cm-${d.key}.md --prompt "Review dimension ${d.key} (${d.name}) on the git diff (try \`git diff HEAD -- <file>\`; if empty, \`git diff origin/main..HEAD -- <file>\`) of EVERY file below. For EACH file output a FINDING line (SEVERITY(BLOCK|HIGH|MED|LOW) | file:line | title | evidence — cite live code; doc-only -> MED) or mark it CLEAN. Then list MISSED_PATTERNS you checked. Files:\n${fileList}"
+3. Parse the JSON blob it prints (fields ok, summary) AND read the --out artifact.
+4. Convert findings into the schema. dimension MUST be "${d.key} ${d.name}". Severities literal;
+   doc-only/uncertain -> MED. Set bug_class where evident. Attest coverage per file (FINDING/CLEAN).
+5. If oc_worker returns ok:false / empty / a planning-only stub / refusal, return BOTH findings:[] AND
+   coverage:[] with a note — the orchestrator detects empty coverage and auto-falls-back to an Anthropic
+   reviewer for this dimension. NEVER fabricate findings or echo the source files.`,
+  { label: `audit:${d.key}:glm`, phase: 'Audit', model: anthropicModel(TP.coordinator.model, 'haiku'), effort: 'low', schema: REVIEW_SCHEMA },
 )
+
+// Orchestrate: D1 (Anthropic Opus multi-pass) in parallel; D2-D7 (glm shims) in batches of 2 so we
+// don't slam the single dollar-capped Go seat. All results merge into one dimensionResults list.
+let dimensionResults = []
+const anthropicDims = DIMENSIONS.filter((d) => d.tier === 'opus')
+const glmDims = DIMENSIONS.filter((d) => d.tier === 'glm')
+const anthropicResults = await parallel(anthropicDims.map((d) => () => reviewAnthropic(d)))
+dimensionResults.push(...anthropicResults.filter(Boolean))
+for (let i = 0; i < glmDims.length; i += 2) {
+  const batch = glmDims.slice(i, i + 2)
+  log(`glm-5.2 audit batch: ${batch.map((d) => d.key).join(', ')}`)
+  const res = await parallel(batch.map((d) => () => reviewGlmShim(d)))
+  for (let j = 0; j < batch.length; j++) {
+    const d = batch[j]
+    let r = res[j]
+    // Auto-fallback (owner 2026-06-26): a glm shim that produced no usable output (null, or no coverage
+    // attested AND no findings = the plan-only-stall signature) is replaced by the trustworthy Anthropic
+    // reviewer for THIS dimension. Never silently lose a dimension's coverage.
+    const usable = r && ((r.coverage && r.coverage.length) || (r.findings && r.findings.length))
+    if (!usable) {
+      log(`glm ${d.key} produced no usable output -> auto-fallback to Anthropic mh-reviewer`)
+      r = await reviewAnthropic(d)
+    }
+    if (r) dimensionResults.push({
+      dimension: `${d.key} ${d.name}`,
+      coverage: r.coverage || [],
+      findings: r.findings || [],
+      notes: r.notes || '',
+      missed_patterns: r.missed_patterns || [],
+    })
+  }
+}
 
 // --- Step 3: self-adversarial pre-filter (reduce false positives before expensive verify) ---
 phase('Self-Adversarial')
@@ -225,7 +318,8 @@ But if evidence is ONLY from docs (not live code), default to DOWNGRADE to MED.`
       {
         label: `self-adv:${f.location}`,
         phase: 'Self-Adversarial',
-        model: 'sonnet',
+        model: anthropicModel(TP.verifier.find.model, 'haiku'),
+        effort: TP.verifier.find.effort,
         schema: SELF_ADV_SCHEMA,
       },
     )),
@@ -263,7 +357,7 @@ Title: ${f.title}
 Location: ${f.location}
 Evidence: ${f.evidence}
 Root cause: ${f.root_cause || '(none given)'}`,
-        { label: `verify:${f.location}`, phase: 'Verify', model: 'sonnet', schema: CRITIC_SCHEMA },
+        { label: `verify:${f.location}`, phase: 'Verify', model: anthropicModel(TP.verifier.find.model, 'haiku'), effort: TP.verifier.find.effort, schema: CRITIC_SCHEMA },
       ).then((v) => ({ k: fkey(f), refuted: !!(v && v.refuted) })),
     ))
     const refute = new Map(verdicts.filter(Boolean).map((v) => [v.k, v.refuted]))
@@ -272,6 +366,46 @@ Root cause: ${f.root_cause || '(none given)'}`,
       else if (f.confidence !== 'HIGH') f.confidence = 'HIGH'
     }
   }
+}
+
+// --- Step 4b: escalate-on-survival — "cheap finds, strong decides" ---
+// Any finding still BLOCK/HIGH and not REJECTED gets EXACTLY ONE final adjudication pass at the
+// strong tier (TP.verifier.adjudicate_block_high — opus/high). Refute → REJECTED; else confirm.
+// Bounded: a single pass over surviving BLOCK/HIGH only. Reuses CRITIC_SCHEMA.
+const escalateTargets = allFindings.filter(
+  (f) => (f.severity === 'BLOCK' || f.severity === 'HIGH') && f.status !== 'REJECTED',
+)
+if (escalateTargets.length) {
+  const adj = TP.verifier.adjudicate_block_high
+  log(`Escalate-on-survival: strong adjudication (${adj.model}/${adj.effort}) of ${escalateTargets.length} surviving BLOCK/HIGH`)
+  const BATCH = 8
+  for (let i = 0; i < escalateTargets.length; i += BATCH) {
+    const batch = escalateTargets.slice(i, i + BATCH)
+    const verdicts = await parallel(batch.map((f) => () =>
+      agent(
+        `You are a SENIOR ADJUDICATOR. This ${f.dimension} finding survived self-adversarial and verify passes and is severity ${f.severity}. Make the FINAL call: CONFIRM or REFUTE it using the live code AND specs/Tài liệu Nội trú.md.
+Read the actual code at the cited location. Confirm only if the evidence holds AND the severity is justified at ${f.severity}. Set refuted=true if the evidence is weak, doc-only, misinterpreted, the code is actually correct, or the severity is overstated. Be rigorous, not reflexive.
+Title: ${f.title}
+Location: ${f.location}
+Evidence: ${f.evidence}
+Root cause: ${f.root_cause || '(none given)'}`,
+        { label: `adjudicate:${f.location}`, phase: 'Verify', model: anthropicModel(adj.model, 'opus'), effort: adj.effort, schema: CRITIC_SCHEMA },
+      ).then((v) => ({ k: fkey(f), refuted: !!(v && v.refuted), reason: (v && v.reason) || '' })),
+    ))
+    const verdictMap = new Map(verdicts.filter(Boolean).map((v) => [v.k, v]))
+    for (const f of batch) {
+      const v = verdictMap.get(fkey(f))
+      if (v && v.refuted) {
+        f.status = 'REJECTED'
+        f.rejection_reason = `Strong adjudication: ${v.reason || 'refuted'}`
+      } else {
+        f.confidence = 'HIGH'
+        f.adjudicated = true
+      }
+    }
+  }
+  const rejected = escalateTargets.filter((f) => f.status === 'REJECTED').length
+  log(`Escalate-on-survival: ${rejected} rejected, ${escalateTargets.length - rejected} confirmed`)
 }
 
 // --- Step 5: dedup ---
@@ -295,7 +429,7 @@ for (let k = 0; k < 2; k++) {
   const fills = await parallel(gaps.slice(0, 16).map((c) => () =>
     agent(
       `Re-review ONLY file "${c.file}" for dimension ${c.dim}. Read the checklist entry first. Attest coverage + report any findings. Same schema/rules. Include exemplar search.`,
-      { label: `fill:${c.dim}:${c.file}`, phase: 'Completeness', agentType: 'mh-reviewer', model: 'sonnet', schema: REVIEW_SCHEMA },
+      { label: `fill:${c.dim}:${c.file}`, phase: 'Completeness', agentType: 'mh-reviewer', model: anthropicModel(TP.verifier.find.model, 'haiku'), effort: 'medium', schema: REVIEW_SCHEMA },
     )))
   for (const r of fills.filter(Boolean)) {
     for (const f of (r.findings || [])) {
@@ -320,5 +454,11 @@ return {
   verdict: (counts.BLOCK || counts.HIGH) ? 'CHƯA ĐÓNG' : 'ĐÓNG',
   findings,
   ledger,
+  lanes: {
+    anthropic_opus_reviewers: anthropicDims.length,
+    glm5_2_reviewers: glmDims.length,
+    filter_passes: 'haiku (self-adv + verify + completeness)',
+    adjudication: `${anthropicModel(TP.verifier.adjudicate_block_high.model, 'opus')}/${TP.verifier.adjudicate_block_high.effort}`,
+  },
   note: 'Caller: write docs/audit/<YYYY-MM-DD>/<base>.round-<N>.md per findings-schema.md and report the summary.',
 }

@@ -1,0 +1,2 @@
+CONTAINER ID   IMAGE            COMMAND                  CREATED      STATUS                   PORTS     NAMES
+b64fc49717fb   redis:7-alpine   "docker-entrypoint.s…"   9 days ago   Exited (0) 3 hours ago             redis-hospital

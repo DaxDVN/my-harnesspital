@@ -1,0 +1,6 @@
+{
+  "serviceInfor": [
+    { "serviceID":"SE0020001", "serviceName":"XQ bàn chân phải thẳng & nghiêng", "group":"DR" },
+    { "serviceID":"SE0020002", "serviceName":"Chụp cộng hưởng từ động mạch cảnh", "group":"MR" }
+  ]
+}

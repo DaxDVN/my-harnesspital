@@ -7,7 +7,7 @@
 //
 // Install (copy or symlink into opencode's plugin dir):
 //   mkdir -p ~/.config/opencode/plugin
-//   ln -sf /home/dax/Documents/arabica/roast/scripts/opencode/myhospital-guard.js ~/.config/opencode/plugin/myhospital-guard.js
+//   ln -sf "$PWD/scripts/opencode/myhospital-guard.js" ~/.config/opencode/plugin/myhospital-guard.js
 //
 // Caveats:
 // - opencode's tool.execute.before does NOT currently intercept tool calls made

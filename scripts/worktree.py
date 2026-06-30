@@ -32,7 +32,30 @@ DEFAULT_INTERNAL_TOKEN_SECRET = os.environ.get(
 DEFAULT_BFF_BRIDGE_URL = os.environ.get("MYHOSPITAL_BFF_BRIDGE_URL", "http://localhost:5000")
 DEFAULT_BFF_BRIDGE_SECRET = os.environ.get("MYHOSPITAL_BFF_BRIDGE_SECRET", "dev-only-dummy")
 
-# === Source DB (main server - private) ===
+# === Source DB (staging server) config loader ===
+# Auto-load ~/.config/myhospital/db-staging.env (XDG, OUTSIDE any git repo,
+# owner-only perms 600). Falls back to env (MYHOSPITAL_SOURCE_DB_* / MYHOSPITAL_MAIN_DB_*)
+# then to localhost defaults. File values DO NOT override already-set env vars
+# (env wins) so owner can temporarily override per-session.
+def _load_staging_env_file() -> None:
+    path = Path(os.path.expanduser("~/.config/myhospital/db-staging.env"))
+    if not path.exists():
+        return
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            k = k.strip()
+            v = v.strip()
+            if k and k not in os.environ:
+                os.environ[k] = v
+    except OSError:
+        pass  # unreadable → fall back silently to defaults
+
+_load_staging_env_file()
+
 # Chỉ cái này mới cần export vì là server thật.
 SOURCE_DB_SERVER = os.environ.get("MYHOSPITAL_SOURCE_DB_SERVER", os.environ.get("MYHOSPITAL_MAIN_DB_SERVER", "localhost"))
 SOURCE_DB_PORT = int(os.environ.get("MYHOSPITAL_SOURCE_DB_PORT", os.environ.get("MYHOSPITAL_MAIN_DB_PORT", "1433")))
@@ -45,6 +68,10 @@ SOURCE_DB_PASSWORD = os.environ.get("MYHOSPITAL_SOURCE_DB_PASSWORD", os.environ.
 # Chỉ set MYHOSPITAL_TARGET_DB_PASSWORD nếu bạn muốn override.
 TARGET_DB_PASSWORD = os.environ.get("MYHOSPITAL_TARGET_DB_PASSWORD", DEFAULT_SQL_PASSWORD)
 WORKTREE_META_FILE = ".myhospital-worktree.json"
+# Tie-breaker marker for PM-orchestrator: when 2+ worktrees are active, the one
+# holding this file is "current". Lives at `worktrees/<slug>/.wt-current` and is
+# already covered by the root `/worktrees/` gitignore, so no .gitignore edit.
+WT_CURRENT_FILE = ".wt-current"
 
 
 @dataclass(frozen=True)
@@ -582,6 +609,75 @@ def collect_worktree_info(task_root: Path) -> dict[str, object]:
         "sql_port": sql_port,
         "status": status,
     }
+
+
+def current_marker_path(task_root: Path) -> Path:
+    return task_root / WT_CURRENT_FILE
+
+
+def read_current_marker(task_root: Path) -> str | None:
+    marker = current_marker_path(task_root)
+    if not marker.exists():
+        return None
+    try:
+        return marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+
+
+def find_current_slug(worktrees_root: Path) -> str | None:
+    """Return the slug whose task root holds the `.wt-current` marker.
+
+    If multiple worktrees carry the marker (manual tampering), the
+    lexicographically-first slug wins so `list` stays deterministic.
+    """
+    if not worktrees_root.exists():
+        return None
+    marked: list[str] = []
+    for child in sorted(worktrees_root.iterdir(), key=lambda p: p.name):
+        if not child.is_dir() or child.name == "_db-backups":
+            continue
+        if current_marker_path(child).exists():
+            marked.append(child.name)
+    return marked[0] if marked else None
+
+
+def write_current_marker(task_root: Path, *, dry_run: bool = False) -> None:
+    marker = current_marker_path(task_root)
+    stamp = datetime.now(timezone.utc).isoformat()
+    print(f"> write current marker {marker}")
+    if dry_run:
+        return
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(stamp + "\n", encoding="utf-8")
+
+
+def clear_current_markers(
+    root: Path, *, except_slug: str | None = None, dry_run: bool = False
+) -> None:
+    worktrees_root = root / "worktrees"
+    if not worktrees_root.exists():
+        return
+    for child in sorted(worktrees_root.iterdir(), key=lambda p: p.name):
+        if not child.is_dir() or child.name == "_db-backups":
+            continue
+        if except_slug is not None and child.name == except_slug:
+            continue
+        marker = current_marker_path(child)
+        if marker.exists():
+            print(f"> remove stale current marker {marker}")
+            if not dry_run:
+                marker.unlink()
+
+
+def set_current_marker(root: Path, slug: str, *, dry_run: bool = False) -> None:
+    """Mark `worktrees/<slug>` as the current worktree; clear the marker elsewhere."""
+    worktrees_root = root / "worktrees"
+    task_root = worktrees_root / slug
+    if not dry_run and not task_root.exists():
+        raise ToolError(f"Task worktree folder not found: {task_root}")
+    clear_current_markers(root, except_slug=slug, dry_run=dry_run)
+    write_current_marker(task_root, dry_run=dry_run)
 
 
 def set_env_line(lines: list[str], name: str, value: object) -> list[str]:
@@ -1399,6 +1495,7 @@ def create_worktree(args: argparse.Namespace) -> None:
                 target_database="MyHospital",
                 sql_user=SOURCE_DB_USER,
                 sql_password=SOURCE_DB_PASSWORD or TARGET_DB_PASSWORD,
+                target_sql_password=TARGET_DB_PASSWORD,
                 python="python",
                 backup_dir=None,
                 yes=True,
@@ -1419,10 +1516,12 @@ def create_worktree(args: argparse.Namespace) -> None:
                 target_database="MyHospital",
                 sql_user=SOURCE_DB_USER,
                 sql_password=SOURCE_DB_PASSWORD or TARGET_DB_PASSWORD,
+                target_sql_password=TARGET_DB_PASSWORD,
                 python="python",
                 backup_dir=None,
                 yes=True,
                 dry_run=args.dry_run,
+                merge=getattr(args, "merge", False),
                 scan_worktrees=args.scan_worktrees,
             )
             sync_db(sync_args)
@@ -1451,6 +1550,13 @@ def create_worktree(args: argparse.Namespace) -> None:
     else:
         print()
         print("Skipping CodeGraph index because --skip-codegraph was passed.")
+
+    # Auto-mark the freshly created worktree as current so PM-orchestrator and
+    # `list` tie-break to it when multiple worktrees are active. Clears any
+    # prior `.wt-current` on other worktrees.
+    print()
+    print("Marking new worktree as current (clears `.wt-current` on others)...")
+    set_current_marker(root, slug, dry_run=args.dry_run)
 
     print()
     print(f"Worktree ready: {task_root}")
@@ -1507,10 +1613,16 @@ def sync_db(args: argparse.Namespace) -> None:
     if not args.dry_run:
         backup_dir.mkdir(parents=True, exist_ok=True)
 
+    merge_mode = getattr(args, "merge", False)
     confirm_or_exit(
         (
-            f"This will replace DB objects and data in slot {args.slot} "
-            f"({cfg.container_name}, localhost,{cfg.sql_port}/{args.target_database}).\n"
+            f"{'MERGE' if merge_mode else 'CLEAR-ALL'} mode.\n"
+            + (
+                f"MERGE preserves existing slot data (mock rows kept); row-level UPSERT.\n"
+                if merge_mode
+                else f"Clear-all+INSERT will WIPE all DB objects and data in slot {args.slot}.\n"
+            )
+            + f"Target: slot {args.slot} ({cfg.container_name}, localhost,{cfg.sql_port}/{args.target_database}).\n"
             f"Source data: {args.source_server},{args.source_port}/{args.source_database}"
         ),
         args.yes or args.dry_run,
@@ -1520,14 +1632,14 @@ def sync_db(args: argparse.Namespace) -> None:
         argparse.Namespace(
             slots=[args.slot],
             image="mcr.microsoft.com/mssql/server:2022-latest",
-            sa_password=args.sql_password,
+            sa_password=args.target_sql_password,
             pull=False,
             dry_run=args.dry_run,
         )
     )
 
     if not args.dry_run:
-        wait_sql_container(cfg.container_name, args.sql_password)
+        wait_sql_container(cfg.container_name, args.target_sql_password)
 
     create_db_sql = f"IF DB_ID(N'{args.target_database}') IS NULL CREATE DATABASE [{args.target_database}];"
     run(
@@ -1541,7 +1653,7 @@ def sync_db(args: argparse.Namespace) -> None:
             "-U",
             args.sql_user,
             "-P",
-            args.sql_password,
+            args.target_sql_password,
             "-C",
             "-b",
             "-Q",
@@ -1567,24 +1679,29 @@ def sync_db(args: argparse.Namespace) -> None:
     ):
         run([db_python, "Scripts/export_db_data.py"], cwd=be_path, dry_run=args.dry_run)
 
-    print()
-    print(f"Clearing target DB objects in slot {args.slot}")
-    with temp_env(
-        {
-            "DB_SERVER": "localhost",
-            "DB_PORT": cfg.sql_port,
-            "DB_NAME": args.target_database,
-            "DB_USER": args.sql_user,
-            "DB_PASSWORD": args.sql_password,
-        }
-    ):
-        run([db_python, "Scripts/drop_db_objects.py"], cwd=be_path, dry_run=args.dry_run)
+    if getattr(args, "merge", False):
+        print()
+        print(f"MERGE mode: preserving existing slot {args.slot} data (mock rows kept)")
+        print("  Skipping drop_db_objects — slot schema + data left intact.")
+    else:
+        print()
+        print(f"Clearing target DB objects in slot {args.slot}")
+        with temp_env(
+            {
+                "DB_SERVER": "localhost",
+                "DB_PORT": cfg.sql_port,
+                "DB_NAME": args.target_database,
+                "DB_USER": args.sql_user,
+                "DB_PASSWORD": args.target_sql_password,
+            }
+        ):
+            run([db_python, "Scripts/drop_db_objects.py"], cwd=be_path, dry_run=args.dry_run)
 
     target_connection = sql_connection_string(
         cfg.sql_port,
         database=args.target_database,
         user=args.sql_user,
-        password=args.sql_password,
+        password=args.target_sql_password,
     )
 
     print()
@@ -1633,7 +1750,7 @@ def sync_db(args: argparse.Namespace) -> None:
                 "-U",
                 args.sql_user,
                 "-P",
-                args.sql_password,
+                args.target_sql_password,
                 "-C",
                 "-b",
                 "-d",
@@ -1652,80 +1769,106 @@ def sync_db(args: argparse.Namespace) -> None:
                 f"EF migrations did not create any user tables in localhost,{cfg.sql_port}/{args.target_database}."
             )
 
-    if not args.dry_run and backup_file.exists():
-        tables = backup_data_tables(backup_file)
-    else:
-        tables = []
-
-    if tables:
-        clear_file = backup_dir / f"pre-import-clear-slot{args.slot}-{timestamp}.sql"
-        clear_lines = [
-            "SET QUOTED_IDENTIFIER ON;",
-            "SET ANSI_NULLS ON;",
-            "SET ANSI_WARNINGS ON;",
-            "SET ANSI_PADDING ON;",
-            "SET ARITHABORT ON;",
-            "SET CONCAT_NULL_YIELDS_NULL ON;",
-            "SET NUMERIC_ROUNDABORT OFF;",
-            "SET NOCOUNT ON;",
-            "SET XACT_ABORT ON;",
-            "PRINT 'Disabling foreign key constraints before pre-import cleanup';",
-            "DECLARE @fkSql NVARCHAR(MAX) = N'';",
-            "SELECT @fkSql = @fkSql + N'ALTER TABLE '",
-            "    + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id)) + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id))",
-            "    + N' NOCHECK CONSTRAINT ' + QUOTENAME(name) + N';' + CHAR(10)",
-            "FROM sys.foreign_keys;",
-            "EXEC sp_executesql @fkSql;",
-            "",
-            "PRINT 'Clearing migration-seeded rows from tables present in source backup';",
-        ]
-        seen: set[tuple[str, str]] = set()
-        for schema, table, _rows in reversed(tables):
-            key = (schema, table)
-            if key in seen:
-                continue
-            seen.add(key)
-            clear_lines.append(f"IF OBJECT_ID(N'{schema}.{table}', N'U') IS NOT NULL DELETE FROM [{schema}].[{table}];")
-        write_lines(clear_file, clear_lines, dry_run=args.dry_run)
-        container_clear_file = f"/tmp/pre-import-clear-slot{args.slot}-{timestamp}.sql"
+    if getattr(args, "merge", False):
+        # MERGE mode: use db_merge.py to UPSERT backup into slot, preserve mock rows.
+        # No pre-import-clear (would delete mock rows). db_merge.py disables FKs
+        # internally, runs MERGE WITH (HOLDLOCK) (no WHEN NOT MATCHED BY SOURCE
+        # DELETE), re-enables FKs. Mock rows in slot but not in backup are KEPT.
         print()
-        print("Clearing migration-seeded rows before source data import")
-        run(["docker", "cp", str(clear_file), f"{cfg.container_name}:{container_clear_file}"], dry_run=args.dry_run)
-        run(
-            [
-                "docker",
-                "exec",
-                cfg.container_name,
-                "/opt/mssql-tools18/bin/sqlcmd",
-                "-S",
-                "localhost",
-                "-U",
-                args.sql_user,
-                "-P",
-                args.sql_password,
-                "-C",
-                "-b",
-                "-d",
-                args.target_database,
-                "-i",
-                container_clear_file,
-            ],
-            dry_run=args.dry_run,
-        )
-        run(["docker", "exec", "-u", "0", cfg.container_name, "rm", "-f", container_clear_file], dry_run=args.dry_run, check=False)
+        print("Merging source data into target DB (mock rows preserved)")
+        db_merge_script = root / "scripts" / "db_merge.py"
+        if not db_merge_script.exists():
+            raise ToolError(
+                f"MERGE mode requires scripts/db_merge.py but it is missing at {db_merge_script}"
+            )
+        with temp_env(
+            {
+                "DB_SERVER": "localhost",
+                "DB_PORT": str(cfg.sql_port),
+                "DB_NAME": args.target_database,
+                "DB_USER": args.sql_user,
+                "DB_PASSWORD": args.target_sql_password,
+            }
+        ):
+            merge_argv = [db_python, str(db_merge_script), str(backup_file)]
+            if args.dry_run:
+                merge_argv.append("--dry-run")
+            run(merge_argv, dry_run=args.dry_run)
+    else:
+        if not args.dry_run and backup_file.exists():
+            tables = backup_data_tables(backup_file)
+        else:
+            tables = []
 
-    print()
-    print("Restoring source data into target DB")
-    with temp_env(
-        {
-            "DB_SERVER": "localhost",
-            "DB_PORT": cfg.sql_port,
-            "DB_NAME": args.target_database,
-            "DB_USER": args.sql_user,
-            "DB_PASSWORD": args.sql_password,
-        }
-    ):
-        run([db_python, "Scripts/import_db_data.py", str(backup_file)], cwd=be_path, dry_run=args.dry_run)
+        if tables:
+            clear_file = backup_dir / f"pre-import-clear-slot{args.slot}-{timestamp}.sql"
+            clear_lines = [
+                "SET QUOTED_IDENTIFIER ON;",
+                "SET ANSI_NULLS ON;",
+                "SET ANSI_WARNINGS ON;",
+                "SET ANSI_PADDING ON;",
+                "SET ARITHABORT ON;",
+                "SET CONCAT_NULL_YIELDS_NULL ON;",
+                "SET NUMERIC_ROUNDABORT OFF;",
+                "SET NOCOUNT ON;",
+                "SET XACT_ABORT ON;",
+                "PRINT 'Disabling foreign key constraints before pre-import cleanup';",
+                "DECLARE @fkSql NVARCHAR(MAX) = N'';",
+                "SELECT @fkSql = @fkSql + N'ALTER TABLE '",
+                "    + QUOTENAME(OBJECT_SCHEMA_NAME(parent_object_id)) + N'.' + QUOTENAME(OBJECT_NAME(parent_object_id))",
+                "    + N' NOCHECK CONSTRAINT ' + QUOTENAME(name) + N';' + CHAR(10)",
+                "FROM sys.foreign_keys;",
+                "EXEC sp_executesql @fkSql;",
+                "",
+                "PRINT 'Clearing migration-seeded rows from tables present in source backup';",
+            ]
+            seen: set[tuple[str, str]] = set()
+            for schema, table, _rows in reversed(tables):
+                key = (schema, table)
+                if key in seen:
+                    continue
+                seen.add(key)
+                clear_lines.append(f"IF OBJECT_ID(N'{schema}.{table}', N'U') IS NOT NULL DELETE FROM [{schema}].[{table}];")
+            write_lines(clear_file, clear_lines, dry_run=args.dry_run)
+            container_clear_file = f"/tmp/pre-import-clear-slot{args.slot}-{timestamp}.sql"
+            print()
+            print("Clearing migration-seeded rows before source data import")
+            run(["docker", "cp", str(clear_file), f"{cfg.container_name}:{container_clear_file}"], dry_run=args.dry_run)
+            run(
+                [
+                    "docker",
+                    "exec",
+                    cfg.container_name,
+                    "/opt/mssql-tools18/bin/sqlcmd",
+                    "-S",
+                    "localhost",
+                    "-U",
+                    args.sql_user,
+                    "-P",
+                    args.target_sql_password,
+                    "-C",
+                    "-b",
+                    "-d",
+                    args.target_database,
+                    "-i",
+                    container_clear_file,
+                ],
+                dry_run=args.dry_run,
+            )
+            run(["docker", "exec", "-u", "0", cfg.container_name, "rm", "-f", container_clear_file], dry_run=args.dry_run, check=False)
+
+        print()
+        print("Restoring source data into target DB")
+        with temp_env(
+            {
+                "DB_SERVER": "localhost",
+                "DB_PORT": cfg.sql_port,
+                "DB_NAME": args.target_database,
+                "DB_USER": args.sql_user,
+                "DB_PASSWORD": args.target_sql_password,
+            }
+        ):
+            run([db_python, "Scripts/import_db_data.py", str(backup_file)], cwd=be_path, dry_run=args.dry_run)
 
     print()
     if args.dry_run:
@@ -1837,6 +1980,12 @@ def cleanup(args: argparse.Namespace) -> None:
         if not args.dry_run:
             metadata_file.unlink()
 
+    current_marker = current_marker_path(task_root)
+    if current_marker.exists():
+        print(f"> remove current marker {current_marker}")
+        if not args.dry_run:
+            current_marker.unlink()
+
     if task_root.exists() and not any(task_root.iterdir()):
         print(f"> remove empty {task_root}")
         if not args.dry_run:
@@ -1856,18 +2005,33 @@ def list_worktrees(args: argparse.Namespace) -> None:
     if not children:
         print("No active worktrees.")
         return
+    current_slug = find_current_slug(worktrees_root)
+    multi_no_current = len(children) >= 2 and current_slug is None
+    warn_line = (
+        "WARN: Multiple active worktrees, none marked current. "
+        "Run `python scripts/worktree.py set-current <slug>` to disambiguate."
+    )
     if args.plain:
         for child in children:
             print(child.name)
+        if multi_no_current:
+            print(warn_line, file=sys.stderr)
         return
     rows = [collect_worktree_info(child) for child in children]
-    print(f"{'slug':<22} {'slot':<4} {'FE':<22} {'BE':<22} {'SQL':<24} status")
-    for row in rows:
+    display_slugs = [
+        f"{row['slug']} (current)" if row["slug"] == current_slug else str(row["slug"])
+        for row in rows
+    ]
+    slug_col = max(22, max((len(s) for s in display_slugs), default=0))
+    print(f"{'slug':<{slug_col}} {'slot':<4} {'FE':<22} {'BE':<22} {'SQL':<24} status")
+    for row, display in zip(rows, display_slugs):
         slot = row["slot"] if row["slot"] is not None else "?"
         fe = f"http://localhost:{row['fe_port']}" if row["fe_port"] else "?"
         be = f"http://localhost:{row['be_port']}" if row["be_port"] else "?"
         sql = f"localhost,{row['sql_port']}/MyHospital" if row["sql_port"] else "?"
-        print(f"{row['slug']:<22} {slot!s:<4} {fe:<22} {be:<22} {sql:<24} {row['status']}")
+        print(f"{display:<{slug_col}} {slot!s:<4} {fe:<22} {be:<22} {sql:<24} {row['status']}")
+    if multi_no_current:
+        print(warn_line, file=sys.stderr)
 
 
 def info_worktree(args: argparse.Namespace) -> None:
@@ -1877,7 +2041,9 @@ def info_worktree(args: argparse.Namespace) -> None:
     if not task_root.exists():
         raise ToolError(f"Task worktree folder not found: {task_root}")
     row = collect_worktree_info(task_root)
+    current_slug = find_current_slug(root / "worktrees")
     print(f"slug={row['slug']}")
+    print(f"current={'true' if row['slug'] == current_slug else 'false'}")
     print(f"slot={row['slot'] if row['slot'] is not None else '?'}")
     print(f"fe_url={'http://localhost:' + str(row['fe_port']) if row['fe_port'] else '?'}")
     print(f"be_url={'http://localhost:' + str(row['be_port']) if row['be_port'] else '?'}")
@@ -1885,6 +2051,13 @@ def info_worktree(args: argparse.Namespace) -> None:
     print(f"fe_path={relative_to_root(task_root / 'fe')}")
     print(f"be_path={relative_to_root(task_root / 'be')}")
     print(f"status={row['status']}")
+
+
+def set_current_worktree(args: argparse.Namespace) -> None:
+    root = workspace_root()
+    slug = safe_slug(args.slug)
+    set_current_marker(root, slug, dry_run=args.dry_run)
+    print(f"Current worktree set to {slug!r}.")
 
 
 def sync_main(args: argparse.Namespace) -> None:
@@ -1952,6 +2125,69 @@ def sync_main(args: argparse.Namespace) -> None:
     print()
     print("Done. Main repos are up to date with local config preserved.")
 
+    # Optional: re-sync active worktree slot DBs from staging server.
+    # --sync-db = MERGE mode (preserve mock rows). --sync-db-clear = wipe + reload.
+    want_merge = bool(getattr(args, "sync_db", False))
+    want_clear = bool(getattr(args, "sync_db_clear", False))
+    if not (want_merge or want_clear):
+        return
+    merge_mode = want_merge  # merge wins if both flags somehow set
+    print()
+    print("=" * 40)
+    print(f"  DB re-sync ({'MERGE' if merge_mode else 'CLEAR-ALL'} mode)")
+    print("=" * 40)
+    # Discover active worktrees + their slots.
+    worktrees_root = root / "worktrees"
+    if not worktrees_root.exists():
+        print("No worktrees/ directory — skipping DB re-sync.")
+        return
+    active = []
+    for task_root in sorted(worktrees_root.iterdir()):
+        if not task_root.is_dir():
+            continue
+        # Active worktree = has be/.git or fe/.git (linked git worktree checkouts).
+        # task_root itself has no .git (it's just a container folder).
+        is_real_worktree = (task_root / "be" / ".git").exists() or (task_root / "fe" / ".git").exists()
+        if not is_real_worktree and not is_git_worktree_dir(task_root):
+            continue
+        try:
+            info = collect_worktree_info(task_root)
+        except Exception:
+            continue
+        slot = info.get("slot")
+        be_path = task_root / "be"
+        if slot and be_path.exists():
+            active.append((task_root.name, int(slot), be_path))
+    if not active:
+        print("No active worktrees with a slot + BE path — skipping DB re-sync.")
+        return
+    for slug, slot, be_path in active:
+        print()
+        print(f"--> slot {slot} ({slug})")
+        sync_args = argparse.Namespace(
+            slot=slot,
+            be_path=str(be_path),
+            migration_be_path=None,
+            source_server=SOURCE_DB_SERVER,
+            source_port=SOURCE_DB_PORT,
+            source_database=SOURCE_DB_NAME,
+            target_database="MyHospital",
+            sql_user=SOURCE_DB_USER,
+            sql_password=SOURCE_DB_PASSWORD or TARGET_DB_PASSWORD,
+            target_sql_password=TARGET_DB_PASSWORD,
+            python="python",
+            backup_dir=None,
+            yes=args.yes,
+            dry_run=args.dry_run,
+            merge=merge_mode,
+            scan_worktrees=False,
+        )
+        try:
+            sync_db(sync_args)
+        except (subprocess.CalledProcessError, ToolError, OSError) as exc:
+            print(f"  slot {slot} sync failed: {exc}", file=sys.stderr)
+            print("  Continuing to next worktree.")
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MyHospital Linux worktree tooling.")
@@ -1964,6 +2200,14 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("info", help="Print slot, ports, URLs, and paths for one worktree slug.")
     p.add_argument("--slug", required=True)
     p.set_defaults(func=info_worktree)
+
+    p = sub.add_parser(
+        "set-current",
+        help="Mark a task worktree as current (PM-orchestrator tie-breaker). Clears `.wt-current` on all other worktrees.",
+    )
+    p.add_argument("--slug", required=True)
+    p.add_argument("--dry-run", action="store_true")
+    p.set_defaults(func=set_current_worktree)
 
     p = sub.add_parser("init-db-slots", help="Create/start SQL Server containers for worktree slots.")
     p.add_argument("--slots", type=int, nargs="+", default=[1, 2, 3], choices=[1, 2, 3, 4])
@@ -1997,6 +2241,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--skip-db-sync", action="store_true", help="Skip DB data/migration setup; still ensures the slot SQL container exists.")
     p.add_argument("--skip-db-init", action="store_true", help="With --skip-db-sync, also skip Docker/SQL slot init (true light worktree, no DB infra touched).")
+    p.add_argument("--merge", action="store_true", help="DB sync MERGE mode: row-level UPSERT preserving mock rows. Default: clear-all+INSERT (wipes slot). Applies only when --db-setup=sync-db and --skip-db-sync is not set.")
     p.add_argument("--skip-fe-install", action="store_true")
     p.add_argument("--skip-codegraph", action="store_true", help="Skip building the CodeGraph index for the new worktree (be+fe).")
     p.add_argument("--allow-port-in-use", action="store_true")
@@ -2011,7 +2256,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=repair_worktree_config)
 
-    p = sub.add_parser("sync-db", help="Reset a slot DB from the main DB data and BE migrations.")
+    p = sub.add_parser("sync-db", help="Sync a slot DB from the staging DB data and BE migrations. Default: clear-all+INSERT (wipes mock data). Use --merge to preserve mock rows (row-level MERGE).")
     p.add_argument("--slot", type=int, required=True, choices=[1, 2, 3, 4])
     p.add_argument("--be-path", required=True)
     p.add_argument("--migration-be-path")
@@ -2019,11 +2264,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--source-port", type=int, default=SOURCE_DB_PORT)
     p.add_argument("--source-database", default=SOURCE_DB_NAME)
     p.add_argument("--target-database", default="MyHospital")
-    p.add_argument("--sql-user", default=SOURCE_DB_USER)
-    p.add_argument("--sql-password", default=SOURCE_DB_PASSWORD or TARGET_DB_PASSWORD)
+    p.add_argument("--sql-user", default=SOURCE_DB_USER, help="SQL user for BOTH source and target (typically 'sa' for both).")
+    p.add_argument("--sql-password", default=SOURCE_DB_PASSWORD or TARGET_DB_PASSWORD, help="SQL password for SOURCE DB (staging server). Defaults to SOURCE_DB_PASSWORD env.")
+    p.add_argument("--target-sql-password", default=TARGET_DB_PASSWORD, help="SQL password for TARGET slot DB (local container). Defaults to TARGET_DB_PASSWORD env (local default).")
     p.add_argument("--python", default="python")
     p.add_argument("--backup-dir")
     p.add_argument("--yes", action="store_true")
+    p.add_argument("--merge", action="store_true", help="MERGE mode: row-level UPSERT, preserves mock rows in slot. Default: clear-all+INSERT (wipes slot).")
     p.add_argument("--scan-worktrees", action="store_true", help="Allow scanning existing worktrees for migration sources.")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=sync_db)
@@ -2043,8 +2290,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=cleanup)
 
-    p = sub.add_parser("sync-main", help="Pull main FE/BE branches and re-apply pre-config stash.")
+    p = sub.add_parser("sync-main", help="Pull main FE/BE branches, re-apply pre-config stash, and optionally re-sync slot DBs from staging.")
     p.add_argument("--checkout", action="store_true", help="Switch a repo to its target branch first if it is on another branch (otherwise that repo is skipped).")
+    p.add_argument("--sync-db", action="store_true", help="After pulling, also re-sync each active worktree's slot DB from staging (MERGE mode — preserves mock rows). Skips slots with no active worktree.")
+    p.add_argument("--sync-db-clear", action="store_true", help="Like --sync-db but CLEAR-ALL mode (wipes mock data). Use only when you want a clean baseline.")
     p.add_argument("--yes", action="store_true")
     p.add_argument("--dry-run", action="store_true")
     p.set_defaults(func=sync_main)

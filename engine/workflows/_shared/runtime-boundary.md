@@ -19,8 +19,8 @@ is responsible for:
 - writing short routing receipts instead of long prompt payloads.
 
 External executors and autonomous workflow loops are owner-gated. A router candidate, keyword match, or
-skill trigger is not enough to start a long-running workflow when the manifest has `auto_route_allowed=false`
-or lifecycle below `PROVEN`. In those cases the agent should prepare the scope, required inputs, command, and
+skill trigger is not enough to start a long-running workflow when the manifest has `auto_route_allowed=false`.
+In those cases the agent should prepare the scope, required inputs, command, and
 validation expectations, then wait for explicit owner approval to run.
 
 ## 2. Envelope Contract

@@ -13,6 +13,12 @@ set shell := ["bash", "-lc"]
 default:
     @just --list
 
+# --- Bootstrap (fresh machine) --------------------------------------------
+
+# Stand up the harness on a fresh clone (idempotent). `just bootstrap --check` = prereqs + doctor only, no mutation.
+bootstrap *ARGS:
+    python scripts/bootstrap.py {{ARGS}}
+
 # --- Health / status ------------------------------------------------------
 
 # Full harness self-check (read-only).
@@ -35,6 +41,14 @@ status:
 # Snapshot harness files (no secrets/DB/build output).
 harness-backup:
     python scripts/harness_backup.py
+
+# Prune gitignored artifacts older than N days (default 30). Preview with --dry-run. Usage: just prune-artifacts 7
+prune-artifacts days="30" *ARGS:
+    @echo "Pruning artifacts older than {{days}} days (preview with --dry-run):"
+    find _db-backups -type f -mtime +{{days}} -name '*.sql' -delete {{ARGS}}
+    find docs/testing/screenshots -type f -mtime +{{days}} -name '*.png' -delete {{ARGS}}
+    find graphify-out -type f -mtime +{{days}} -delete {{ARGS}}
+    @echo "Done. For full cleanup: rm -rf graphify-out/ && codegraph init (rebuild fresh)"
 
 # Scan ACTIVE harness files for stray Windows/macOS artifacts (concrete drive paths / cmdlets / invocations — not the word "powershell" in deprecation prose; excludes the legacy archive and self-referential pattern files).
 agent-audit:
@@ -64,9 +78,21 @@ wt-create-preview slug slot:
 wt-sync-main *ARGS:
     python scripts/worktree.py sync-main {{ARGS}}
 
-# Reset a slot DB from main DB data. Usage: just wt-sync-db bed 1  (add --dry-run to preview)
+# Reset a slot DB from staging DB data (CLEAR-ALL — wipes mock data). Usage: just wt-sync-db bed 1  (add --dry-run to preview)
 wt-sync-db slug slot *ARGS:
     python scripts/worktree.py sync-db --slot {{slot}} --be-path worktrees/{{slug}}/be {{ARGS}}
+
+# MERGE sync: UPSERT staging baseline into slot, PRESERVES mock rows. Usage: just wt-sync-db-merge bed 1
+wt-sync-db-merge slug slot *ARGS:
+    python scripts/worktree.py sync-db --slot {{slot}} --be-path worktrees/{{slug}}/be --merge {{ARGS}}
+
+# Pull main FE/BE + re-sync all active worktree slot DBs (MERGE — preserves mock). Add --dry-run to preview.
+wt-sync-main-db *ARGS:
+    python scripts/worktree.py sync-main --sync-db {{ARGS}}
+
+# Pull main FE/BE + re-sync all active worktree slot DBs (CLEAR-ALL — wipes mock). Add --dry-run to preview.
+wt-sync-main-db-clear *ARGS:
+    python scripts/worktree.py sync-main --sync-db-clear {{ARGS}}
 
 # Run a worktree backend with its .env loaded safely. Usage: just wt-run-be bed --no-build
 wt-run-be slug *ARGS:
@@ -117,6 +143,82 @@ codegraph-sync-worktree slug:
 # Wire CodeGraph MCP server into installed agents (re-runnable). Preview a target with --print-config.
 codegraph-install:
     codegraph install --target=auto --location=global --yes
+
+# --- Harness helpers (toil reduction scripts) -----------------------------
+
+# Session start ritual: worktree list + rule_card fe/be + learning_recall. Usage: just session-start "fix IPD admission bug"
+session-start task:
+    python scripts/harness_session_start.py "{{task}}"
+
+# Build context-manifest for PM-orchestrator worker dispatch. Usage: just ctx-build "fix bug" bugfix rca
+ctx-build task workflow phase:
+    python scripts/context_manifest_build.py "{{task}}" --workflow {{workflow}} --phase {{phase}}
+
+# Regen FE DTO/client after BE contract change. Usage: just fe-regen ipd-improve-v5
+fe-regen slug:
+    python scripts/fe_regen_from_be.py --be-path worktrees/{{slug}}/be --fe-path worktrees/{{slug}}/fe
+
+# Browser login to a slot FE. Usage: just browser-login 4
+browser-login slot:
+    python scripts/browser_login_slot.py {{slot}}
+
+# Apply CONVENTIONS.fixed.md → demote CONVENTIONS.md to pointer. Preview with --dry-run.
+conventions-apply *ARGS:
+    python scripts/conventions_sync.py apply {{ARGS}}
+
+# Doctor with explain mode (WARN/FAIL cause + fix). Usage: just doctor-explain
+doctor-explain:
+    python scripts/harness_doctor.py explain
+
+# Scaffold a new spec module (14 files). Usage: just spec-new ipd-admission --description "IPD admission module"
+spec-new module *ARGS:
+    python scripts/specs_new_module.py {{module}} {{ARGS}}
+
+# Finish a module (archive + state DONE + promotion check). Usage: just module-finish ipd-admission
+module-finish module *ARGS:
+    python scripts/module_finish.py {{module}} {{ARGS}}
+
+# Add a provisional decision log entry. Usage: just dl-prov ipd-admission "decision text" --basis "src"
+dl-prov module text *ARGS:
+    python scripts/decision_log_add.py {{module}} --provisional "{{text}}" {{ARGS}}
+
+# Refresh CodeGraph index if stale. Usage: just codegraph-refresh be
+codegraph-refresh repo *ARGS:
+    python scripts/codegraph_refresh.py --repo {{repo}} {{ARGS}}
+
+# Pre-edit risk classify + suggest gates. Usage: just pre-edit myhospital-be/ServiceInterface/MyServices/BedService.cs
+pre-edit file:
+    python scripts/harness_pre_edit.py {{file}}
+
+# --- Agentic coding tool adapter (3 backends + fallback) -----------------
+# Dispatch a code task to one of 3 agentic tools: opencode (paid, $12/5h cap),
+# grok (Claude Code-style, --effort ladder), agy (Antigravity, Gemini/Claude/GPT-OSS).
+# Fallback chain fires when primary backend quota-exhausts/times-out/auth-fails.
+# Review roles (audit/final_review) force glm-5.2/Opus — no fallback per owner.
+
+# Dispatch a role to its primary backend. Usage: just agent-exec agentic_primary worktrees/ipd-improve-v5/be "fix the bug"
+agent-exec role scope prompt *ARGS:
+    python scripts/agent_exec.py --role {{role}} --scope {{scope}} --prompt "{{prompt}}" {{ARGS}}
+
+# Dispatch via a specific backend (override role.backend). Usage: just agent-exec-with grok agentic_primary worktrees/ipd-improve-v5/be "fix the bug"
+agent-exec-with backend role scope prompt *ARGS:
+    python scripts/agent_exec.py --role {{role}} --scope {{scope}} --prompt "{{prompt}}" --backend {{backend}} {{ARGS}}
+
+# Dispatch with rule-card injection (convention contract). Usage: just agent-exec-rc agentic_primary worktrees/x/be "fix" engine/rules/backend/quick.md
+agent-exec-rc role scope prompt rulecard *ARGS:
+    python scripts/agent_exec.py --role {{role}} --scope {{scope}} --prompt "{{prompt}}" --rule-card {{rulecard}} {{ARGS}}
+
+# Dry-run: preview the resolved command + fallback chain. Usage: just agent-exec-dry agentic_primary worktrees/x/be "fix"
+agent-exec-dry role scope prompt *ARGS:
+    python scripts/agent_exec.py --role {{role}} --scope {{scope}} --prompt "{{prompt}}" --dry-run {{ARGS}}
+
+# List available backends + their current status. Usage: just agent-backends
+agent-backends:
+    @echo "Agentic backends (scripts/agent_exec.py):"
+    @which opencode 2>/dev/null && opencode --version 2>/dev/null | head -1 || echo "  opencode: NOT FOUND"
+    @which grok 2>/dev/null && grok --version 2>/dev/null | head -1 || echo "  grok: NOT FOUND"
+    @which agy 2>/dev/null && agy --version 2>/dev/null | head -1 || echo "  agy: NOT FOUND"
+
 
 # --- graphify -------------------------------------------------------------
 

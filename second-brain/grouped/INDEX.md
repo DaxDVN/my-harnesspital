@@ -1,7 +1,8 @@
 # grouped source coverage
 
 All 67 archived raw notes are assigned to generalized rule gates below. Raw notes live in `../_archive/` as
-evidence and should only be opened for provenance or exact detail.
+evidence and should only be opened for provenance or exact detail. (Verified 2026-06-29: 67/67 real notes
+covered, 0 dangling refs.)
 
 ## 01-freshness-before-diagnosis.md
 
@@ -62,11 +63,11 @@ evidence and should only be opened for provenance or exact detail.
 - [`2026-06-21-a-convention-skip-needs-current-empirical-evidence-survey-nt.md`](../_archive/2026-06-21-a-convention-skip-needs-current-empirical-evidence-survey-nt.md)
 - [`2026-06-21-do-not-claim-verified-without-running-the-real-gate-the-live.md`](../_archive/2026-06-21-do-not-claim-verified-without-running-the-real-gate-the-live.md)
 - [`2026-06-21-self-test-the-fix-new-edge-cases-not-just-the-original-bug.md`](../_archive/2026-06-21-self-test-the-fix-new-edge-cases-not-just-the-original-bug.md)
+- [`2026-06-22-no-audit-claim-without-manual-crosscheck.md`](../_archive/2026-06-22-no-audit-claim-without-manual-crosscheck.md)
 
 ## 05-automation-orchestration-triage.md
 
 - [`2026-06-17-agent-browser-sheet-portal-snapshots.md`](../_archive/2026-06-17-agent-browser-sheet-portal-snapshots.md)
-- [`2026-06-17-mimo-executor-retries-provider-400.md`](../_archive/2026-06-17-mimo-executor-retries-provider-400.md)
 - [`2026-06-17-fix-một-list-bug-gộp-theo-phase-be-hết-buildregentest-1-lượt.md`](../_archive/2026-06-17-fix-một-list-bug-gộp-theo-phase-be-hết-buildregentest-1-lượt.md)
 - [`2026-06-17-multi-round-fixreview-harness-batch-reporting-per-phase-vali.md`](../_archive/2026-06-17-multi-round-fixreview-harness-batch-reporting-per-phase-vali.md)
 - [`2026-06-18-fe-ui-quality-harnessskill-quyết-định-chứ-không-phải-model-đ.md`](../_archive/2026-06-18-fe-ui-quality-harnessskill-quyết-định-chứ-không-phải-model-đ.md)

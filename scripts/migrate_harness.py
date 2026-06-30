@@ -251,7 +251,6 @@ FIXUP_FILES = [
     "engine/rules/worktree-workflow.md",
     "docs/graphify-agent-guide.md",
     "scripts/README.md",
-    "scripts/WORKTREE-TOOLING.md",
 ]
 
 

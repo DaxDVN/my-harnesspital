@@ -70,3 +70,17 @@ obj/
 *.gif
 *.webp
 *.svg
+
+# User custom ignores
+specs/dev-specs/
+specs/docx_extracted_images/
+specs/docx_structure/
+specs/extracted_images/
+specs/ipd-improve-v3/
+specs/mapped_images/
+temp/
+docs/**
+!docs/
+!docs/business/
+!docs/business/**
+

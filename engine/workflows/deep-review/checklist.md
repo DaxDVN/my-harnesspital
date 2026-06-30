@@ -12,6 +12,7 @@
 - **Applies-to** quyết định chiều có chạy trên scope không (FE/BE/both + glob). Không áp dụng → đánh `N/A` trong ledger.
 - **Exemplar-first (BẮT BUỘC):** trước khi review mỗi file, tìm 1–2 pattern đúng trong code sống làm anchor. "Code này có match exemplar không?" Giúp reviewer có concrete reference thay vì chỉ abstract rules.
 - **Scanner pre-scan:** `mh_scan` chạy trước mỗi audit (protocol §3 Step 2.0). Hits inject vào reviewer prompt như candidate list — reviewer confirm/refute, KHÔNG re-derive.
+- **Bỏ qua các file tự sinh (Ignore Generated/Migration Files):** Không bao giờ kiểm tra, review hay báo lỗi đối với các file tự động sinh ra (FE: `generated-dtos.ts`, `Constants.ts`, `generated-api-client.ts` và BE: mọi file EF migrations dưới thư mục `Migrations/`). Nếu các file này có thay đổi, chúng sẽ tự động được xử lý bởi các công cụ tích hợp như `make migrate-data` hoặc `npm run dtos:update`.
 
 ## Aggressive Pass Variants
 

@@ -1,0 +1,51 @@
+{
+  "id": "354365",
+  "resourceType": "Bundle",
+  "type": "collection",
+  "timestamp": "2024-07-24T14:12:47+07:00",
+  "entry": [
+    { "fullUrl": "Patient/1900011089492", "resource": {
+        "resourceType": "Patient", "id": "1900011089492",
+        "identifier": [
+          {"system":"PatientID","value":"1900011089492"},
+          {"system":"CMT/CCCD","value":"036487682154"},
+          {"system":"MSCS","value":"097863"},
+          {"system":"BHYT","value":"BH67746430","effectiveDate":"2024-01-01","expirationDate":"2024-12-31"}
+        ],
+        "name":[{"use":"official","text":"BÙI NHÃ HẠNH"}],
+        "telecom":[{"system":"phone","value":"0989653526"}],
+        "gender":"Female","birthDate":"1996-05-05","deceasedBoolean":false,
+        "address":[{"use":"home","line":["Xuân Phương, Nam Từ Liêm, Hà Nội, Việt Nam"],
+                    "city":"Hà Nội","district":"Xuân Phương","country":"Việt Nam"}]
+    }},
+    { "fullUrl":"Encounter/999177141097","resource":{
+        "resourceType":"Encounter","id":"999177141097",
+        "identifier":[{"value":"999177141097"}],"status":"in-progress",
+        "class":{"system":"http://terminology.hl7.org/CodeSystem/v3-ActCode","code":"IMP","display":"khám bệnh"},
+        "period":{"start":"2023-05-16T15:02:59+07:00"},
+        "location":[{"location":{"code":"CDHA01","reference":"Khoa CĐHA"}}]
+    }},
+    { "fullUrl":"ServiceRequest/66677141097","resource":{
+        "resourceType":"ServiceRequest","id":"66677141097","status":"active","intent":"order","priority":"routine",
+        "code":{"coding":[{"system":"local","code":"2424254"}],"text":"Chụp CLVT lồng ngực không tiêm thuốc cản quang"},
+        "subject":{"reference":"Patient/1900011089492"},
+        "authoredOn":"2024-07-24T14:12:47+07:00",
+        "requester":{"reference":"Practitioner/232"},
+        "reasonCode":[{"text":"Đau mỏi vai phải/ KTSK/ TS viêm gan B"}],
+        "locationReference":[{"identifier":{"system":"modalityCode","value":""},"display":""}],
+        "note":[{"extension":[{"valueCodeableConcept":{"coding":[{"code":"SO_PHIEU"}],"text":"354365"}}]}]
+    }},
+    { "fullUrl":"ImagingStudy/66677141097","resource":{
+        "resourceType":"ImagingStudy","id":"66677141097",
+        "identifier":[{"system":"HIS","value":"66677141097"}],"status":"unknown",
+        "modality":[{"system":"","code":"CT"}],
+        "subject":{"reference":"Patient/1900011089492"},
+        "basedOn":[{"reference":"ServiceRequest/66677141097"}]
+    }},
+    { "fullUrl":"Practitioner/232","resource":{
+        "resourceType":"Practitioner","id":"232",
+        "identifier":[{"system":"CCHN","value":"232"}],
+        "name":[{"use":"official","text":"Ths.Bs.Đào Văn Nhật"}]
+    }}
+  ]
+}

@@ -1,0 +1,44 @@
+{
+   "patient": {
+      "id": "38440635",
+      "name": "HOÀNG XUÂN LAN",
+      "sex": "F",
+      "birthYear": "1987",
+      "address": "Tổ 16, Hoàng Văn Thụ, Thái Nguyên, Thái Nguyên",
+      "phone": "",
+      "identityCardID": "514051119033",
+      "birthCertificateID": "514051119033",
+      "healthInsurance": {
+         "healthInsuranceCardID": "HT514051119033",
+         "effectiveDate": "2024-01-01",
+         "expirationDate": "2024-12-31"
+      }
+   },
+   "orders": [
+      { "id": "059483225", "code": "B2100219", "name": "Chụp Xquang ngực thẳng", "group": "DX" },
+      { "id": "059483226", "code": "B2100220", "name": "Chụp Xquang khung chậu thường", "group": "DX" }
+   ],
+   "orderNumber": "579166468",
+   "orderDate": "2024-07-22 15:45:41",
+   "insuranceActive": 1,
+   "comment": "",
+   "status": "NEW",
+   "msgDate": "2024-07-22 15:45:41",
+   "charged": "512000",
+   "priority": "",
+   "observation": [],
+   "encounterID": "38440635",
+   "clinical": {
+      "departmentCode": "CDHA01",
+      "department": "Khoa Chẩn đoán Hình ảnh",
+      "doctorCode": "001242/HD-CCHN",
+      "doctor": "Bs. Vũ Quang Huy",
+      "diagnosis": "J32 - Viêm xoang mạn tính",
+      "room": "Phòng điều trị 426",
+      "diagnostic": "TDMP trái - Tổn thương phổi trái - Ho máu nâu thẫm",
+      "accompanyingDiagnosis": "Xin đánh giá kĩ tuyến thượng thận 2 bên",
+      "detailedDiagnosis": "Tại giường"
+   },
+   "stationAE": "",
+   "stationName": ""
+}

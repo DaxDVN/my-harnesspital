@@ -42,7 +42,7 @@ checks.
 
 Cố định phạm vi, chống "review trôi":
 
-1. **Dirty set:** `git -C <repo> diff --name-only <base>` (guard hook cho phép `git diff`/`status`). Với worktree: base = branch gốc.
+1. **Dirty set:** `git -C <repo> diff --name-only <base>` (guard hook cho phép `git diff`/`status`). Với worktree: base = branch gốc. **Lưu ý**: Bắt buộc lọc và bỏ qua (ignore) các file tự sinh (FE generated-dtos.ts, Constants.ts, generated-api-client.ts) và các file BE EF migrations (thư mục `Migrations/`) ra khỏi scope review để tránh sinh cảnh báo nhiễu.
 2. **Blast radius:** CodeGraph `impact`/`affected` trên symbol đã đổi → file phụ thuộc bị kéo theo (đưa vào scope nếu rủi ro).
 3. **Nghiệp vụ source:** `specs/Tài liệu Nội trú.md` (hoặc `.docx`) — **nguồn sự thật duy nhất** cho rule nghiệp vụ. **KHÔNG** dùng `specs/<module>/02-requirements.md` làm nguồn rule nghiệp vụ (chỉ dùng cho MVP dev: schema, API, UI).
 4. **Spec set (design/contract):** `specs/<module>/{03-ui,07-schema,08-api,04-traceability}.md` (nguồn rule thiết kế & contract, không phải nguồn rule nghiệp vụ).

@@ -429,6 +429,8 @@ Catalog facts from the audit:
 
 ## Generated Artifact Rules
 
+Always ignore these generated FE files during code review, static analysis, type check reviews, or linting. Do not report styling or convention violations in them.
+
 Never hand-edit:
 
 - `src/lib/dtos/generated-dtos.ts`

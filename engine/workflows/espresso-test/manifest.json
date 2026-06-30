@@ -3,12 +3,10 @@
   "description": "Owner-gated agent-orchestrated review->fix->re-review loop. A thin coordinator agent spawns a review subagent (runs deep-review), then hands the findings file to a stronger fixer subagent (RCA + mh-fix, fanning out mh-implementer), then re-reviews -- looping until a round reports 0 BLOCK/HIGH OPEN or the round cap is hit. The coordinator never reads output md, never loads rules; it only routes paths + compact status and decides stop.",
   "kind": "workflow",
   "implementation_kind": "agent-orchestrated-loop (review->fix->re-review until clean)",
-  "maturity": "scaffolded",
   "public_entry": true,
   "manual_only": true,
   "owner_invocation_required": true,
   "auto_route_allowed": false,
-  "lifecycle_status": "DRAFT",
   "entry_skill": "espresso-test",
   "recommended_prompt_file": "engine/prompts/espresso-test.md",
   "required_inputs": [
@@ -50,24 +48,39 @@
     "auto_decide_floor": "irreversible-data/migration ONLY -- when closing an ambiguous business finding would require a hard-delete / non-backfilled migration / table reshape (data loss not undoable), the fixer PARKS it (status PARKED-NEEDS-OWNER, logged BLOCKING) instead of guessing, and the loop continues on the other findings. Clinical/billing/permission decisions MAY be provisional because the fix lands in a worktree diff the owner reviews before merge (reversible).",
     "never_invent_without_evidence": "every provisional decision MUST cite BA-doc page/section, a safe-default rationale, or a live exemplar -- pure invention is still forbidden; provisional != unfounded"
   },
-  "finding_statuses_added": ["PROVISIONAL-FIXED", "PARKED-NEEDS-OWNER"],
+  "finding_statuses_added": [
+    "PROVISIONAL-FIXED",
+    "PARKED-NEEDS-OWNER"
+  ],
   "roles": {
     "coordinator": "thin; NO md read, NO rule load, NO source read/edit; spawns subagents, routes file PATHS + compact status, decides stop from COUNTS. It IS the owner-facing voice: at round 0 it relays the pre-sweep question batch (a list of questions in a blob, not md bodies) to the owner and feeds the answers down as decision_preseed. After that it never asks. tier=coordinator_tier",
     "pre-sweep": "round-0 read-only agent: reads specs/Tai lieu Noi tru.md + the changeset scope, returns the list of every foreseeable business/owner decision as questions (blob) for the coordinator to batch-ask the owner once at invoke; tier=review_tier",
     "reviewer": "reads prior_findings_path (warm-start / FP-suppression) then runs deep-review (nested fan-out); writes findings md to docs/audit/; returns {findings_path, counts, open_block_high, verdict}; tier=review_tier",
     "fixer": "input = findings_path + fix_floor + decision_preseed + decision_mode + auto_decide_floor; RCA (mh-rca) + mh-fix discipline; fans out mh-implementer per cluster; for unanswered business ambiguity applies the provisional protocol (or PARKS if irreversible-data/migration); writes DL-PROV entries to specs/<module>/06-decision-log.md + 05-open-questions.md; validates (scanner + build/typecheck); returns compact {fixed_ids, provisional_ids, parked_ids, residual_fixable_open, validation_summary, fix_refs, decision_log_path}; tier=fix_tier"
   },
-  "eval_summary": {
-    "last_real_run": "",
-    "artifact_path": "",
-    "verdict": ""
-  },
-  "agents": ["mh-rca", "mh-implementer"],
+  "agents": [
+    "mh-rca",
+    "mh-implementer"
+  ],
   "external_agents": [],
-  "skills_used": ["mh-review", "mh-fix", "bug-fix"],
-  "reuses_workflows": ["deep-review"],
-  "rules": ["backend", "frontend", "source-discovery", "ponytail", "quality-gates"],
-  "uses_shared": ["runtime-boundary.md"],
+  "skills_used": [
+    "mh-review",
+    "mh-fix",
+    "bug-fix"
+  ],
+  "reuses_workflows": [
+    "deep-review"
+  ],
+  "rules": [
+    "backend",
+    "frontend",
+    "source-discovery",
+    "ponytail",
+    "quality-gates"
+  ],
+  "uses_shared": [
+    "runtime-boundary.md"
+  ],
   "artifact_contract": {
     "coordinator_reads_output_md": false,
     "run_folder_pattern": "engine/workflows/espresso-test/runs/<scope>/run-NNN/",

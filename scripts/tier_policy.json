@@ -1,0 +1,363 @@
+{
+  "_comment": "Owner-locked model routing 2026-06-26 (updated 2026-06-29: agentic-tool adapter). Orchestrator is ALWAYS Opus 4.8 low; it spawns per-task workers. Non-Anthropic (OpenCode Go / Grok Build / Antigravity) models IMPLEMENT/AUDIT to save Claude quota but are NOT trusted: every code-mutating workflow MUST end with a mandatory Opus 4.8 xhigh review (see mandatory_final_review). Sonnet is dropped from dispatch (kept only as an emergency manual fallback). THREE PARALLEL AGENTIC BACKENDS (scripts/agent_exec.py adapter): opencode (paid, dollar-capped, $12/5h), grok (Claude Code-style, --effort ladder, --allow/--deny permission rules), agy (Gemini/Claude/GPT-OSS via Antigravity CLI). Fallback chain per role: when primary backend quota-exhausted/timeout/auth-fail, agent_exec tries fallback[i+1]. Review roles (audit/audit_second_lens/final_review) set allow_fallback=false — glm-5.2 review is mandatory per owner, no fallback. TWO PARALLEL TIERS BY DESIGN: `roles`+`agentic_ladder` = ACTUAL worker dispatch (read by select_worker_routing); `tiers`+`escalation_ladder`+`coordinator`+`verifier` = Anthropic-equivalent SAFETY baseline (read by select_model_effort). Both agree on the safety floor. Full SSOT explanation: docs/harness/notes/tier-policy-ssot.md. Plan: docs/harness/plans/opencode-multimodel-integration-plan-2026-06-26.md",
+  "orchestrator": {
+    "provider": "anthropic",
+    "model": "opus",
+    "effort": "low"
+  },
+  "providers": {
+    "anthropic": {
+      "backend": "native",
+      "note": "Claude Code / Claude CLI native dispatch"
+    },
+    "opencode": {
+      "backend": "opencode-cli",
+      "prefix": "opencode-go/",
+      "note": "OpenCode Go; PAID models only (no -free, rate-limit risk); single dollar-capped seat $12/5h $30/wk $60/mo"
+    },
+    "grok": {
+      "backend": "grok-cli",
+      "binary": "grok",
+      "note": "Grok Build TUI; Claude Code-style flags (--effort, --allow/--deny, --agent); supports Claude + GPT-OSS + other models"
+    },
+    "agy": {
+      "backend": "agy-cli",
+      "binary": "agy",
+      "note": "Antigravity CLI; Gemini 3.5 Flash / Gemini 3.1 Pro / Claude Sonnet 4.6 / Claude Opus 4.6 / GPT-OSS 120B; effort is model-fixed; --sandbox for restricted mode"
+    }
+  },
+  "roles": {
+    "orchestrator": {
+      "provider": "anthropic",
+      "model": "opus",
+      "effort": "low",
+      "backend": "native"
+    },
+    "audit": {
+      "provider": "opencode",
+      "model": "glm-5.2",
+      "variant": "max",
+      "read_only": true,
+      "backend": "opencode",
+      "allow_fallback": false
+    },
+    "audit_second_lens": {
+      "provider": "opencode",
+      "model": "deepseek-v4-pro",
+      "variant": "high",
+      "read_only": true,
+      "backend": "opencode",
+      "fallback": [
+        "grok",
+        "agy"
+      ]
+    },
+    "adjudicate": {
+      "provider": "anthropic",
+      "model": "opus",
+      "effort": "xhigh",
+      "backend": "native"
+    },
+    "final_review": {
+      "provider": "anthropic",
+      "model": "opus",
+      "effort": "xhigh",
+      "backend": "native",
+      "allow_fallback": false
+    },
+    "trivial": {
+      "provider": "opencode",
+      "model": "mimo-v2.5",
+      "variant": "high",
+      "backend": "opencode",
+      "fallback": [
+        "grok",
+        "agy"
+      ]
+    },
+    "mechanical_fix": {
+      "provider": "opencode",
+      "model": "deepseek-v4-flash",
+      "variant": "high",
+      "backend": "opencode",
+      "fallback": [
+        "grok",
+        "agy"
+      ]
+    },
+    "agentic_primary": {
+      "provider": "opencode",
+      "model": "deepseek-v4-pro",
+      "variant": "high",
+      "backend": "opencode",
+      "fallback": [
+        "agy",
+        "grok"
+      ],
+      "agy_model": "Gemini 3.5 Flash (Low)"
+    },
+    "agentic_harder": {
+      "provider": "opencode",
+      "model": "minimax-m3",
+      "variant": "high",
+      "backend": "opencode",
+      "fallback": [
+        "agy",
+        "grok"
+      ],
+      "agy_model": "Gemini 3.5 Flash (Medium)"
+    },
+    "agentic_complex": {
+      "provider": "opencode",
+      "model": "kimi-k2.7-code",
+      "variant": "high",
+      "backend": "opencode",
+      "fallback": [
+        "agy",
+        "grok"
+      ],
+      "agy_model": "Gemini 3.5 Flash (High)"
+    },
+    "design": {
+      "provider": "anthropic",
+      "model": "opus",
+      "effort": "xhigh",
+      "backend": "native"
+    },
+    "clinical_floor": {
+      "provider": "anthropic",
+      "model": "opus",
+      "effort": "xhigh",
+      "backend": "native",
+      "allow_fallback": false
+    },
+    "danger_refactor": {
+      "provider": "anthropic",
+      "model": "opus",
+      "effort": "max",
+      "backend": "native",
+      "allow_fallback": false
+    }
+  },
+  "agentic_ladder": [
+    "agentic_primary",
+    "agentic_harder",
+    "agentic_complex",
+    "clinical_floor",
+    "danger_refactor"
+  ],
+  "backend_defaults": {
+    "_note": "Default backend configs read by scripts/agent_exec.py when role doesn't override. `fallback_chain` = order to try when primary fails (quota/timeout/auth). Review roles set allow_fallback=false to force glm-5.2.",
+    "opencode": {
+      "binary": "opencode",
+      "config_file": ".opencode/worker.json",
+      "read_only_agent": "mh-reviewer-oc",
+      "mutating_agent": "mh-fixer",
+      "output_format": "json"
+    },
+    "grok": {
+      "binary": "grok",
+      "default_model": "grok-composer-2.5-fast",
+      "read_only_agent": null,
+      "mutating_agent": null,
+      "default_effort": "high",
+      "output_format": "json"
+    },
+    "agy": {
+      "binary": "agy",
+      "default_model": "gemini-3.5-flash-low",
+      "sandbox_for_read_only": true,
+      "skip_permissions_for_mutating": true,
+      "output_format": "text"
+    },
+    "native": {
+      "binary": null,
+      "note": "Claude Code Task tool — agent_exec refuses native roles; dispatch via Claude subagent instead"
+    }
+  },
+  "mandatory_final_review": {
+    "role": "final_review",
+    "skippable": false,
+    "applies_to": [
+      "single-skill",
+      "implement+review",
+      "bugfix",
+      "batch-bugfix",
+      "espresso",
+      "full-SDD",
+      "refactor",
+      "scaffold"
+    ],
+    "rule": "Every code-mutating workflow MUST end with an Opus 4.8 xhigh review of the produced diff, ALWAYS — even if a non-Anthropic model (glm-5.2/kimi-2.7/etc.) already reviewed. Non-Anthropic review is additive, NEVER a substitute. Rationale: cheap models are allowed to implement to spare Claude quota, but are not trusted; Opus does the final careful review."
+  },
+  "risk_class_floor": {
+    "classes": [
+      "clinical",
+      "billing",
+      "permission",
+      "migration"
+    ],
+    "floor": {
+      "provider": "anthropic",
+      "model": "opus",
+      "effort": "xhigh"
+    }
+  },
+  "tiers": {
+    "_baseline_note": "Anthropic-equivalent SAFETY baseline only (read by select_model_effort). NOT the actual dispatch — see roles/agentic_ladder + select_worker_routing.",
+    "T0": {
+      "model": "haiku",
+      "effort": "low"
+    },
+    "T1": {
+      "model": "sonnet",
+      "effort": "medium"
+    },
+    "T2": {
+      "model": "sonnet",
+      "effort": "high"
+    },
+    "T3": {
+      "model": "opus",
+      "effort": "high"
+    }
+  },
+  "coordinator": {
+    "model": "opus",
+    "effort": "low"
+  },
+  "verifier": {
+    "find": {
+      "provider": "opencode",
+      "model": "glm-5.2",
+      "variant": "max",
+      "read_only": true
+    },
+    "adjudicate_block_high": {
+      "provider": "anthropic",
+      "model": "opus",
+      "effort": "xhigh"
+    }
+  },
+  "escalation_ladder": [
+    [
+      "sonnet",
+      "medium"
+    ],
+    [
+      "sonnet",
+      "high"
+    ],
+    [
+      "opus",
+      "high"
+    ],
+    [
+      "opus",
+      "xhigh"
+    ]
+  ],
+  "recipe_depth": {
+    "none": {
+      "depth": 0,
+      "situation": "T0 / trivial (label/copy/test/doc/local-guard, 1 file)",
+      "recipe_workflow": "oc_worker:trivial",
+      "phases": [
+        "ONE mimo-v2.5 worker (role=trivial) via oc_worker + harness gate — the PM still DISPATCHES; it never reads/edits source itself"
+      ]
+    },
+    "single-skill": {
+      "depth": 1,
+      "situation": "T1 / small (few files, one component or one bug)",
+      "recipe_workflow": "mh-implement|mh-fix",
+      "phases": [
+        "implement-or-fix + own self-review",
+        "opus-xhigh-final-review (mandatory)"
+      ]
+    },
+    "implement+review": {
+      "depth": 2,
+      "situation": "T2 (shared/API/DTO/permission/cross-file)",
+      "recipe_workflow": "implement+deep-review",
+      "phases": [
+        "implement",
+        "deep-review",
+        "opus-xhigh-final-review (mandatory)"
+      ]
+    },
+    "bugfix": {
+      "depth": 2,
+      "situation": "a BUG with a known repro (any tier)",
+      "recipe_workflow": "bug-fix",
+      "phases": [
+        "mh-rca",
+        "mh-fix",
+        "review",
+        "opus-xhigh-final-review (mandatory)"
+      ]
+    },
+    "review": {
+      "depth": 1,
+      "situation": "read-only audit intent",
+      "recipe_workflow": "deep-review",
+      "phases": [
+        "deep-review"
+      ]
+    },
+    "triage-only": {
+      "depth": 1,
+      "situation": "verify a finding/bug list real-vs-false-positive, no fix",
+      "recipe_workflow": "triage-only",
+      "phases": [
+        "adjudicate",
+        "report"
+      ]
+    },
+    "batch-bugfix": {
+      "depth": 3,
+      "situation": "a LIST of bugs to fix (batched by dependency phase)",
+      "recipe_workflow": "batch-bugfix",
+      "phases": [
+        "rca-dedupe",
+        "adjudicate",
+        "fix",
+        "review",
+        "opus-xhigh-final-review (mandatory)"
+      ]
+    },
+    "design-only": {
+      "depth": 2,
+      "situation": "design only (distill + spec), stop before implement",
+      "recipe_workflow": "design-only",
+      "phases": [
+        "distill",
+        "spec",
+        "STOP"
+      ]
+    },
+    "espresso": {
+      "depth": 3,
+      "situation": "drive to 0 BLOCK/HIGH / review-fix-converge intent",
+      "recipe_workflow": "espresso-test",
+      "phases": [
+        "review",
+        "fix",
+        "re-review-loop",
+        "opus-xhigh-final-review (mandatory)"
+      ]
+    },
+    "full-SDD": {
+      "depth": 4,
+      "situation": "T3 OR module/feature-set OR a BA-doc/spec-file input",
+      "recipe_workflow": "feature",
+      "phases": [
+        "distill",
+        "spec",
+        "slice",
+        "implement",
+        "converge",
+        "opus-xhigh-final-review (mandatory)"
+      ]
+    }
+  }
+}

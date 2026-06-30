@@ -1,6 +1,6 @@
 # Harness Router - P1 Dry-Run
 
-P1 status: read-only dry-run router. It classifies intent, risk tier, lifecycle, and files-to-load. It does not execute workflows, enforce fast-path, edit files, thin context by itself, or change runtime behavior.
+P1 status: read-only dry-run router. It classifies intent, risk tier, and files-to-load. It does not execute workflows, enforce fast-path, edit files, thin context by itself, or change runtime behavior.
 
 ## Purpose
 
@@ -42,10 +42,6 @@ intent:
 risk_tier: UNKNOWN # T0|T1|T2|T3|UNKNOWN
 candidate_workflow:
 entry_skill:
-lifecycle_status:
-lifecycle_evidence:
-  ok: false
-  reason:
 auto_route_allowed:
 confidence: low # high|medium|low
 uncertainty: []
@@ -96,9 +92,7 @@ package scope, package rule files, and matched worktree when the selected route 
 - It must not execute workflows.
 - It must not enforce fast-path.
 - It must not edit files.
-- Explicit workflow names may select a candidate workflow, but lifecycle still controls auto-route.
-- Workflows below `PROVEN` cannot auto-route.
-- `PROVEN` / `DEFAULT` workflows also need a real `eval_summary.artifact_path` before auto-route.
+- Explicit workflow names may select a candidate workflow, but `auto_route_allowed` controls auto-route.
 - Fast-path is denied on uncertainty.
 - API/schema/DTO/security/permission/business/billing/insurance/state-machine/migration/multi-module uncertainty escalates risk tier.
 - Ambiguous intent should ask for clarification in later enforcing versions.
@@ -107,9 +101,8 @@ package scope, package rule files, and matched worktree when the selected route 
 - Router output may recommend a prompt file, but it must not auto-load that file for normal daily work.
   Prompt files are session/external-agent runbooks, not lightweight workflow docs.
 - Router output is advisory until a later owner-approved phase turns any part into enforcement.
-- A candidate workflow is not execution approval. If the manifest has `auto_route_allowed=false` or lifecycle
-  below `PROVEN`, the agent may prepare scope/inputs/commands but must not launch the workflow without an
-  explicit owner instruction.
+- A candidate workflow is not execution approval. If the manifest has `auto_route_allowed=false`, the agent
+  may prepare scope/inputs/commands but must not launch the workflow without an explicit owner instruction.
 - Natural-language preflight is the default UX for actionable work: predict route -> show card -> wait for owner
   confirmation -> execute only the confirmed route.
 
@@ -129,24 +122,14 @@ kind
 entry_skill
 public_entry
 auto_route_allowed
-lifecycle_status
 required_inputs
 allowed_writes
 validators
 budget
-eval_summary
 recommended_prompt_file
 ```
 
-P4 lifecycle evidence fields:
-
-```text
-eval_summary.last_real_run
-eval_summary.artifact_path
-eval_summary.verdict
-```
-
-The router treats missing eval evidence as an auto-route blocker. It may still suggest the workflow as a
+The router treats `auto_route_allowed=false` as an auto-route blocker. It may still suggest the workflow as a
 candidate for explicit owner invocation.
 
 Workflow runbooks and protocol docs should be loaded only after the dry-run decision names the candidate workflow and files to load.
@@ -181,7 +164,7 @@ The router must prefer false negatives over false positives for fast-path:
 ```text
 If not clearly low-risk, do not classify as low-risk.
 If uncertainty touches contract/business/security/data/state, escalate.
-If lifecycle evidence is missing, block auto-route and require explicit owner intent.
+If `auto_route_allowed=false`, block auto-route and require explicit owner intent.
 ```
 
 ## Public/Internal/Advisory Semantics

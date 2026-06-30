@@ -36,7 +36,7 @@ bare named `.js` (invoked by `{name}`) may sit flat as `engine/workflows/<name>.
 - `bug-fix/` — investigate→RCA→fix→verify from any source; `mh-rca` follows the bug-trace playbook. Entry skill: `/bug-fix`.
 - `ui-spec/` — **FE keystone**: DOCX + PNG mockups → detailed `specs/<m>/03-ui.md` reuse-map (multimodal + deep FE reuse-audit). Entry skill: `/ui-spec`. Feeds the FE dev workflow.
 - `technical-design/` (**API-contract only**: `08`; schema=owner, UI=`/ui-spec`) · `task-slicing/` (large/cross-cutting modules) · `incremental-impl/` (**internal** per-task executor of `/mh-implement`). Entry skills of the same name, owner-gated/manual-only.
-- `dev-from-handoff/` — owner-supplied business/design handoff → technical plan → owner approval → bounded dev slices → validation/receipt. Manual-only DRAFT; no BA discovery or invented business rules.
+- `dev-from-handoff/` — owner-supplied business/design handoff → technical plan → owner approval → bounded dev slices → validation/receipt. Manual-only; no BA discovery or invented business rules.
 > **FE dev pipeline:** owner authors `02-requirements`+`07-schema` → `/ui-spec` → `03-ui.md` → `/mh-implement` FE-mode (`engine/skills/mh-implement/fe-flow.md`; folds `incremental-impl` per task).
 
 ## Shared support — `_shared/` (NOT a workflow)

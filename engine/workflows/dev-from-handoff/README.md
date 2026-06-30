@@ -1,6 +1,6 @@
 # dev-from-handoff — owner handoff to bounded development
 
-Entry skill: `/dev-from-handoff`. Manual-only, owner-gated, lifecycle `DRAFT`.
+Entry skill: `/dev-from-handoff`. Manual-only, owner-gated.
 
 ## Purpose
 Use this workflow when the owner supplies business/design handoff documents and wants development to start from

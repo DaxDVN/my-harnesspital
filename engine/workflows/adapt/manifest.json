@@ -1,0 +1,95 @@
+{
+  "name": "adapt",
+  "description": "Owner-gated semi-automated harness adaptation. Two modes: (A) adapt-on-failure — RCA + fix a workflow whose machinery failed during a run (threshold: same root-cause fail >=2); (B) adapt-on-repetition — design + build a new workflow for a repeated task pattern (threshold: pattern >=3 occurrences, or learning_recall returns same note >=3, or scanner_promotion reports bug_class >=3). POST-run only — never runs MID-run while the target workflow is active. Six safety gates: owner-gated (no auto-spawn from intent words), POST-run, no-self-fix (adapt never modifies adapt/ itself), pin-version (diff + backup, owner approves + commits before apply), threshold (fail >=2 / pattern >=3), conflict-check (Mode B refuses duplicate workflows). Reuses mh-rca (RCA) + mh-implementer (fix files) + harness_doctor (validate) + harness_backup (rollback). Stop enum {DONE, CAP_HIT, BLOCKED, PARKED}.",
+  "kind": "orchestrator",
+  "implementation_kind": "agent-orchestrated-meta (blind coordinator over a 2-mode adapt pipeline; RCA + plan + fix/build + validate; owner approves every apply)",
+  "public_entry": true,
+  "manual_only": true,
+  "owner_invocation_required": true,
+  "auto_route_allowed": false,
+  "entry_skill": "adapt",
+  "recommended_prompt_file": "engine/prompts/adapt.md",
+  "required_inputs": {
+    "A": [
+      "mode: A (adapt-on-failure)",
+      "target_workflow: the workflow name whose machinery failed",
+      "failure_evidence: path to the failed run ledger / envelope / error artifact (the RCA input)",
+      "fail_count: number of times this root-cause has failed (must be >=2 to enter Mode A)",
+      "root_cause_signature: a short stable key deduplicating failures (so 'same root-cause' is verifiable)"
+    ],
+    "B": [
+      "mode: B (adapt-on-repetition)",
+      "repetition_signal: one of — learning_recall note seen >=3 times | scanner_promotion bug_class >=3 | agent-observed task-type repeated >=3 (cite the 3+ occurrences with paths)",
+      "proposed_workflow_name: candidate slug (conflict-checked against harness_doctor registry + REGISTRY.md before building)",
+      "pattern_description: one-line of the repeated task the new workflow would automate"
+    ]
+  },
+  "allowed_writes": [
+    "engine/workflows/adapt/runs/**",
+    "engine/workflows/<target_workflow>/**",
+    "engine/skills/<target_workflow>/**",
+    "engine/prompts/<target_workflow>*.md",
+    "engine/REGISTRY.md",
+    "AGENTS.md",
+    "engine/HARNESS-GUIDE.md"
+  ],
+  "validators": [
+    "python scripts/harness_doctor.py --strict        # registry + governance + runtime-contract must stay green",
+    "python engine/workflows/_shared/validate-envelope.py <envelope>",
+    "python scripts/harness_backup.py --snapshot       # pin a backup before any apply (rollback anchor)"
+  ],
+  "budget": {
+    "max_context_files": 0,
+    "max_payload_inline_chars": 0
+  },
+  "agents": [
+    "mh-rca"
+  ],
+  "external_agents": [],
+  "skills_used": [
+    "mh-fix"
+  ],
+  "rules": [
+    "orchestrator-ledger",
+    "context-manifest",
+    "multi-agent-execution",
+    "quality-gates",
+    "ponytail"
+  ],
+  "uses_shared": [
+    "envelope.schema.json",
+    "validate-envelope.py",
+    "gate-check.py"
+  ],
+  "modes": {
+    "A": {
+      "summary": "adapt-on-failure — RCA + fix a failing workflow (POST-run, threshold >=2 same root-cause)",
+      "phases": [
+        {"name": "intake", "dispatch": "adapt", "kind": "internal", "tier": "coordinator", "gate": "auto", "done_check": "failure_evidence + root_cause_signature recorded in ledger; fail_count >=2 verified"},
+        {"name": "rca", "dispatch": "mh-rca", "kind": "agent", "tier": "opus/high", "gate": "auto", "done_check": "03-rca written: workflow bug root cause + DIRECT_PATCH | REDESIGN | HUMAN_DECISION"},
+        {"name": "fix-plan", "dispatch": "adapt", "kind": "internal", "tier": "coordinator", "gate": "owner-confirm", "done_check": "04-adapt-plan written: allowlist of workflow files to edit + validation + rollback; owner approved"},
+        {"name": "fix", "dispatch": "mh-fix", "kind": "skill", "tier": "sonnet/high", "gate": "owner-confirm", "done_check": "workflow files patched per allowlist; self-review-diff clean; harness_backup snapshot taken pre-apply"},
+        {"name": "validate", "dispatch": "adapt", "kind": "internal", "tier": "coordinator", "gate": "auto", "done_check": "harness_doctor --strict green; target workflow self-test green; replay failed run on synthetic input passes OR residual risk stated"}
+      ]
+    },
+    "B": {
+      "summary": "adapt-on-repetition — design + build a new workflow for a repeated pattern (threshold >=3; conflict-checked)",
+      "phases": [
+        {"name": "intake", "dispatch": "adapt", "kind": "internal", "tier": "coordinator", "gate": "auto", "done_check": "repetition_signal verified (>=3 occurrences cited); proposed_workflow_name conflict-checked against registry + REGISTRY.md (refuse if duplicate)"},
+        {"name": "design", "dispatch": "mh-rca", "kind": "agent", "tier": "opus/high", "gate": "owner-confirm", "done_check": "design doc written: manifest draft + README skeleton + recipe/phases + entry skill stub + prompt + reuse map; owner approved the design before any file is created"},
+        {"name": "build", "dispatch": "mh-fix", "kind": "skill", "tier": "sonnet/high", "gate": "owner-confirm", "done_check": "workflow files created per design allowlist (engine/workflows/<new>/ + engine/skills/<new>/ + engine/prompts/<new>.md); self-review-diff clean; harness_backup snapshot taken pre-apply"},
+        {"name": "wire", "dispatch": "adapt", "kind": "internal", "tier": "coordinator", "gate": "owner-confirm", "done_check": "REGISTRY.md + AGENTS.md + HARNESS-GUIDE.md updated with the new workflow row + owner-gated entry; owner approved the wiring"},
+        {"name": "validate", "dispatch": "adapt", "kind": "internal", "tier": "coordinator", "gate": "auto", "done_check": "harness_doctor --strict green (registry resolves, governance clean); new workflow self-test green; dry-run on a synthetic input passes OR residual risk stated"}
+      ]
+    }
+  },
+  "safety_gates": [
+    "owner-gated APPLY — auto-detection + proposal is automatic (adapt_trigger SessionEnd hook + adapt_fail_watch PostToolUse hook), but applying (fix/build/wire) is owner-gated; no auto-spawn of a fixer from intent words or a trigger",
+    "POST-run — adapt runs AFTER the target workflow ends, never MID-run while PM is dispatching it (the fail-watch hook only QUEUES a trigger MID-session; the apply runs POST-run)",
+    "no-self-fix — adapt NEVER modifies engine/workflows/adapt/ or engine/skills/adapt/ or engine/prompts/adapt.md (bootstrap paradox); if adapt itself is broken, the owner fixes it by hand",
+    "pin-version — adapt emits a diff + takes a harness_backup snapshot BEFORE any apply; owner approves + commits before the change takes effect; no silent mutate mid-session",
+    "threshold — Mode A requires fail_count >=2 with the same root_cause_signature (no adapt on first fail — could be data); the PostToolUse fail-watch bypasses this only because it has already confirmed status + machinery hint (its detection IS the second confirmation); Mode B requires >=3 occurrences cited with paths",
+    "conflict-check — Mode B refuses to build a workflow whose name already exists in harness_doctor registry or REGISTRY.md (prevents bloat self-generation)"
+  ],
+  "stop_enum": ["DONE", "CAP_HIT", "BLOCKED", "PARKED"]
+}

@@ -1,0 +1,10 @@
+node_modules
+.env
+*.pem
+*.key
+npm-debug.log*
+studies.json
+*.log
+.env
+cert.pem
+key.pem

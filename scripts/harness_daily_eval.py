@@ -218,7 +218,6 @@ def write_eval(result: dict[str, Any]) -> Path:
         residual.append("context traps still present; load only router-selected files")
     body = (
         "workflow: harness-daily-optimization\n"
-        "lifecycle_status: DRAFT\n"
         "risk_tier: T2\n"
         "model: n/a\n"
         "executor: local-scripts\n"

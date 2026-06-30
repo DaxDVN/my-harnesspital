@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Scan workflow taxonomy, lifecycle, and deprecation governance.
+"""Scan workflow taxonomy and deprecation governance.
 
 P5 scope: make consolidation/deprecation decisions explicit and evidence-gated. This script does not
 modify manifests or deprecate workflows. It reports governance drift so later cleanup can happen safely.
@@ -19,8 +19,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = ROOT / "engine" / "workflows"
-ALLOWED_KIND = {"workflow", "internal", "advisory"}
-ALLOWED_LIFECYCLE = {"DRAFT", "LAB", "PROVEN", "DEFAULT", "DEPRECATED"}
+ALLOWED_KIND = {"workflow", "internal", "advisory", "orchestrator"}
 
 
 def load_manifests(base: Path = WORKFLOWS) -> list[dict[str, Any]]:
@@ -48,7 +47,6 @@ def analyze(manifests: list[dict[str, Any]]) -> tuple[list[str], list[str], dict
     summary: dict[str, Any] = {
         "total": len(manifests),
         "by_kind": {},
-        "by_lifecycle": {},
         "public_entries": [],
         "internal_entries": [],
         "advisory_entries": [],
@@ -62,17 +60,17 @@ def analyze(manifests: list[dict[str, Any]]) -> tuple[list[str], list[str], dict
     for manifest in manifests:
         name = str(manifest.get("name") or manifest.get("_folder"))
         kind = str(manifest.get("kind") or "")
-        lifecycle = str(manifest.get("lifecycle_status") or "")
         entry_skill = str(manifest.get("entry_skill") or "")
+        replacement = _replacement(manifest)
+        is_deprecated = "replacement_workflow" in manifest or "deprecation" in manifest
         summary["by_kind"][kind] = summary["by_kind"].get(kind, 0) + 1
-        summary["by_lifecycle"][lifecycle] = summary["by_lifecycle"].get(lifecycle, 0) + 1
-        if kind == "workflow":
+        if kind in {"workflow", "orchestrator"}:
             summary["public_entries"].append(name)
         elif kind == "internal":
             summary["internal_entries"].append(name)
         elif kind == "advisory":
             summary["advisory_entries"].append(name)
-        if lifecycle == "DEPRECATED":
+        if is_deprecated:
             summary["deprecated"].append(name)
         if manifest.get("auto_route_allowed") is True:
             summary["auto_route_candidates"].append(name)
@@ -84,26 +82,19 @@ def analyze(manifests: list[dict[str, Any]]) -> tuple[list[str], list[str], dict
 
         if kind not in ALLOWED_KIND:
             errors.append(f"{name}: invalid kind={kind!r}")
-        if lifecycle not in ALLOWED_LIFECYCLE:
-            errors.append(f"{name}: invalid lifecycle_status={lifecycle!r}")
         if kind == "internal" and manifest.get("public_entry") is True:
             warnings.append(f"{name}: kind=internal but public_entry=true")
         if kind == "advisory" and any("worktrees/<slug>/" in item for item in manifest.get("allowed_writes", [])):
             warnings.append(f"{name}: advisory workflow allows worktree writes")
-        if lifecycle in {"DRAFT", "LAB"} and manifest.get("auto_route_allowed") is True:
-            errors.append(f"{name}: auto_route_allowed=true below PROVEN")
-        if lifecycle == "DEFAULT" and manifest.get("public_entry") is not True:
-            warnings.append(f"{name}: DEFAULT workflow is not public_entry=true")
         if "recommended_prompt_file" not in manifest:
             warnings.append(f"{name}: missing recommended_prompt_file")
         elif not isinstance(manifest.get("recommended_prompt_file"), str):
             warnings.append(f"{name}: recommended_prompt_file is not a string")
         elif manifest.get("recommended_prompt_file") and not (ROOT / str(manifest["recommended_prompt_file"])).exists():
             warnings.append(f"{name}: recommended_prompt_file does not exist: {manifest['recommended_prompt_file']}")
-        if lifecycle == "DEPRECATED":
-            replacement = _replacement(manifest)
+        if is_deprecated:
             if not replacement:
-                errors.append(f"{name}: DEPRECATED without replacement_workflow")
+                errors.append(f"{name}: deprecated (has deprecation/replacement_workflow field) but replacement_workflow is empty")
             elif replacement not in names:
                 errors.append(f"{name}: replacement_workflow={replacement!r} does not match any workflow")
 
@@ -128,7 +119,6 @@ def command_scan() -> int:
         "Summary: "
         f"{summary['total']} workflow(s), "
         f"kind={summary['by_kind']}, "
-        f"lifecycle={summary['by_lifecycle']}, "
         f"{len(errors)} error(s), {len(warnings)} warning(s)"
     )
     return 1 if errors else 0
@@ -162,7 +152,6 @@ def self_test() -> int:
             "kind": "workflow",
             "public_entry": True,
             "auto_route_allowed": False,
-            "lifecycle_status": "DRAFT",
             "entry_skill": "robust-test",
             "recommended_prompt_file": "engine/prompts/robust-test.md",
             "allowed_writes": ["engine/workflows/robust-test/runs/**"],
@@ -172,7 +161,6 @@ def self_test() -> int:
             "kind": "workflow",
             "public_entry": False,
             "auto_route_allowed": False,
-            "lifecycle_status": "DEPRECATED",
             "entry_skill": "old-flow",
             "recommended_prompt_file": "",
             "replacement_workflow": "robust-test",
@@ -183,9 +171,6 @@ def self_test() -> int:
     assert not errors, errors
     assert not warnings, warnings
     assert summary["by_kind"]["workflow"] == 2
-    bad = [{**sample[0], "auto_route_allowed": True, "lifecycle_status": "LAB"}]
-    errors, _, _ = analyze(bad)
-    assert errors, "auto-route below PROVEN accepted"
     bad_deprecated = [{**sample[1], "replacement_workflow": ""}]
     errors, _, _ = analyze(bad_deprecated)
     assert errors, "deprecated workflow without replacement accepted"

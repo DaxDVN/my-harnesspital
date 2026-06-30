@@ -272,6 +272,7 @@ References: `MyHospital/Configure.AppHost.cs`, `MyHospital.Apis/DepartmentApi.cs
 
 ## Migrations and Generated Artifacts
 
+- Always ignore generated files and BE EF migrations during review, linting, and static analysis checks. Do not report convention or style violations in these files.
 - Do not edit existing migration files or `MyHospitalContextModelSnapshot` manually.
 - Do not hand-write migrations; generate new migrations only through EF CLI when model changes require it.
 

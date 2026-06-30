@@ -38,6 +38,17 @@ evidence for that claim.
   snapshot checks.
 - Cited authority such as decision IDs must exist.
 - For hard-to-capture runtime hangs, use targeted bisection rather than over-trusting screenshots/profilers.
+- Completeness claims ("all X match Y", "all reverted", "no other instances") require manual spot-check
+  crosscheck; automated script output is necessary but not sufficient evidence.
+- **FE routing / lazy-import / route-component changes are NOT proven by static checks (tsc/scan/grep/source-read).**
+  A deleted or renamed lazy route can leave a stale dev-server HMR module graph, producing a runtime
+  `X is not defined` that source inspection cannot see (source is clean; the running `:300x` bundle is old).
+  Before closing such a change: **the PM restarts the FE dev server for the slot itself** (restart BE → regen
+  contract → restart FE are normal routine post-change steps, run them automatically whenever a change needs
+  them — do NOT defer to the owner), hard-reload, then live browser smoke the affected route. If the worker
+  reports "servers not restarted / smoke not run" (e.g. grok/opencode in scope), the PM must NOT close on
+  static verify alone — restart + run the live smoke first. Applies to any change touching `*-routing.tsx`,
+  `lazy(() => import(...))`, or route registration.
 
 ## Why It Generalizes
 
@@ -55,3 +66,4 @@ not actually proven.
 - [`convention-skip-current-evidence`](../_archive/2026-06-21-a-convention-skip-needs-current-empirical-evidence-survey-nt.md)
 - [`do-not-claim-verified`](../_archive/2026-06-21-do-not-claim-verified-without-running-the-real-gate-the-live.md)
 - [`self-test-new-edge-cases`](../_archive/2026-06-21-self-test-the-fix-new-edge-cases-not-just-the-original-bug.md)
+- [`no-audit-claim-without-manual-crosscheck`](../_archive/2026-06-22-no-audit-claim-without-manual-crosscheck.md)

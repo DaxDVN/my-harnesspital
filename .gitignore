@@ -16,7 +16,13 @@
 /.harness-backups/
 /.linux-migration-backups/
 /.obsidian/
+/.idea/
 /specs/
+/temp/
+
+# --- Large generated SQL/CSV data dumps (keep the generator .py tracked, ignore the dumps) ---
+scripts/*.sql
+scripts/*.csv
 
 # --- docs: track the graphify guide + harness history; not work artifacts/captures ---
 /docs/*
@@ -53,12 +59,10 @@ obj/
 .vite/
 coverage/
 
-# --- SDLC workflows (impact-analysis/bug-fix/technical-design/task-slicing/incremental-impl):
-#     track the workflow SOURCE, ignore per-run round artifacts (envelopes/payloads). ---
-engine/workflows/*/rounds/
-
-# --- robust-test runtime output: keep workflow source, ignore per-run test artifacts. ---
-engine/workflows/robust-test/runs/
+# --- Workflow runtime output: keep the workflow SOURCE tracked, ignore per-run artifacts
+#     (runs/envelopes/payloads/rounds) across ALL workflows
+#     (espresso-test, robust-test, pm-orchestrator, SDLC impact-analysis/bug-fix/etc.). ---
+engine/workflows/*/runs/
 
 # --- Promptfoo eval outputs: keep configs, ignore volatile run results. ---
 docs/harness/promptfoo/results/*
@@ -67,3 +71,14 @@ docs/harness/promptfoo/results/*
 # --- Runtime locks ---
 .claude/scheduled_tasks.lock
 .aider*
+
+# --- PM orchestrator runtime (Fugu): transient markers + per-run ledgers; workflow source stays tracked
+#     (per-run output dirs are covered by the generic engine/workflows/*/runs/ rule above). ---
+.claude/.pm-run-active
+.claude/.orchestrator_invariants.heartbeat
+
+# --- OpenCode budget tally (scripts/oc_budget.py local usage cache; transient) ---
+.claude/.oc_budget.json
+
+# blind-PM direct-work escape marker (owner-toggled, never committed)
+.direct-mode

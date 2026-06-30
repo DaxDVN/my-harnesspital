@@ -13,6 +13,7 @@ not long prompts. Use them to make senior-review behavior repeatable.
 | Weak-model deep-review finding BLOCK/HIGH | Strong adjudication | Cheap models find candidates; strong models decide |
 | Browser/E2E bug candidate | Robust triage | Prevent false positives from bad test setup |
 | Repeated bug class | Scanner promotion check | Move repeatable quality into deterministic checks |
+| Any code-mutating workflow where a non-Anthropic (OpenCode) model implemented/reviewed | Mandatory Opus 4.8 xhigh final review | Cheap models implement to spare Claude quota but are NOT trusted; Opus does the final careful review — additive, NEVER a substitute (owner invariant 2026-06-26; `scripts/tier_policy.json` → `mandatory_final_review`) |
 | Any completed work | Definition of done validation | Report real validation, not vibes |
 
 ## Reuse Evidence Gate

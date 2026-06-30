@@ -3,6 +3,23 @@
 Standalone **system prompts** the owner can hand to a fresh/external agent. These are not skills and are not
 auto-invoked. They are durable copy-paste templates for recurring real-world harness situations.
 
+## Layout
+
+```text
+engine/prompts/
+  *.md            top-level = WIRED prompts a workflow/skill/router can dispatch (each is referenced by a
+                  manifest `recommended_prompt_file`, a skill, a rule, or a script). Keep this dir clean.
+  governance/     harness-maintenance LIBRARY — prompts the owner hands an agent for harness / governance /
+                  optimization / recovery work. Catalogued here, never auto-dispatched by a workflow.
+  manual/         read-only MANUAL prompts the owner runs by hand (architecture audit / browser smoke /
+                  source discovery / scoped review). Read-only, never auto-dispatched.
+```
+
+Only top-level prompts are reachable by the router and workflow manifests. Moving a wired prompt into a subdir
+would break its `recommended_prompt_file` path (harness doctor `registry` / workflow-governance flags it as a
+dangling reference) — so dispatched prompts MUST stay at the top level. `governance/` and `manual/` prompts are
+owner-handed runbooks only.
+
 ## How to use
 
 Give an agent one file path plus the concrete task input:
@@ -33,16 +50,14 @@ Use this distinction:
 
 ## Fast Picker
 
+### Wired / dispatched (top level)
+
+These have a workflow/skill/script behind them; the router exposes them via `recommended_prompt_file`.
+
 | Situation | Prompt |
 |---|---|
 | Deep module/worktree audit before merge | `deep-audit-orchestrator.md` |
 | Fix from an audit/findings report | `bugfix-from-report.md` |
-| Read-only harness architecture audit | `architecture-audit-readonly.md` |
-| Evaluate quality-vs-cost adaptive harness argument | `adaptive-harness-evaluation.md` |
-| Implement a named harness governance phase | `harness-governance-phase-runner.md` |
-| Run all approved optimization phases in order | `harness-full-optimization-runner.md` |
-| Check if optimized harness is ready to trial | `harness-readiness-check.md` |
-| Classify a user prompt without executing workflow | `router-dry-run-classifier.md` |
 | Owner-gated robust targeted/sweep testing | `robust-test.md` |
 | Module-wide E2E bug harvest | `robust-test.md` |
 | One failing E2E flow reproduction/retest | `robust-test.md` |
@@ -50,21 +65,41 @@ Use this distinction:
 | Small approved finding patch | `mh-fix-approved-finding.md` |
 | Implement a scoped feature/module | `mh-implement-feature.md` |
 | Preflight blast-radius/risk analysis | `impact-analysis-preflight.md` |
-| Review a scoped diff without full deep audit | `scope-aware-review.md` |
 | Generate/refine UI spec from docs/mockups | `ui-spec-from-docs-mockups.md` |
 | Technical/API/schema design | `technical-api-design.md` |
 | Slice a design into implementation tasks | `task-slicing.md` |
 | Give a subagent one bounded implementation slice | `incremental-impl-worker.md` |
 | Design/review high-quality clinical UI | `clinical-ui-design.md` |
-| Capture durable learning safely | `learning-capture.md` |
-| Repair harness doctor/drift issues | `doctor-drift-repair.md` |
-| Browser smoke/E2E evidence run | `browser-e2e-smoke.md` |
-| Locate source and impact with CodeGraph-first | `codegraph-source-discovery.md` |
-| Review external executor wrapper boundary | `external-executor-wrapper.md` |
-| Harden envelope/runtime compatibility | `envelope-runtime-hardening.md` |
-| Govern eval-backed lifecycle promotion | `eval-lifecycle-governance.md` |
-| Consolidate/deprecate workflows with evidence | `workflow-consolidation-deprecation.md` |
-| Recover worktree/slot/dev environment | `worktree-environment-recovery.md` |
+| Review/espresso loop coordination | `espresso-test.md` |
+| Always-on PM orchestrator runbook | `pm-orchestrator.md` |
+| Bounded subagent prompt scaffold | `subagent-prompt-template.md` |
+
+### Governance library (`governance/`)
+
+Harness-maintenance prompts — owner-handed only, never auto-dispatched. The 7 one-off rollout
+prompts from the completed P0–P8 optimization (adaptive-eval, full-optimization-runner,
+governance-phase-runner, readiness-check, workflow-consolidation, GUIDELINE stub,
+eval-lifecycle tombstone) were archived to `docs/harness/archive/prompts/`.
+
+| Situation | Prompt |
+|---|---|
+| Classify a user prompt without executing workflow | `governance/router-dry-run-classifier.md` |
+| Capture durable learning safely | `governance/learning-capture.md` |
+| Repair harness doctor/drift issues | `governance/doctor-drift-repair.md` |
+| Review external executor wrapper boundary | `governance/external-executor-wrapper.md` |
+| Harden envelope/runtime compatibility | `governance/envelope-runtime-hardening.md` |
+| Recover worktree/slot/dev environment | `governance/worktree-environment-recovery.md` |
+
+### Manual read-only (`manual/`)
+
+Read-only prompts the owner runs by hand; no source edits.
+
+| Situation | Prompt |
+|---|---|
+| Read-only harness architecture audit | `manual/architecture-audit-readonly.md` |
+| Browser smoke/E2E evidence run | `manual/browser-e2e-smoke.md` |
+| Locate source and impact with CodeGraph-first | `manual/codegraph-source-discovery.md` |
+| Review a scoped diff without full deep audit | `manual/scope-aware-review.md` |
 
 ## Audit/Fix Loop
 

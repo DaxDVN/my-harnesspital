@@ -1,0 +1,1 @@
+"{\"url\":\"http://localhost:3003/home\",\"bodyText\":\"Khám chữa bệnh\\nThu ngân\\nNhà thuốc POS\\nDược lâm sàng\\nKho & Đấu thầu\\nDanh mục\\nQuản trị\\nTrang chủ\\n\\nChọn tính năng để bắt đầu làm việc\\n\\nReception\\nRegistration\\nQuery\\nQMS\\nHàng đợi bác sĩ\\nCấu hình QMS\\nNội tr\"}"

@@ -1,0 +1,40 @@
+{
+  "patient": { "id": "38440635", "name": "HOÀNG XUÂN LAN TTHC", "sex": "F", "birthYear": "1987", "phone": "0978456341" },
+  "status": "APPROVED",
+  "orderNumber": "579166469",
+  "orderDate": "2024-07-22 15:45:41",
+  "clinicalDiagnosis": "J32 - Viêm xoang mạn tính",
+  "comment": "",
+  "msgDate": "2024-07-22 15:45:41",
+  "modality": "DX",
+  "keyImages": [],
+  "studyIUID": "",
+  "encounterID": "38440635",
+  "studyDate": "2024-07-22 16:00:13",
+  "executionStartTime": "2024-07-22 16:00:05",
+  "serviceID": "059483226",
+  "orders": [
+    {
+      "id": "059483226",
+      "code": "B2100220",
+      "name": "Chụp Xquang khung chậu thường",
+      "diagnosis": [
+        {
+          "author": { "account": "0001", "name": "Tài khoản test", "hisID": "" },
+          "approvers": [ { "account": "", "name": "", "hisID": "" } ],
+          "technicians": [ { "account": "", "name": "", "hisID": "" } ],
+          "nurse": [],
+          "signedDate": "2024-07-22 16:18:19",
+          "diagnosis": "- Không thấy hình ảnh trật khớp .\n- ...<br/>Hiện tại không thấy hình ảnh bất thường trên phim chụp xquang khung chậu",
+          "reading": "- Không thấy hình ảnh trật khớp .\n- ... không thấy dày xương.",
+          "conclude": "Hiện tại không thấy hình ảnh bất thường trên phim chụp xquang khung chậu",
+          "note": "",
+          "modality": { "code": "DX", "name": "Máy chụp XQuang", "hisCode": "" },
+          "printImage": [],
+          "diagID": "a36bf357.288e669e.23dbb62a.37715190.73",
+          "signStatus": "unSign"
+        }
+      ]
+    }
+  ]
+}
